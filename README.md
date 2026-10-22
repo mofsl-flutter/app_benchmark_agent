@@ -45,6 +45,59 @@ will measure with the Medium test account.
 python3 record.py --me "Your Name"     # stored in ~/.riise-benchmark/me.json
 ```
 
+## The agent: what it is and how to use it
+
+The agent is a Claude Code agent definition in this repo. When you open Claude Code inside the
+cloned folder, it is picked up automatically together with its three slash commands.
+
+| File | What it is | Review it for |
+|---|---|---|
+| `.claude/agents/benchmark-runner.md` | The agent itself: hard rules (no PINs, no orders, write only in your own results folder), the step list for a run, how it combines reports, how it defines a module | Missing steps, wrong commands, anything that would make your module's run unfair or unsafe |
+| `.claude/commands/benchmark.md` | `/benchmark <module>` — run or resume your module | Wording of the prompt |
+| `.claude/commands/benchmark-report.md` | `/benchmark-report` — combine everyone's results into one scorecard | — |
+| `.claude/commands/benchmark-module.md` | `/benchmark-module <name>` — define or edit a module (screens per app, list, gestures, items) | The questions it asks |
+| `PROTOCOL.md` | The measurement rules the agent enforces | Steps that do not match how you actually measure |
+| `METRICS.md` | Every metric with its method (generated from `benchlib.py`) | Unclear or wrong methods |
+| `modules/<your-module>.json` | Your module's screens, list, gestures, offline and data items | Wrong screen names, missing competitor screens, items that do not fit |
+
+### Using it, step by step
+
+1. **Clone and set up** (section above), then `python3 record.py --me "<your name>"` once.
+2. **Start Claude Code in the repo folder** and type `/benchmark <module>` with the module you were
+   assigned (`portfolio`, `home`, `stocks`, `fno`, `mf`, `commodity`, `research`, `us_stocks`,
+   `stratx`, `watchlist`, `quote`, `search`). Type `/benchmark` alone and it asks.
+3. The agent then, in order: checks your Mac tools and that exactly one phone is on adb; loads
+   your module and asks you to confirm its screens if it is still a seeded skeleton; lists which
+   competitor apps are installed and shows the plan table; runs `preflight.py` (it stops on a hard
+   failure such as private DNS fixed or battery under 50 %); measures the phone-scoped metrics
+   (`_app`) once; then goes app by app.
+4. **When it prints a `bench.py run …` command, you run it**, typed into the Claude Code prompt
+   with a leading `!` (for example `! python3 bench.py run RISE --module fno --runs 1`). The script
+   pauses with "Press Enter" prompts while you unlock the phone, enter the PIN and open the screen.
+   Tell the agent when it finishes; it reads what was recorded and continues.
+5. **Manual metrics** (scrcpy timings, offline items, data items, Exodus, Play Store, storage): the
+   agent shows the method for one metric at a time and records your value with `record.py`.
+6. **Stop any time.** `/benchmark <module>` again resumes at the first missing run.
+7. When the module is complete, the agent builds `reports/<module>/…xlsx` and prints RISE's rank
+   per category on your phone. Commit your results folder on a branch and open a pull request
+   (see Sharing below).
+8. Anyone can run `/benchmark-report` after `git pull` to rebuild the combined scorecard.
+
+### Reviewing the agent and giving input
+
+Please read `.claude/agents/benchmark-runner.md`, `PROTOCOL.md`, `METRICS.md` and your
+`modules/<module>.json` before your first run. If a step is wrong, missing, unsafe, or does not
+fit your module:
+
+- small fixes (a screen name, a metric method, a missing competitor screen): edit the file on a
+  branch named `agent/<topic>` and open a pull request, with one line on what changed and why;
+- bigger questions (a metric that should be added or dropped, a change to the run protocol, a
+  scorecard weight): open a GitHub issue on this repo titled `agent: <topic>` so the lead can
+  decide before anyone's results depend on it.
+
+Module files carry a version hash on every result row, so a change to a module after results
+exist is flagged in the combined report rather than silently mixing old and new definitions.
+
 ## Running a module
 
 Open Claude Code in this folder and type `/benchmark <module>` (for example `/benchmark fno`).
