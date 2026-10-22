@@ -1,0 +1,76 @@
+{
+  "name": "mf",
+  "title": "Mutual Funds",
+  "rise": {
+    "screen": "Explore > MF tab",
+    "list": "fund collections / top funds list",
+    "detail": "fund detail",
+    "live_ticks": false,
+    "account_sensitive": false
+  },
+  "apps": {
+    "Kite": {
+      "screen": null
+    },
+    "Coin": {
+      "screen": "Coin app home (stands in for Kite)"
+    },
+    "Groww": {
+      "screen": "Explore > Mutual Funds section (confirm)"
+    },
+    "Angel One": {
+      "screen": "Mutual Funds tab"
+    },
+    "INDmoney": {
+      "screen": null
+    },
+    "Kotak Neo": {
+      "screen": "Mutual Funds tab"
+    },
+    "SAHI": {
+      "screen": null
+    },
+    "Dhan": {
+      "screen": "Mutual Funds (confirm)"
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Explore > MF tab shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Explore > MF tab → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "fund detail opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Fund collections",
+    "Top funds",
+    "SIP entry point",
+    "Category filters",
+    "Returns (1Y/3Y/5Y)",
+    "Fund rating",
+    "Personalised recommendations",
+    "Banners / promotions",
+    "Search entry point",
+    "Dark mode"
+  ],
+  "notes": "",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}

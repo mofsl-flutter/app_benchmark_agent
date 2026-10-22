@@ -1,0 +1,20 @@
+# Old single-developer Portfolio material (kept locally for reference only)
+archive/
+
+# Generated reports: rebuild with build_report.py
+reports/
+
+# Traces and recordings never belong in the repo (they stay in ~/.riise-benchmark/artifacts/)
+*.pftrace
+*.mp4
+*.perfetto-trace
+
+# Excel lock files and backups
+~$*.xlsx
+*.backup-*.xlsx
+
+# Python / OS
+__pycache__/
+*.pyc
+.DS_Store
+.venv/

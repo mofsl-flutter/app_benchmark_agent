@@ -1,0 +1,15 @@
+{
+  "_comment": "Scorecard category weights, must total 100. Edited only here; the generated workbooks show them read-only. Needs the lead's sign-off.",
+  "Loading Time": 20,
+  "User-wise": 5,
+  "API / Network": 5,
+  "Offline": 5,
+  "Scroll & Gesture": 15,
+  "Screen Updation": 15,
+  "Data Pointers": 10,
+  "External SDKs": 4,
+  "RAM": 7,
+  "Storage": 3,
+  "CPU / Battery / Data": 7,
+  "Stability": 4
+}

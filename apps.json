@@ -1,0 +1,12 @@
+{
+  "RISE":      {"package": "com.mosl.mobile",            "ranked": true},
+  "RISE UAT":  {"package": "com.mosl.mobile.uat",        "ranked": false, "note": "Optional. Measured last, never ranked."},
+  "Kite":      {"package": "com.zerodha.kite3",          "ranked": true},
+  "Coin":      {"package": "com.zerodha.coin",           "ranked": true, "stands_in_for": "Kite", "modules": ["mf"]},
+  "Groww":     {"package": "com.nextbillion.groww",      "ranked": true},
+  "Angel One": {"package": "com.msf.angelmobile",        "ranked": true},
+  "INDmoney":  {"package": "in.indwealth",               "ranked": true},
+  "Kotak Neo": {"package": "com.kotak.neo",              "ranked": true},
+  "SAHI":      {"package": "com.aaritya.sahi_trade_app", "ranked": true},
+  "Dhan":      {"package": "com.dhan.live",              "ranked": true}
+}

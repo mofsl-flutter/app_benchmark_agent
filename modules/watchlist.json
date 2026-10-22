@@ -1,0 +1,75 @@
+{
+  "name": "watchlist",
+  "title": "Watchlist",
+  "rise": {
+    "screen": "Watchlist tab",
+    "list": "watchlist symbols",
+    "detail": "stock quote page",
+    "live_ticks": true,
+    "account_sensitive": true
+  },
+  "apps": {
+    "Kite": {
+      "screen": "Watchlist"
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": "Watchlist"
+    },
+    "Angel One": {
+      "screen": "Watchlist"
+    },
+    "INDmoney": {
+      "screen": "Watchlist"
+    },
+    "Kotak Neo": {
+      "screen": "Watchlist"
+    },
+    "SAHI": {
+      "screen": "Watchlist"
+    },
+    "Dhan": {
+      "screen": "Watchlist"
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Watchlist tab shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Watchlist tab → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "stock quote page opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Live LTP and change",
+    "Sparkline / mini chart",
+    "Market depth from watchlist",
+    "Multiple watchlists",
+    "Sort / reorder",
+    "Add from search",
+    "Alerts from watchlist",
+    "Quick buy / sell",
+    "Dark mode"
+  ],
+  "notes": "Use the same 50-scrip watchlist on every app for S1–S5; Large account = max watchlist.",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}

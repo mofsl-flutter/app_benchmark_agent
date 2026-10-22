@@ -1,0 +1,93 @@
+{
+  "name": "portfolio",
+  "title": "Portfolio",
+  "rise": {
+    "screen": "Portfolio tab",
+    "list": "holdings list",
+    "detail": "Holding detail",
+    "live_ticks": true,
+    "account_sensitive": true
+  },
+  "apps": {
+    "Kite": {
+      "screen": "Portfolio > Holdings"
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": "Investments > Stocks"
+    },
+    "Angel One": {
+      "screen": "Portfolio"
+    },
+    "INDmoney": {
+      "screen": "Portfolio"
+    },
+    "Kotak Neo": {
+      "screen": "Portfolio"
+    },
+    "SAHI": {
+      "screen": "Portfolio"
+    },
+    "Dhan": {
+      "screen": "Portfolio / Holdings"
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → portfolio shows cached holdings",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on portfolio → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "Holding detail opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Current value",
+    "Invested value",
+    "Overall P&L (₹ and %)",
+    "Day's P&L (₹ and %)",
+    "XIRR / annualised return",
+    "Realised P&L",
+    "Combined view (stocks + MF + other assets)",
+    "Asset allocation breakdown",
+    "Sector allocation breakdown",
+    "Benchmark comparison (vs Nifty/Sensex)",
+    "Average buy price",
+    "Live LTP",
+    "Quantity incl. pledged / T1 quantity",
+    "Holding-level day's P&L",
+    "Holding-level overall P&L",
+    "52-week high / low",
+    "Corporate actions / dividends shown",
+    "Buy history / tax lots",
+    "Sort options",
+    "Filter options",
+    "Search within holdings",
+    "Toggle ₹ / % view",
+    "Hide values (privacy mode)",
+    "Export / download holdings statement",
+    "Quick buy / sell / exit from holdings",
+    "Create price alert from holdings",
+    "Import external holdings (other brokers / CAS)",
+    "Dark mode"
+  ],
+  "notes": "Same wording as the archived Portfolio workbook. Use the Medium account; Small/Large for L9/L10/S6."
+}

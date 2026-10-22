@@ -1,0 +1,74 @@
+{
+  "name": "search",
+  "title": "Search",
+  "rise": {
+    "screen": "Search",
+    "list": "search results list",
+    "detail": "stock quote page",
+    "live_ticks": false,
+    "account_sensitive": false
+  },
+  "apps": {
+    "Kite": {
+      "screen": "Search"
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": "Search"
+    },
+    "Angel One": {
+      "screen": "Search"
+    },
+    "INDmoney": {
+      "screen": "Search"
+    },
+    "Kotak Neo": {
+      "screen": "Search"
+    },
+    "SAHI": {
+      "screen": "Search"
+    },
+    "Dhan": {
+      "screen": "Search"
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Search shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Search → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "stock quote page opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Trending searches",
+    "Recent searches",
+    "Results across stocks / MF / F&O",
+    "Typo tolerance",
+    "Search by ISIN / symbol",
+    "Filters by segment",
+    "Offline cached results",
+    "Dark mode"
+  ],
+  "notes": "",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}

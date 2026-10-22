@@ -1,0 +1,77 @@
+{
+  "name": "home",
+  "title": "Home (Explore)",
+  "rise": {
+    "screen": "Explore > Home tab",
+    "list": "home sections (indices, trending, expert picks, most traded)",
+    "detail": "stock quote page",
+    "live_ticks": true,
+    "account_sensitive": true
+  },
+  "apps": {
+    "Kite": {
+      "screen": null
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": "Explore (whole screen, compare section by section)"
+    },
+    "Angel One": {
+      "screen": null
+    },
+    "INDmoney": {
+      "screen": null
+    },
+    "Kotak Neo": {
+      "screen": null
+    },
+    "SAHI": {
+      "screen": null
+    },
+    "Dhan": {
+      "screen": null
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Explore > Home tab shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Explore > Home tab → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "stock quote page opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Indices strip",
+    "Market movers (gainers / losers)",
+    "Most traded",
+    "Trending / popular",
+    "Sectors and themes",
+    "Watchlist entry point",
+    "Personalised section (holdings-aware)",
+    "Banners / promotions",
+    "News and insights",
+    "Search entry point",
+    "Dark mode"
+  ],
+  "notes": "Rise landing tab must be pinned to Home before cold starts (project-docs/EXPLORE_LANDING_TAB_RULES.md).",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}

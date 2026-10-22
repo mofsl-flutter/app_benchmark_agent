@@ -1,0 +1,91 @@
+{
+  "name": "quote",
+  "title": "Stock quote page",
+  "rise": {
+    "screen": "Stock quote page",
+    "list": "quote page sections (chart, depth, fundamentals, news)",
+    "detail": "option chain",
+    "live_ticks": true,
+    "account_sensitive": false
+  },
+  "apps": {
+    "Kite": {
+      "screen": "Stock quote (market depth / chart)"
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": "Stock quote page"
+    },
+    "Angel One": {
+      "screen": "Stock quote page"
+    },
+    "INDmoney": {
+      "screen": "Stock quote page"
+    },
+    "Kotak Neo": {
+      "screen": "Stock quote page"
+    },
+    "SAHI": {
+      "screen": "Stock quote page"
+    },
+    "Dhan": {
+      "screen": "Stock quote page"
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [
+    "RELIANCE",
+    "TCS",
+    "INFY",
+    "HDFCBANK",
+    "WIPRO"
+  ],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Stock quote page shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Stock quote page → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "option chain opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "LTP, change, % change",
+    "NSE/BSE switch",
+    "Chart ranges (1D…All)",
+    "Candle toggle + volume",
+    "Touch-scrub OHLC",
+    "Market depth (5 levels)",
+    "Performance (day/52-week range, OHLC, volume, circuits)",
+    "Fundamentals",
+    "Financials",
+    "Shareholding",
+    "Similar stocks",
+    "Technicals",
+    "F&O section",
+    "News",
+    "Events",
+    "Price alert",
+    "Watchlist bookmark",
+    "Option chain entry",
+    "Dark mode"
+  ],
+  "notes": "L14 = tab switch inside the quote page (Overview → Technicals). S7 = chart range switches and scrub; add gestures per app.",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}

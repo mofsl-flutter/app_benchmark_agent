@@ -1,0 +1,77 @@
+{
+  "name": "fno",
+  "title": "F&O",
+  "rise": {
+    "screen": "Explore > F&O tab",
+    "list": "F&O movers list",
+    "detail": "contract / option chain",
+    "live_ticks": true,
+    "account_sensitive": false
+  },
+  "apps": {
+    "Kite": {
+      "screen": null
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": "Explore > F&O section (confirm by scroll capture)"
+    },
+    "Angel One": {
+      "screen": "F&O tab"
+    },
+    "INDmoney": {
+      "screen": "F&O tab"
+    },
+    "Kotak Neo": {
+      "screen": "F&O tab"
+    },
+    "SAHI": {
+      "screen": "F&O tab"
+    },
+    "Dhan": {
+      "screen": "F&O (confirm)"
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Explore > F&O tab shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Explore > F&O tab → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "contract / option chain opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Indices strip",
+    "Market movers (gainers / losers)",
+    "Most traded",
+    "Trending / popular",
+    "Sectors and themes",
+    "Watchlist entry point",
+    "Personalised section (holdings-aware)",
+    "Banners / promotions",
+    "News and insights",
+    "Search entry point",
+    "Dark mode"
+  ],
+  "notes": "",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}

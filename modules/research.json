@@ -1,0 +1,72 @@
+{
+  "name": "research",
+  "title": "Research",
+  "rise": {
+    "screen": "Explore > Research tab",
+    "list": "research / recommendations list",
+    "detail": "research report",
+    "live_ticks": false,
+    "account_sensitive": false
+  },
+  "apps": {
+    "Kite": {
+      "screen": null
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": null
+    },
+    "Angel One": {
+      "screen": null
+    },
+    "INDmoney": {
+      "screen": null
+    },
+    "Kotak Neo": {
+      "screen": null
+    },
+    "SAHI": {
+      "screen": null
+    },
+    "Dhan": {
+      "screen": null
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Explore > Research tab shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Explore > Research tab → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "research report opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Expert picks",
+    "Research reports",
+    "Ratings / targets",
+    "Filters",
+    "News and insights",
+    "Dark mode"
+  ],
+  "notes": "No competitor tab on the list; measured and described, not ranked.",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}

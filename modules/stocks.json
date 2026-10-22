@@ -1,0 +1,77 @@
+{
+  "name": "stocks",
+  "title": "Stocks",
+  "rise": {
+    "screen": "Explore > Stocks tab",
+    "list": "stocks list (movers / most traded)",
+    "detail": "stock quote page",
+    "live_ticks": true,
+    "account_sensitive": false
+  },
+  "apps": {
+    "Kite": {
+      "screen": null
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": "Explore > Stocks section (confirm by scroll capture)"
+    },
+    "Angel One": {
+      "screen": "Stocks tab"
+    },
+    "INDmoney": {
+      "screen": "Stocks tab"
+    },
+    "Kotak Neo": {
+      "screen": "Stocks tab"
+    },
+    "SAHI": {
+      "screen": "Stocks tab"
+    },
+    "Dhan": {
+      "screen": "Stocks (confirm)"
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Explore > Stocks tab shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Explore > Stocks tab → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "stock quote page opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Indices strip",
+    "Market movers (gainers / losers)",
+    "Most traded",
+    "Trending / popular",
+    "Sectors and themes",
+    "Watchlist entry point",
+    "Personalised section (holdings-aware)",
+    "Banners / promotions",
+    "News and insights",
+    "Search entry point",
+    "Dark mode"
+  ],
+  "notes": "",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}

@@ -1,0 +1,50 @@
+{
+  "name": "_app",
+  "title": "Phone-scoped (per developer, per phone)",
+  "description": "Metrics that do not depend on a module: L1, L2, R1, R4–R8, X1, X2, X4, A3, A4. Measured once per developer and phone, reused by every module they run.",
+  "metrics": [
+    "L1",
+    "L2",
+    "R1",
+    "R4",
+    "R5",
+    "R6",
+    "R7",
+    "R8",
+    "X1",
+    "X2",
+    "X4",
+    "A3",
+    "A4"
+  ],
+  "apps": {
+    "Kite": {
+      "screen": "home"
+    },
+    "Coin": {
+      "screen": "home"
+    },
+    "Groww": {
+      "screen": "home"
+    },
+    "Angel One": {
+      "screen": "home"
+    },
+    "INDmoney": {
+      "screen": "home"
+    },
+    "Kotak Neo": {
+      "screen": "home"
+    },
+    "SAHI": {
+      "screen": "home"
+    },
+    "Dhan": {
+      "screen": "home"
+    }
+  },
+  "skip": [],
+  "offline_items": [],
+  "data_items": [],
+  "notes": ""
+}

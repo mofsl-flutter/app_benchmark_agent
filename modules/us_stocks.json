@@ -1,0 +1,77 @@
+{
+  "name": "us_stocks",
+  "title": "US Stocks",
+  "rise": {
+    "screen": "Explore > US Stocks tab",
+    "list": "US stocks list",
+    "detail": "US stock quote page",
+    "live_ticks": true,
+    "account_sensitive": false
+  },
+  "apps": {
+    "Kite": {
+      "screen": null
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": null
+    },
+    "Angel One": {
+      "screen": null
+    },
+    "INDmoney": {
+      "screen": null
+    },
+    "Kotak Neo": {
+      "screen": null
+    },
+    "SAHI": {
+      "screen": null
+    },
+    "Dhan": {
+      "screen": null
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [],
+  "offline_items": [
+    "Cold launch in airplane mode → Explore > US Stocks tab shows cached data",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Explore > US Stocks tab → data stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "US stock quote page opens offline from cache",
+    "Cached values are clearly not presented as live prices",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Indices strip",
+    "Market movers (gainers / losers)",
+    "Most traded",
+    "Trending / popular",
+    "Sectors and themes",
+    "Watchlist entry point",
+    "Personalised section (holdings-aware)",
+    "Banners / promotions",
+    "News and insights",
+    "Search entry point",
+    "Dark mode"
+  ],
+  "notes": "INDmoney has a US Stocks tab but it is not on the measured list; add its screen if the lead wants it.",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+}
