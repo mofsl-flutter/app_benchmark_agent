@@ -274,6 +274,44 @@ def frame_stats(frames):
     }
 
 
+SF_LAYER = "SurfaceFlinger display frames (app reported none)"
+SF_NOTE = ("SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); "
+           "S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median")
+
+
+def interval_stats(frames):
+    """Stats from display-frame present times when the app itself reports no frames: [(ts_ns, dur_ns, jank)].
+    Jank = a present-to-present interval longer than 1.5x the median one (a dropped frame); percentiles are
+    of the intervals, not of app frame durations; FPS as in frame_stats."""
+    if len(frames) < 2:
+        return None
+    ts = sorted(f[0] for f in frames)
+    gaps = [(b - a) / 1e6 for a, b in zip(ts, ts[1:])]
+    active = sorted(g for g in gaps if g < 100)  # ignore idle gaps between flings
+    if not active:
+        return None
+    median = statistics.median(active)
+    janky = sum(1 for g in active if g > 1.5 * median)
+    pct = lambda p: active[min(len(active) - 1, int(round(p / 100 * (len(active) - 1))))]
+    return {
+        "frames": len(frames),
+        "jank_pct": round(100 * janky / len(active), 2),
+        "p50": round(pct(50), 1), "p90": round(pct(90), 1), "p99": round(pct(99), 1),
+        "fps": round(1000 / statistics.mean(active), 1),
+        "fallback": True,
+    }
+
+
+def scroll_stats(layer, frames):
+    """frame_stats for an app layer; interval_stats when only SurfaceFlinger display frames were found."""
+    if layer == SF_LAYER:
+        return interval_stats(frames)
+    stats = frame_stats(frames)
+    if stats:
+        stats["fallback"] = False
+    return stats
+
+
 def idle_rate(frames, seconds):
     """Frames presented per second over an idle window (raw count, no gap filtering)."""
     return round(len(frames) / seconds, 1)
@@ -336,8 +374,10 @@ def fling(adb, w, h, fracs, down=True):
     adb.sh(f"input swipe {x} {y1} {x} {y2} 120")
 
 
-def trace_frames(adb, pkg, duration_s, action, keep_as=None):
-    """Run `action()` under a Perfetto FrameTimeline trace; return {layer: [(ts, dur, jank)]} for the app."""
+def trace_frames(adb, pkg, duration_s, action, keep_as=None, sf_fallback=False):
+    """Run `action()` under a Perfetto FrameTimeline trace; return {layer: [(ts, dur, jank)]} for the app.
+    With sf_fallback, when the app reports no frames at all, return SurfaceFlinger's display frames under
+    the single key SF_LAYER instead (score them with interval_stats, never frame_stats)."""
     from perfetto.trace_processor import TraceProcessor
 
     proc = adb.start_perfetto(int(duration_s * 1000))
@@ -356,11 +396,17 @@ def trace_frames(adb, pkg, duration_s, action, keep_as=None):
             rows = list(tp.query(
                 "select a.ts, a.dur, a.jank_type, a.layer_name from actual_frame_timeline_slice a "
                 f"join process p using(upid) where p.name = '{pkg}' or p.name like '{pkg}:%'"))
+            sf_rows = [] if rows or not sf_fallback else list(tp.query(
+                "select a.ts, a.dur, a.jank_type from actual_frame_timeline_slice a "
+                "join process p using(upid) where p.name like '%/surfaceflinger' order by a.ts"))
         finally:
             tp.close()
     by_layer = {}
     for r in rows:
         by_layer.setdefault(r.layer_name, []).append((r.ts, r.dur, r.jank_type))
+    if not by_layer and sf_rows:
+        print(f"    {pkg} reported no frames; using {len(sf_rows)} SurfaceFlinger display frames instead")
+        by_layer[SF_LAYER] = [(r.ts, r.dur, r.jank_type) for r in sf_rows]
     return by_layer
 
 
@@ -375,10 +421,10 @@ def scroll_test(adb, pkg, w, h, fracs, keep_as=None):
         for i in range(FLINGS):
             fling(adb, w, h, fracs, down=i < FLINGS // 2)
             time.sleep(0.8)
-    layer, frames = main_layer(trace_frames(adb, pkg, FLINGS + 6, action, keep_as))
-    if not frames:
+    layer, frames = main_layer(trace_frames(adb, pkg, FLINGS + 6, action, keep_as, sf_fallback=True))
+    stats = scroll_stats(layer, frames) if frames else None
+    if not stats:
         return None
-    stats = frame_stats(frames)
     stats["layer"] = layer
     return stats
 
@@ -390,10 +436,11 @@ def gesture_test(adb, pkg, gestures, w, h, keep_as=None):
         for c in cmds:
             adb.sh(c, check=False)
             time.sleep(1.5)
-    layer, frames = main_layer(trace_frames(adb, pkg, len(gestures) * 2 + 6 + swipe_ms, action, keep_as))
-    if not frames:
+    layer, frames = main_layer(trace_frames(adb, pkg, len(gestures) * 2 + 6 + swipe_ms, action, keep_as,
+                                            sf_fallback=True))
+    stats = scroll_stats(layer, frames) if frames else None
+    if not stats:
         return None
-    stats = frame_stats(frames)
     stats["layer"] = layer
     stats["labels"] = ", ".join(g.get("label", "?") for g in gestures)
     return stats
@@ -798,7 +845,8 @@ def cmd_run(a):
                         for m in B.BENCH_GROUPS["scroll"]:
                             rec(m, i, None, note)
                     else:
-                        note = f"({g['frames']} frames, layer {g['layer'][:60]})"
+                        note = (f"({g['frames']} display frames) {SF_NOTE}" if g.get("fallback")
+                                else f"({g['frames']} frames, layer {g['layer'][:60]})")
                         rec("S1", i, g["jank_pct"], note, art)
                         rec("S2", i, g["p50"]); rec("S3", i, g["p90"]); rec("S4", i, g["p99"])
                         rec("S5", i, g["fps"])
@@ -813,7 +861,8 @@ def cmd_run(a):
                         if g is None:
                             rec("S7", i, None, "no frames from the app during the gestures")
                         else:
-                            rec("S7", i, g["jank_pct"], f"{g['labels']} ({g['frames']} frames, p99 {g['p99']} ms)", art)
+                            rec("S7", i, g["jank_pct"], f"{g['labels']} ({g['frames']} frames, p99 {g['p99']} ms)"
+                                + (f"; {SF_NOTE}" if g.get("fallback") else ""), art)
                 if "idle" in todo:
                     print(f"    Idle trace: {IDLE_SECONDS} s with no input, don't touch the phone…")
                     art = artifact_path(module, app, "U4", i, "pftrace")

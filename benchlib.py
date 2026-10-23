@@ -83,9 +83,11 @@ METRIC_CATALOGUE = [
        "bench.py --group open: the app's UID byte counter from dumpsys netstats before the tap that opens {screen} and 8 s after it is loaded."),
     # ---- Scroll / gestures
     _m("S1", "Scroll & Gesture", "Janky frames while scrolling {list} (Medium account)", "%", "Lower", ("runs", SCROLL), "Perfetto (bench.py)",
-       "bench.py --group scroll records a Perfetto FrameTimeline trace during 10 identical scripted flings on {list}. Janky = frames with a jank type other than None / Buffer Stuffing. Same for Native and Flutter apps."),
+       "bench.py --group scroll records a Perfetto FrameTimeline trace during 10 identical scripted flings on {list}. Janky = frames with a jank type other than None / Buffer Stuffing. "
+       "Fallback: some apps (Flutter on Android 16) report no FrameTimeline frames at all; bench.py then scores SurfaceFlinger's display frames from the same trace and the row note says so: "
+       "janky = a present-to-present interval over 1.5x the median (a dropped frame), a stricter measure than jank types, so compare such rows with care."),
     _m("S2", "Scroll & Gesture", "Frame duration – 50th percentile", "ms", "Lower", ("runs", SCROLL), "Perfetto (bench.py)",
-       "Same trace: time from the app starting a frame to that frame being on screen."),
+       "Same trace: time from the app starting a frame to that frame being on screen. Under the SurfaceFlinger fallback (see S1) S2–S4 are present-to-present intervals instead; the row note says so."),
     _m("S3", "Scroll & Gesture", "Frame duration – 90th percentile", "ms", "Lower", ("runs", SCROLL), "Perfetto (bench.py)",
        "Same trace, 90th percentile."),
     _m("S4", "Scroll & Gesture", "Frame duration – 99th percentile", "ms", "Lower", ("runs", SCROLL), "Perfetto (bench.py)",
