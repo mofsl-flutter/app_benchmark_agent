@@ -131,6 +131,13 @@ def coverage(cscores, weights, apps):
     return out
 
 
+def module_app_rows(module, app_rows):
+    """The _app rows a module's report uses: all of them, minus cold start (L1, X4) when the module turned it off."""
+    if B.coldstart_on(module):
+        return app_rows
+    return [r for r in app_rows if r["metric"] not in B.COLDSTART_METRICS]
+
+
 def module_apps(module, rows, app_rows):
     """Apps that take part in a module's report: RISE (and unranked RISE builds) plus every app that has module
     rows AND a screen in this module. Apps known only from _app rows, or with screen null, stay out."""
@@ -199,6 +206,7 @@ def fill_module_workbook(module, folder, rows, app_rows, out_path, developer, de
     from openpyxl import load_workbook
     import build_benchmark as W
 
+    app_rows = module_app_rows(module, app_rows)
     apps = module_apps(module, rows, app_rows)
     app_rows = [r for r in app_rows if r["app"] in apps]
     layout = W.build_workbook(out_path, apps=apps, device_label=device_label, module=module)
@@ -252,6 +260,8 @@ def fill_module_workbook(module, folder, rows, app_rows, out_path, developer, de
         ok, why = B.metric_applies(mid, module)
         if not ok and not B.METRICS[mid]["phone"]:
             wb[sheet].cell(row=row, column=COL_NOTE).value = f"N/A: {why}"
+        elif mid in B.COLDSTART_METRICS and not B.coldstart_on(module):
+            wb[sheet].cell(row=row, column=COL_NOTE).value = "N/A: cold start turned off for this module"
 
     # Test Setup + App Info from env.csv
     envs = B.read_env(folder) or B.read_env(folder.parent.parent / B.APP_SCOPE / folder.name)
@@ -303,7 +313,7 @@ def module_report(a):
     if not rows:
         sys.exit(f"No runs.csv in {folder}")
     app_folder = B.results_dir(B.APP_SCOPE, developer, model, a.results_dir)
-    app_rows = B.read_runs(app_folder / "runs.csv")
+    app_rows = module_app_rows(module, B.read_runs(app_folder / "runs.csv"))
     out_dir = (Path(a.out) if a.out else B.REPORTS_DIR / module["name"])
     out_dir.mkdir(parents=True, exist_ok=True)
     date = datetime.date.today().isoformat()
@@ -386,7 +396,7 @@ def combined_report(a):
         developer = rows[0].get("developer", folder.name.split("_", 1)[0]) if rows else ""
         phone = rows[0].get("device_model", "") if rows else folder.name.split("_", 1)[-1]
         app_folder = base / B.APP_SCOPE / folder.name
-        app_rows = B.read_runs(app_folder / "runs.csv")
+        app_rows = module_app_rows(module, B.read_runs(app_folder / "runs.csv"))
         apps = module_apps(module, rows, app_rows)
         app_rows = [x for x in app_rows if x["app"] in apps]
         ranked = [x for x in apps if reg.get(x, {}).get("ranked", True)]

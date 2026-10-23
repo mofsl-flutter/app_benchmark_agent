@@ -116,6 +116,7 @@ steps are:
 ```bash
 python3 preflight.py --module fno
 python3 bench.py run RISE --module _app              # once per phone: L1, X4, R1
+python3 bench.py run RISE --module _app --group ram  # same, when cold start is off for the module (R1 only)
 python3 bench.py run RISE --module fno               # ram, open, scroll (5 runs)
 python3 bench.py run RISE --module fno --group gesture,leak --runs 1
 python3 bench.py run RISE --module fno --group idle --with-video --runs 3   # market hours

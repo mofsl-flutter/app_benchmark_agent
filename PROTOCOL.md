@@ -15,6 +15,10 @@ done") and the Portfolio decisions in `archive/CONTEXT.md`.
 - **Phone-scoped metrics once.** Cold start (L1), PIN→home (L2), RAM after cold start (R1),
   storage (R4–R8), SDK facts (X1, X2, X4) and Play Store facts (A3, A4) are measured once per
   developer and phone under module `_app`, then reused by every module they run.
+- **Cold start is optional per module.** Before each module session the runner asks whether cold
+  start (L1, X4) is measured and counted for that module, and writes `"coldstart": true|false`
+  into the module file. With `false`, the `coldstart` group is not run (`_app` takes `--group ram`
+  only) and the module report leaves L1 and X4 out as N/A.
 - **Medium account by default.** Small and Large accounts only for L9, L10, S6 on modules
   marked `account_sensitive`.
 - **RISE UAT last, never ranked.** If measured, it runs in its own pass after the ranked apps,
