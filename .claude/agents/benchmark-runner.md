@@ -16,10 +16,13 @@ they are the method. `docs/RISE Benchmark Plan.md` is the background and
 ## Hard rules
 
 1. **Never type, store, or ask for a PIN, password, OTP or account number.** The developer enters
-   the PIN on the phone by hand; `bench.py` pauses for that.
+   the PIN on the phone by hand; `bench.py` pauses for that. The PCAPdroid API key is not a secret
+   of that kind: it is stored once with `python3 record.py --pcapdroid-key <key>` in
+   `~/.riise-benchmark/me.json`, outside the repo, and never goes into notes, logs or results.
 2. **Never place an order, modify a watchlist, or change holdings** on any app. Phones are logged
    into real or client accounts. Reading screens is fine.
-3. **Write only inside** `results/<module>/<developer>_<device>/`, the same developer's
+3. **Write only inside** `results/<module>/<developer>_<device>/` (`runs.csv`, `env.csv`,
+   `state.json`, and the side tables `api_calls.csv` / `net_calls.csv` that bench.py writes), the same developer's
    `results/_app/<developer>_<device>/`, `reports/`, and `modules/<name>.json`. Never touch another developer's results folder, `archive/`, or the
    scripts, unless the developer explicitly asks for a tooling fix.
 4. **Never fabricate or estimate a value.** A metric without a measurement stays missing. If a
@@ -75,6 +78,11 @@ Follow these steps in order. Say which step you are on in one line each time.
    `perfetto` blocks the scroll, gesture and idle groups; missing `ffmpeg` blocks U5; missing
    `scrcpy` only affects manual timing metrics. Say what is missing and what it blocks, with the
    install line from `README.md`. Continue with what works.
+   Also `python3 -c "import benchlib as B; print('pcapdroid key:', 'saved' if B.pcapdroid_key() else 'MISSING')"`.
+   If missing, tell the developer once: open PCAPdroid on the phone → Settings → Control
+   permissions → ⋮ → API key, then run `python3 record.py --pcapdroid-key <key>` (paste the key only
+   into that command). Without it the network pass (step 7, last bullet) needs a tap on Allow for
+   every run; without PCAPdroid installed that pass is skipped and L11 / X3 stay manual.
 3. **Module.** `python3 -c "import benchlib as B; import json; print(json.dumps(B.load_module('<module>'), indent=1))"`.
    If it fails because the file does not exist, switch to mode `module <name>` (below) to create
    it, then come back. If the module has `_todo`, show its screens, list and data items and ask
@@ -109,6 +117,19 @@ Follow these steps in order. Say which step you are on in one line each time.
      the ten open/back cycles with the module's open and back steps).
    - During market hours (09:15–15:30 IST, Mon–Fri) and only when the module has
      `live_ticks: true`: `--group idle --with-video --runs 3` and `--group live --runs 3 --live-minutes 10`.
+   - **Network pass, last and alone:** `python3 drive.py run "<app>" --module <module> --group net --runs 5`
+     per app, after every other group (PCAPdroid's VPN adds overhead, so bench.py refuses to combine
+     `net` with other groups). It starts a PCAPdroid capture filtered to the app, launches it, opens
+     the screen and records L11 (connections in the open window), `net_calls.csv` (one row per
+     connection: host, bytes, first-response time) and, on run 1 after 60 s on the screen, X3 when
+     `apps.json` has `own_domains` for the app (otherwise it prints the hosts and X3 stays manual).
+     The first capture on a phone shows Android's VPN request: the developer taps OK (drive.py waits
+     up to five minutes). Run 1 takes about 2 min, later runs under a minute.
+   The `open` runs (and the `_app` cold starts) also read the app's own API log from logcat. RISE
+   logs every call, so for RISE `api_calls.csv` gets one row per call (method, path, status,
+   duration, CDN cache; no query strings, no bodies) and the L15 / R1 note carries a summary such as
+   `api: 12 calls, 9 endpoints, 3 repeats, net 1.42 s, longest GET … 520 ms`. Competitor apps log
+   nothing: "no API lines" for them is expected, not an error.
    Re-running the same command resumes at the first missing run, so an interrupted session is
    never lost. To measure a run again, add `--redo N`.
    If bench.py prints "reported no frames; using N SurfaceFlinger display frames", that is its
@@ -129,7 +150,10 @@ Follow these steps in order. Say which step you are on in one line each time.
    The newest row for a run wins; the workbook keeps five columns.
 10. **Module report.** When `record.py --list` is clean for every app (or the developer stops):
     `python3 build_report.py --module <module>`. Print the path and the RISE rank per category
-    it reports. Say what is still missing, if anything.
+    it reports, plus its "API calls" and "Network per open" lines (sheet `10 API & Network calls`
+    in the workbook: diagnostic, never scored). Point out RISE's API wall time against its L3 so
+    the developer sees how much of the screen load is network and how much is rendering. Say what
+    is still missing, if anything.
 
 11. **Commit.** Remind the developer to commit their results folder on their own branch and open
     a pull request: `git checkout -b results/<module>-<name>`, `git add results/<module>/<name>_<phone>`
@@ -148,7 +172,7 @@ that `state.json` already has.
    `scorecard_<date>.md`.
 2. Print the scorecard tables from the markdown file and the Completeness summary: modules with
    fewer runs than expected, manual metrics missing, and rows whose `module_version` differs
-   from the current module file.
+   from the current module file. Also its "API and network calls" section when present.
 3. Remind the reader: ranks and 0–100 scores compare across modules; raw milliseconds do not,
    because each module was measured on a different phone.
 
@@ -173,6 +197,8 @@ Create or edit `modules/<name>.json`. Ask these, one at a time, in plain words:
    it out when the default (tap the node named like the screen, type the first test subject,
    hide the keyboard) works; it is not part of the module version.
 6. Offline items and data items if the seeded lists do not fit.
+7. If the network pass left X3 manual for an app, add that company's domains under
+   `own_domains` for the app in `apps.json` (not in the module file) so the next run computes it.
 
 Write the JSON with the schema used by `modules/portfolio.json`. Never overwrite an existing
 module silently: show the diff, and show the version hash before and after

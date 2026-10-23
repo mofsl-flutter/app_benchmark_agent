@@ -11,7 +11,15 @@ Collects, per run, on a Play Store (release) build, for the module given with --
              (60 s screenrecord + ffmpeg mpdecimate)
   leak       R9 PSS growth over 10 open/close cycles of the module screen
   live       C1–C4 live session (market hours): CPU %, battery mAh, temperature rise, data MB
+  net        L11 connections per screen open and X3 third-party hosts from a PCAPdroid capture driven
+             over adb (needs the PCAPdroid API key: record.py --pcapdroid-key). Runs ALONE: its VPN
+             adds overhead to every other metric. Per-connection rows go to net_calls.csv.
   --with-r3  R3 RAM after 5 min on the screen
+
+The `open` and `_app` runs also read the app's own API log from logcat (RISE logs every call as
+JSON: method, path, status, duration, cache). Calls go to api_calls.csv next to runs.csv, with
+query strings dropped and id-like path segments masked; the L15 / R1 note carries a one-line
+summary. Competitor apps log nothing, so nothing is written for them.
 
 Module `_app` holds the phone-scoped metrics (L1, X4, R1 …) measured once per developer and phone.
 
@@ -45,7 +53,9 @@ import time
 import zipfile
 from pathlib import Path
 
+import apilog
 import benchlib as B
+import netcap
 
 HERE = Path(__file__).resolve().parent
 ARTIFACTS = B.ME_FILE.parent / "artifacts"
@@ -56,7 +66,13 @@ LIVE_SECONDS = 900
 IDLE_SECONDS = 60
 LEAK_CYCLES = 10
 OPEN_SETTLE = 8
-GROUPS = ["coldstart", "ram", "open", "scroll", "gesture", "idle", "leak", "live"]
+GROUPS = ["coldstart", "ram", "open", "scroll", "gesture", "idle", "leak", "live", "net"]
+X3_SECONDS = 60
+PCAPDROID_PKG = "com.emanuelef.remote_capture"
+PCAPDROID_CTRL = f"{PCAPDROID_PKG}/.activities.CaptureCtrl"
+REMOTE_PCAP_NAME = "bench_net.pcap"
+REMOTE_PCAP = f"/sdcard/Download/PCAPdroid/{REMOTE_PCAP_NAME}"
+VPN_DIALOG = "com.android.vpndialogs"
 DEFAULT_GROUPS = {"module": "ram,open,scroll", B.APP_SCOPE: "coldstart,ram"}
 REMOTE_TRACE = "/data/misc/perfetto-traces/bench.pftrace"
 REMOTE_VIDEO = "/sdcard/bench_idle.mp4"
@@ -508,6 +524,101 @@ def uid_bytes(adb, app_id):
     return parse_netstats_bytes(adb.sh("dumpsys netstats detail", timeout=180), app_id)
 
 
+def api_capture(adb, pkg, module, app, run, phase):
+    """Read the app's API log lines (RISE's JSON lines) from logcat. (calls, artifact path or None).
+    The raw log is kept locally as an artifact; only the sanitized call table is written to results."""
+    pid = app_pid(adb, pkg)
+    raw = adb.sh(f"logcat -d -v threadtime --pid={pid}" if pid else "logcat -d -v threadtime", timeout=90, check=False)
+    calls = apilog.parse_api_log(raw)
+    if not calls:
+        return [], None
+    art = artifact_path(module, app, f"API-{phase}", run, "log")
+    art.parent.mkdir(parents=True, exist_ok=True)
+    art.write_text(raw)
+    return calls, art
+
+
+def save_api_calls(adb, pkg, module, app, run, phase, folder, meta):
+    """api_capture + append to api_calls.csv. Returns the summary note ('' when the app logs nothing)."""
+    calls, art = api_capture(adb, pkg, module, app, run, phase)
+    if not calls:
+        print("    api log: no API lines from the app (expected for competitor apps)")
+        return ""
+    B.append_calls(folder, apilog.to_rows(calls, phase, run), meta, module, "api_calls.csv", artifact=art)
+    note = apilog.summary_note(calls)
+    print(f"    {note} → api_calls.csv")
+    return note
+
+
+def device_time(adb):
+    """The phone's clock in epoch seconds (pcap timestamps use the same clock)."""
+    out = adb.sh("echo $EPOCHREALTIME", check=False).strip()
+    try:
+        return float(out)
+    except ValueError:
+        return float(adb.sh("date +%s").strip())
+
+
+def window_focus(adb):
+    m = re.search(r"mCurrentFocus=(.*)", adb.sh("dumpsys window", check=False))
+    return m.group(1).strip() if m else ""
+
+
+def pcap_running(adb):
+    svc = adb.sh(f"dumpsys activity services {PCAPDROID_PKG}", timeout=60, check=False)
+    present = adb.sh(f"ls -l {REMOTE_PCAP} 2>/dev/null", check=False).strip()
+    return "CaptureService" in svc and bool(present)
+
+
+def pcap_start(adb, pkg, key):
+    """Start a PCAPdroid capture filtered to pkg, dumping to REMOTE_PCAP. Waits for it, asking the
+    developer to tap through the consent / VPN dialog when one shows. True when running."""
+    adb.sh(f"rm -f {REMOTE_PCAP}", check=False)
+    extras = f"-e action start -e pcap_dump_mode pcap_file -e pcap_name {REMOTE_PCAP_NAME} -e app_filter {pkg}"
+    if key:
+        extras += f" -e api_key {key}"
+    adb.sh(f"am start -W {extras} -n {PCAPDROID_CTRL}", timeout=60, check=False)  # never printed: carries the key
+    asked = False
+    for _ in range(30):
+        if pcap_running(adb):
+            return True
+        focus = window_focus(adb)
+        if not asked and (VPN_DIALOG in focus or PCAPDROID_PKG in focus):
+            asked = True
+            ask("PCAPdroid consent: tap Allow / OK on the phone. Press Enter when PCAPdroid is back in the background.")
+            continue
+        time.sleep(1)
+    return pcap_running(adb)
+
+
+def pcap_stop(adb, key, keep_as=None):
+    """Stop the capture, wait for the file to settle, pull it to keep_as (optional) and delete it on the phone.
+    Returns the pcap bytes, or None."""
+    extras = "-e action stop" + (f" -e api_key {key}" if key else "")
+    adb.sh(f"am start -W {extras} -n {PCAPDROID_CTRL}", timeout=60, check=False)
+    last, same = -1, 0
+    for _ in range(20):
+        out = adb.sh(f"stat -c %s {REMOTE_PCAP} 2>/dev/null", check=False).strip()
+        size = int(out) if out.isdigit() else -1
+        same = same + 1 if size == last else 0
+        last = size
+        if size >= 0 and same >= 2:
+            break
+        time.sleep(1)
+    if last <= 0:
+        adb.sh(f"rm -f {REMOTE_PCAP}", check=False)
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        local = os.path.join(tmp, "net.pcap")
+        adb.run("pull", REMOTE_PCAP, local, timeout=300)
+        data = Path(local).read_bytes()
+    adb.sh(f"rm -f {REMOTE_PCAP}", check=False)
+    if keep_as:
+        keep_as.parent.mkdir(parents=True, exist_ok=True)
+        keep_as.write_bytes(data)
+    return data
+
+
 def live_session(adb, pkg, app_id, run, rec, screen, minutes=LIVE_SECONDS // 60):
     """C1–C4 over `minutes` on the module screen. Simulates unplugged so batterystats accrues.
     C2 and C4 are scaled to a 15-min equivalent so sessions of different length stay comparable."""
@@ -702,6 +813,8 @@ def cmd_run(a):
         sys.exit(f"--group accepts {', '.join(GROUPS)} (got {', '.join(sorted(bad))})")
     if is_app_scope and set(groups) - {"coldstart", "ram"}:
         sys.exit("Module _app only takes --group coldstart,ram (phone-scoped metrics).")
+    if "net" in groups and len(groups) > 1:
+        sys.exit("--group net runs alone: PCAPdroid's VPN adds overhead to every other metric. Run it last, by itself.")
     if not 1 <= a.runs <= B.NRUNS:
         sys.exit(f"--runs must be 1–{B.NRUNS}")
     if set(groups) & {"scroll", "gesture", "idle"}:
@@ -742,6 +855,18 @@ def cmd_run(a):
         print("! Market is closed right now (09:15–15:30 IST, Mon–Fri). Live-tick metrics should be taken during market hours.")
     if "live" in groups:
         print(f"Live session: {a.live_minutes} min per run, so about {a.runs * (a.live_minutes + 2)} min in total.")
+    pcap_key = ""
+    if "net" in groups:
+        if not installed(adb, PCAPDROID_PKG):
+            sys.exit("PCAPdroid is not installed on this phone (Play Store: PCAPdroid). --group net needs it.")
+        pcap_key = B.pcapdroid_key()
+        if not pcap_key:
+            print("! No PCAPdroid API key saved (python3 record.py --pcapdroid-key <key>; PCAPdroid → Settings → "
+                  "Control permissions → ⋮ → API key). Each capture will need a tap on Allow.")
+        own = B.own_domains(app)
+        print(f"Network pass: PCAPdroid capture per run (L11, net_calls.csv); X3 "
+              f"{'from own_domains ' + ', '.join(own) if own else 'stays manual (no own_domains for this app in apps.json)'}.")
+    adb.sh("logcat -G 16M", check=False)
 
     def applies(metric):
         return B.metric_applies(metric, module)[0]
@@ -758,8 +883,66 @@ def cmd_run(a):
         ids = group_ids(group)
         return all(run in B.runs_done(folder, app, m) for m in ids) if ids else True
 
+    def net_run(i):
+        """One PCAPdroid run: launch, open the screen, 8 s settle (L11 window = the L15 window), then on run 1
+        stay 60 s on the screen for X3. Flows go to net_calls.csv; L11 (and X3 when own_domains is set) to runs.csv."""
+        art = artifact_path(module, app, "NET", i, "pcap")
+        adb.sh(f"am force-stop {pkg}", check=False)
+        if not pcap_start(adb, pkg, pcap_key):
+            rec("L11", i, None, "PCAPdroid did not start (consent denied, VPN refused, or app not running)")
+            pcap_stop(adb, pcap_key)
+            return
+        try:
+            t0 = device_time(adb)
+            adb.sh(f"am start -S -n {comp}")
+            ask("Unlock / enter PIN. Press Enter when HOME is fully loaded.")
+            t_open = device_time(adb)
+            ask(f"Open {screen}. Press Enter the moment it is fully loaded.")
+            time.sleep(OPEN_SETTLE)
+            t_loaded = device_time(adb)
+            want_x3 = i == 1 and applies("X3") and 1 not in B.runs_done(folder, app, "X3")
+            if want_x3:
+                ask(f"Exercise {screen} for X3: use its controls (search, clear, tabs, filters) as a user would, "
+                    f"up to {X3_SECONDS} s. Press Enter when done.")
+                left = X3_SECONDS - (device_time(adb) - t_loaded)
+                if left > 0:
+                    print(f"    Staying {left:.0f} s more on {screen} for X3, don't touch the phone…")
+                    time.sleep(left)
+            t_end = device_time(adb)
+        finally:
+            data = pcap_stop(adb, pcap_key, keep_as=art)
+        if not data:
+            rec("L11", i, None, "PCAPdroid wrote no capture")
+            return
+        own = B.own_domains(app)
+        try:
+            res = netcap.analyse(data, {"launch": (t0, t_open), "open": (t_open, t_loaded), "screen": (t_loaded, t_end)}, own)
+        except ValueError as e:
+            rec("L11", i, None, f"capture unreadable: {e}")
+            return
+        o = res["open"]
+        rec("L11", i, o["connections"], f"prompt → loaded + {OPEN_SETTLE} s (the L15 window); {netcap.hosts_note(o)}", art)
+        if want_x3:
+            hosts = sorted(set(o["hosts"]) | set(res["screen"]["hosts"]))
+            if own:
+                tp = netcap.third_party(hosts, own)
+                rec("X3", 1, len(tp), f"over {X3_SECONDS} s on {screen} with its controls exercised; "
+                    f"third-party: {', '.join(tp) or 'none'}; own: {', '.join(own)}", art)
+            else:
+                print(f"    X3 stays manual (no own_domains for {app} in apps.json). Hosts seen in {X3_SECONDS} s: {', '.join(hosts)}")
+        rows = netcap.to_rows(res, i)
+        if rows:
+            B.append_calls(folder, rows, meta, module, "net_calls.csv", artifact=art)
+            kb = lambda ph: (res[ph]["win_bytes_in"] + res[ph]["win_bytes_out"]) / 1024
+            print(f"    {len(rows)} connections → net_calls.csv: launch {res['launch']['connections']} ({kb('launch'):.0f} KB), "
+                  f"open {o['connections']} ({kb('open'):.0f} KB), on screen after {res['screen']['connections']} new "
+                  f"({kb('screen'):.0f} KB over existing connections too)")
+
     if a.redo:
-        dropped = B.forget_runs(folder, app, [m for g in groups for m in group_ids(g)], a.redo)
+        ids = [m for g in groups for m in group_ids(g)]
+        if "net" in groups and a.redo == 1 and applies("X3"):
+            ids.append("X3")  # the one-run X3 is taken in net run 1; a redo of run 1 takes it again
+        dropped = B.forget_runs(folder, app, ids, a.redo)
         print(f"Redo run {a.redo}: {', '.join(dropped) or 'nothing was recorded for it'}")
     if gestures:
         try:
@@ -807,6 +990,12 @@ def cmd_run(a):
                 continue
             print(f"\n  Run {i}/{a.runs}: {', '.join(todo)}")
             adb.sh("logcat -b main -b system -c", check=False)  # keep the crash buffer for A1/A2
+            if "net" in todo:
+                net_run(i)
+                flush()
+                adb.sh(f"am force-stop {pkg}")
+                time.sleep(3)
+                continue
             if "coldstart" in todo:
                 rec("L1", i, cold_start_ms(adb, comp))
                 time.sleep(5)
@@ -821,15 +1010,19 @@ def cmd_run(a):
                 if "ram" in todo and applies("R1"):
                     time.sleep(5)
                     mi = meminfo(adb, pkg)
-                    rec("R1", i, mi["pss_mb"], meminfo_note(mi))
+                    api_note = save_api_calls(adb, pkg, module, app, i, "launch", folder, meta) if is_app_scope else ""
+                    rec("R1", i, mi["pss_mb"], meminfo_note(mi) + (f"; {api_note}" if api_note else ""))
 
             on_screen = set(todo) & {"ram", "open", "scroll", "gesture", "idle", "leak", "live"} and not is_app_scope
             if on_screen:
                 if "open" in todo:
                     net0 = uid_bytes(adb, app_id)
+                    adb.sh("logcat -b main -c", check=False)  # the API log window starts at the open prompt
                     ask(f"Open {screen}. Press Enter the moment it is fully loaded.")
                     time.sleep(OPEN_SETTLE)
-                    rec("L15", i, round((uid_bytes(adb, app_id) - net0) / 1024, 1), f"open + {OPEN_SETTLE} s")
+                    kb = round((uid_bytes(adb, app_id) - net0) / 1024, 1)
+                    api_note = save_api_calls(adb, pkg, module, app, i, "open", folder, meta)
+                    rec("L15", i, kb, f"open + {OPEN_SETTLE} s" + (f"; {api_note}" if api_note else ""))
                 else:
                     ask(f"Open {screen}. Press Enter when {lst} is loaded.")
                 if "ram" in todo:
@@ -954,7 +1147,7 @@ def main():
     r.add_argument("--developer", help="your name (default: ~/.riise-benchmark/me.json)")
     r.add_argument("--results-dir", help="write under this folder instead of results/ (dry runs)")
     r.add_argument("--runs", type=int, default=5)
-    r.add_argument("--group", help=f"comma list of {', '.join(GROUPS)} (default: {DEFAULT_GROUPS['module']}; _app: {DEFAULT_GROUPS[B.APP_SCOPE]})")
+    r.add_argument("--group", help=f"comma list of {', '.join(GROUPS)} (default: {DEFAULT_GROUPS['module']}; _app: {DEFAULT_GROUPS[B.APP_SCOPE]}). net runs alone")
     r.add_argument("--with-r3", action="store_true", help="also take R3 (adds 5 min per run)")
     r.add_argument("--with-video", action="store_true", help="in --group idle, also record U5 (screenrecord + ffmpeg)")
     r.add_argument("--redo", type=int, metavar="N", help="measure run N again for the selected groups (replaces the earlier rows)")

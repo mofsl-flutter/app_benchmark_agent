@@ -12,14 +12,16 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 | `PROTOCOL.md` | How every run is done (pre-flight, order, run counts, market hours, safety) |
 | `METRICS.md` | The 50 metrics: method, tool, unit, expected runs. Generated from `benchlib.py` |
 | `modules/<name>.json` | One file per module: RISE screen, list, detail, competitor screens, scroll/gesture scripts, offline and data items |
-| `apps.json` | App registry (package names, ranked or not). `RISE UAT` is never ranked |
+| `apps.json` | App registry (package names, ranked or not, `own_domains` for X3). `RISE UAT` is never ranked |
 | `weights.json` | Scorecard category weights (lead's sign-off) |
-| `bench.py` | adb collector: cold start, lock contention, RAM, bytes per open, Perfetto scroll/gesture/idle, leak check, live session |
+| `bench.py` | adb collector: cold start, lock contention, RAM, bytes per open, Perfetto scroll/gesture/idle, leak check, live session, PCAPdroid network pass, the app's API log |
+| `apilog.py` | Parses the API lines RISE writes to logcat (method, path, status, duration, cache) into `api_calls.csv`; no bodies, no query strings |
+| `netcap.py` | Reads a PCAPdroid capture (no scapy): connections, hosts (SNI / DNS), bytes, first-response time, into `net_calls.csv` |
 | `preflight.py` | Pre-run checks; writes `env.csv` |
 | `record.py` | Records a manual metric or an offline/data item |
 | `build_report.py` | Per-module workbook, combined workbook + scorecard, `METRICS.md` |
 | `build_benchmark.py` | Workbook layout (imported by `build_report.py`) |
-| `results/<module>/<developer>_<device>/` | `runs.csv`, `env.csv`, `state.json` — your folder only |
+| `results/<module>/<developer>_<device>/` | `runs.csv`, `env.csv`, `state.json`, plus `api_calls.csv` (RISE API calls per run) and `net_calls.csv` (connections per run) — your folder only |
 | `reports/` | Generated workbooks and scorecards, dated |
 | `docs/` | The benchmark plan, the design, and example reports |
 | `archive/` | The original Portfolio workbook, CSVs and context, for reference only |
@@ -39,11 +41,15 @@ adb devices            # your phone must show as "device"
 LibChecker from the Play Store for the manual network and SDK metrics. Log in to every app you
 will measure with the Medium test account.
 
-**Identity**
+**Identity and the PCAPdroid key**
 
 ```bash
-python3 record.py --me "Your Name"     # stored in ~/.riise-benchmark/me.json
+python3 record.py --me "Your Name"            # stored in ~/.riise-benchmark/me.json
+python3 record.py --pcapdroid-key <key>       # PCAPdroid → Settings → Control permissions → ⋮ → API key
 ```
+
+The key lets `bench.py --group net` start and stop PCAPdroid captures over adb without a tap on
+Allow each time. It stays in `me.json` on your Mac; never put it in notes or the repo.
 
 ## The agent: what it is and how to use it
 
@@ -121,6 +127,7 @@ python3 bench.py run RISE --module fno               # ram, open, scroll (5 runs
 python3 bench.py run RISE --module fno --group gesture,leak --runs 1
 python3 bench.py run RISE --module fno --group idle --with-video --runs 3   # market hours
 python3 bench.py run RISE --module fno --group live --runs 3 --live-minutes 10
+python3 bench.py run RISE --module fno --group net --runs 5     # last, alone: PCAPdroid pass (L11, X3, net_calls.csv)
 python3 record.py --module fno --app RISE --list     # manual metrics still missing
 python3 record.py --module fno --app RISE L14 --value 310 --note "Overview → Technicals"
 python3 build_report.py --module fno
@@ -129,16 +136,30 @@ python3 build_report.py --module fno
 `/benchmark-report` (or `python3 build_report.py --combined`) rebuilds the combined workbook and
 scorecard from every developer's results.
 
+## API and network details
+
+What can be seen per app, and where it ends up:
+
+| App | What is captured | How | Where |
+|---|---|---|---|
+| RISE | Every API call: method, host, path, status, duration, CDN cache state, size when logged | RISE's production build logs each call to logcat as JSON; `bench.py` reads it in the `open` window and on `_app` cold starts | `api_calls.csv`, a summary in the L15 / R1 note, sheet `10 API & Network calls` |
+| Every app | Connections opened, hosts (TLS SNI or DNS), bytes in/out, time to the first server byte | PCAPdroid capture per run, driven over adb by `bench.py --group net` | `net_calls.csv`, L11 (and X3 when `own_domains` is set), sheet 10 |
+
+Competitor request paths and bodies are not readable: their release builds log nothing and Android
+ignores user-installed certificates (TLS pinning). Response bodies are not captured for RISE either;
+they appear only in the UAT build's debug log. Query strings are dropped and id-like path segments
+are masked before anything is written to the shared results folder.
+
 ## Sharing (git)
 
 Repo: `https://github.com/mofsl-flutter/app_benchmark_agent.git`. Each developer works on their
 own branch (`results/<module>-<name>`), writes only inside `results/<module>/<their-name>_<phone>/`,
-and opens a pull request with their `runs.csv`, `env.csv` and `state.json`. Nothing collides by
+and opens a pull request with their `runs.csv`, `env.csv`, `state.json`, `api_calls.csv` and `net_calls.csv`. Nothing collides by
 design. Generated `reports/` and the `archive/` are git-ignored; run `python3 build_report.py
 --combined` after a `git pull` to rebuild the scorecard from everyone's results. Traces and
 recordings stay on your Mac under `~/.riise-benchmark/artifacts/` and are referenced by file name;
-they may show client-account screens and must never be committed (`*.pftrace` and `*.mp4` are
-ignored).
+they may show client-account screens and must never be committed (`*.pftrace`, `*.mp4` and
+`*.pcap` are ignored).
 
 ## Comparing across phones
 

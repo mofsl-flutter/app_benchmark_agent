@@ -28,6 +28,7 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(D.classify_prompt("→ Go to the screen just BEFORE Search (the one you open it from). Press Enter when settled. [Enter = continue, q = stop]"), "before")
         self.assertEqual(D.classify_prompt("→ Open Search, wait for it to load, then go back (3/10). [Enter = continue, q = stop]"), "cycle")
         self.assertEqual(D.classify_prompt("→ Something new [Enter = continue, q = stop]"), "other")
+        self.assertEqual(D.classify_prompt("→ Exercise Search for X3: use its controls. Press Enter when done. [Enter = continue, q = stop]"), "exercise")
 
     def test_prompt_regex_matches_bench_prompt_tail(self):
         self.assertTrue(D.PROMPT_RE.search("  → Open X. [Enter = continue, q = stop] "))
@@ -48,9 +49,10 @@ class StepTests(unittest.TestCase):
         self.assertEqual(D.parse_step("key:KEYCODE_BACK"), ("key", "KEYCODE_BACK"))
         self.assertEqual(D.parse_step("sleep:2"), ("sleep", 2.0))
         self.assertEqual(D.parse_step("hide_keyboard"), ("hide_keyboard", None))
+        self.assertEqual(D.parse_step("del:8"), ("del", 8))
 
     def test_parse_bad(self):
-        for bad in ("tap:0.5", "tap:1.5 0.5", "swipe:0.1 0.2 0.3", "frob:1", "find:", "nonsense"):
+        for bad in ("tap:0.5", "tap:1.5 0.5", "swipe:0.1 0.2 0.3", "frob:1", "find:", "nonsense", "del:0", "del:x"):
             with self.assertRaises(ValueError, msg=bad):
                 D.parse_step(bad)
 
@@ -108,3 +110,21 @@ class ScreenTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConsentPromptTests(unittest.TestCase):
+    def test_pcapdroid_consent_prompt(self):
+        self.assertEqual(D.classify_prompt("→ PCAPdroid consent: tap Allow / OK on the phone. Press Enter when PCAPdroid is back in the background. [Enter = continue, q = stop]"), "consent")
+        self.assertTrue(D.FOREIGN_WINDOWS.search("mCurrentFocus=Window{1 u0 com.android.vpndialogs/com.android.vpndialogs.ConfirmDialog}"))
+        self.assertTrue(D.FOREIGN_WINDOWS.search("com.emanuelef.remote_capture/com.emanuelef.remote_capture.activities.CaptureCtrl"))
+        self.assertFalse(D.FOREIGN_WINDOWS.search("com.zerodha.kite3/com.zerodha.kite3.MainActivity"))
+
+
+class ExerciseStepsTests(unittest.TestCase):
+    def test_lookup_and_render(self):
+        mod = {"name": "search", "auto_open": {"exercise": {"default": ["del:8", "text:{subject2}"], "per_app": {"Kite": ["tap:0.1 0.2"]}}}}
+        self.assertEqual(D.exercise_steps(mod, "Kite"), ["tap:0.1 0.2"])
+        self.assertEqual(D.exercise_steps(mod, "Groww"), ["del:8", "text:{subject2}"])
+        self.assertEqual(D.exercise_steps({"name": "x"}, "Groww"), [])
+        self.assertEqual(D.render_step("text:{subject2}", "Search", "RELIANCE", "INFY"), "text:INFY")
+        self.assertEqual(D.render_step("text:{subject2}", "Search", "RELIANCE"), "text:RELIANCE")

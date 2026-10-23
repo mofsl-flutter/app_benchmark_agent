@@ -57,6 +57,7 @@ PROMPT_RE = re.compile(r"\[Enter = continue, q = stop\]\s*$")
 AUTH_WORDS = re.compile(
     r"\b(m?pin|passcode|enter (your )?pin|log ?in|sign ?in|password|otp|one.time password|"
     r"fingerprint|biometric|verify (your )?identity|unlock)\b", re.I)
+FOREIGN_WINDOWS = re.compile(r"(com\.emanuelef\.remote_capture|com\.android\.vpndialogs)")  # PCAPdroid consent / VPN dialog
 AUTH_WINDOWS = re.compile(r"(pin|lock|login|auth|otp|passcode|biometric|accountpicker|chooseaccount|signin|sign_in)", re.I)
 DEFAULT_OPEN = ["find:{screen}", "sleep:2", "text:{subject}", "sleep:4", "hide_keyboard"]
 DEFAULT_BACK = ["hide_keyboard", "key:KEYCODE_BACK", "sleep:2"]
@@ -66,7 +67,11 @@ FIND_TRIES = 4
 # ---------------------------------------------------------------- pure helpers (tested in tests/)
 
 def classify_prompt(line):
-    """Which bench.py prompt this is: home, open, gestures, before, cycle, or other."""
+    """Which bench.py prompt this is: home, open, gestures, before, cycle, consent, exercise, or other."""
+    if "PCAPdroid" in line:
+        return "consent"
+    if line.lstrip("→ ").startswith("Exercise "):
+        return "exercise"
     if "HOME is fully loaded" in line:
         return "home"
     if "Gestures listed above" in line:
@@ -80,13 +85,14 @@ def classify_prompt(line):
     return "other"
 
 
-def render_step(step, screen, subject):
-    return step.replace("{screen}", screen or "").replace("{subject}", subject or "")
+def render_step(step, screen, subject, subject2=None):
+    return (step.replace("{screen}", screen or "").replace("{subject2}", subject2 or subject or "")
+            .replace("{subject}", subject or ""))
 
 
 def parse_step(step):
     """('find', 'Search') / ('tap', [0.5, 0.08]) / ('swipe', [..]) / ('text', 'RELIANCE') / ('key', 'KEYCODE_BACK')
-    / ('sleep', 2.0) / ('hide_keyboard', None). ValueError on a bad step."""
+    / ('del', 8) (backspace N times, one by one) / ('sleep', 2.0) / ('hide_keyboard', None). ValueError on a bad step."""
     if step == "hide_keyboard":
         return "hide_keyboard", None
     if ":" not in step:
@@ -97,6 +103,10 @@ def parse_step(step):
         if not val:
             raise ValueError(f"bad step {step!r}: empty value")
         return kind, val
+    if kind == "del":
+        if not val.isdigit() or int(val) < 1:
+            raise ValueError(f"bad step {step!r}: del needs a count")
+        return kind, int(val)
     if kind == "sleep":
         return kind, float(val)
     if kind in ("tap", "swipe"):
@@ -117,6 +127,15 @@ def auto_open_steps(module, app):
     name = B.canonical_app(app) if B.is_rise(app) or B.is_unranked_rise(app) else app
     steps = per_app.get(app) or per_app.get(name) or cfg.get("default") or DEFAULT_OPEN
     return list(steps), list(cfg.get("back") or DEFAULT_BACK)
+
+
+def exercise_steps(module, app):
+    """Steps played on the screen during the net pass's 60 s window (auto_open.exercise: default / per_app).
+    [] when the module defines none: the screen is then left idle."""
+    cfg = ((module or {}).get("auto_open") or {}).get("exercise") or {}
+    per_app = cfg.get("per_app") or {}
+    name = B.canonical_app(app) if B.is_rise(app) or B.is_unranked_rise(app) else app
+    return list(per_app.get(app) or per_app.get(name) or cfg.get("default") or [])
 
 
 def parse_bounds(b):
@@ -238,15 +257,20 @@ class Phone:
     def launch(self, pkg):
         self.sh(f"monkey -p {pkg} -c android.intent.category.LAUNCHER 1")
 
-    def run_steps(self, steps, screen, subject, pkg):
+    def run_steps(self, steps, screen, subject, pkg, subject2=None):
         """Execute module steps. Returns a list of notes; raises RuntimeError when a find: step fails."""
         w, h = self.size()
         notes = []
         for raw in steps:
-            step = render_step(raw, screen, subject)
+            step = render_step(raw, screen, subject, subject2)
             kind, val = parse_step(step)
             if kind == "sleep":
                 time.sleep(val)
+            elif kind == "del":
+                for _ in range(val):
+                    self.sh("input keyevent KEYCODE_DEL")
+                    time.sleep(0.3)
+                notes.append(f"deleted {val} chars one by one")
             elif kind == "tap":
                 self.tap(val[0] * w, val[1] * h)
                 notes.append(f"tap {val[0]:.2f},{val[1]:.2f}")
@@ -296,9 +320,12 @@ class Driver:
         self.module_name = ns.module
         self.module = None if ns.module == B.APP_SCOPE else B.load_module(ns.module)
         self.screen = (B.app_screen(self.module, self.app) if self.module else "") or ""
-        self.subject = ((self.module or {}).get("test_subjects") or [""])[0]
+        subjects = (self.module or {}).get("test_subjects") or [""]
+        self.subject = subjects[0]
+        self.subject2 = subjects[1] if len(subjects) > 1 else subjects[0]
         self.pkg = ns.pkg or B.load_apps().get(self.app, {}).get("package", "")
         self.open_steps, self.back_steps = auto_open_steps(self.module, self.app) if self.module else ([], [])
+        self.exercise = exercise_steps(self.module, self.app) if self.module else []
         ART_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.log_path = Path(a.log) if a.log else ART_DIR / f"drive-{ns.module}-{B.slug(self.app)}-{stamp}.log"
@@ -372,6 +399,25 @@ class Driver:
             return "\n", "before: " + "; ".join(notes)
         if kind == "gestures":
             return "\n", "playing gestures"
+        if kind == "exercise":
+            if not self.exercise:
+                return "\n", "no exercise steps for this app; leaving the screen idle"
+            try:
+                notes = self.phone.run_steps(self.exercise, self.screen, self.subject, self.pkg, self.subject2)
+            except (RuntimeError, ValueError) as e:
+                return "\n", f"exercise stopped: {e}"
+            return "\n", "exercise: " + "; ".join(notes)
+        if kind == "consent":
+            waited = 0
+            while FOREIGN_WINDOWS.search(self.phone.focus() or ""):
+                if waited == 0:
+                    self.say(f"PCAPdroid / VPN dialog showing ({self.phone.focus()}); waiting up to {self.a.auth_wait}s "
+                             "for the developer to tap Allow / OK")
+                if waited >= self.a.auth_wait:
+                    return "q", "PCAPdroid consent dialog was not answered"
+                time.sleep(5)
+                waited += 5
+            return "\n", f"consent dialog gone: {self.phone.focus()}"
         return "\n", "unknown prompt, pressing Enter"
 
     # -- main loop -------------------------------------------------------------------------------
@@ -382,6 +428,7 @@ class Driver:
                  f"subject={self.subject!r}")
         if self.module:
             self.say(f"open steps: {self.open_steps}  back steps: {self.back_steps}")
+            self.say(f"exercise steps: {self.exercise or 'none (screen left idle in the net pass)'}")
         if self.a.dry:
             self.say(f"dry run; would start: {' '.join(cmd)}")
             return 0

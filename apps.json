@@ -1,12 +1,95 @@
 {
-  "RISE":      {"package": "com.mosl.mobile",            "ranked": true},
-  "RISE UAT":  {"package": "com.mosl.mobile.uat",        "ranked": false, "note": "Optional. Measured last, never ranked."},
-  "Kite":      {"package": "com.zerodha.kite3",          "ranked": true},
-  "Coin":      {"package": "com.zerodha.coin",           "ranked": true, "stands_in_for": "Kite", "modules": ["mf"]},
-  "Groww":     {"package": "com.nextbillion.groww",      "ranked": true},
-  "Angel One": {"package": "com.msf.angelmobile",        "ranked": true},
-  "INDmoney":  {"package": "in.indwealth",               "ranked": true},
-  "Kotak Neo": {"package": "com.kotak.neo",              "ranked": true},
-  "SAHI":      {"package": "com.aaritya.sahi_trade_app", "ranked": true},
-  "Dhan":      {"package": "com.dhan.live",              "ranked": true}
+  "RISE": {
+    "package": "com.mosl.mobile",
+    "ranked": true,
+    "own_domains": [
+      "motilaloswal.com",
+      "mosl.com",
+      "moamc.com",
+      "mofsl.net",
+      "riseapp.in",
+      "motilaloswaluat.com"
+    ]
+  },
+  "RISE UAT": {
+    "package": "com.mosl.mobile.uat",
+    "ranked": false,
+    "note": "Optional. Measured last, never ranked.",
+    "own_domains": [
+      "motilaloswal.com",
+      "mosl.com",
+      "moamc.com",
+      "mofsl.net",
+      "riseapp.in",
+      "motilaloswaluat.com"
+    ]
+  },
+  "Kite": {
+    "package": "com.zerodha.kite3",
+    "ranked": true,
+    "own_domains": [
+      "zerodha.com",
+      "zerodha.net",
+      "kite.trade"
+    ]
+  },
+  "Coin": {
+    "package": "com.zerodha.coin",
+    "ranked": true,
+    "stands_in_for": "Kite",
+    "modules": [
+      "mf"
+    ],
+    "own_domains": [
+      "zerodha.com",
+      "zerodha.net",
+      "kite.trade"
+    ]
+  },
+  "Groww": {
+    "package": "com.nextbillion.groww",
+    "ranked": true,
+    "own_domains": [
+      "groww.in"
+    ]
+  },
+  "Angel One": {
+    "package": "com.msf.angelmobile",
+    "ranked": true,
+    "own_domains": [
+      "angelone.in",
+      "angelbroking.com"
+    ]
+  },
+  "INDmoney": {
+    "package": "in.indwealth",
+    "ranked": true,
+    "own_domains": [
+      "indmoney.com"
+    ]
+  },
+  "Kotak Neo": {
+    "package": "com.kotak.neo",
+    "ranked": true,
+    "own_domains": [
+      "kotaksecurities.com",
+      "kotak.com"
+    ]
+  },
+  "SAHI": {
+    "package": "com.aaritya.sahi_trade_app",
+    "ranked": true,
+    "own_domains": [
+      "sahi.co",
+      "aaritya.com"
+    ]
+  },
+  "Dhan": {
+    "package": "com.dhan.live",
+    "ranked": true,
+    "own_domains": [
+      "dhan.co"
+    ]
+  },
+  "_note": "own_domains: the company's own hosts, so X3 can count third-party hosts from the net pass. A host counts as own when it equals or ends with one of these; add a full host name (e.g. a CloudFront distribution) to claim a CDN. RISE: motilaloswaluat.com is the company's UAT domain, listed because the production build was seen calling it (2026-10-23, Search) — a finding for the RISE team, not a third party. SAHI and Dhan are guesses: confirm from the first capture's host list."
 }

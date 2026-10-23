@@ -71,8 +71,8 @@ METRIC_CATALOGUE = [
        "L3 method on the Small test account.", applies="account_sensitive"),
     _m("L10", "User-wise", "{screen} load – Large account", "ms", "Lower", ("runs", LOAD), "scrcpy",
        "L3 method on the Large test account.", applies="account_sensitive"),
-    _m("L11", "API / Network", "Network connections during {screen} load", "count", "Lower", ("runs", LOAD), "PCAPdroid",
-       "In PCAPdroid, filter to the app and start capture. Open {screen} cold and count the connections opened in the first 10 s."),
+    _m("L11", "API / Network", "Network connections during {screen} load", "count", "Lower", ("runs", LOAD), "PCAPdroid (bench.py --group net)",
+       "bench.py --group net starts a PCAPdroid capture filtered to the app over adb (needs the PCAPdroid API key: record.py --pcapdroid-key), opens {screen} and counts the connections opened (TCP SYN + QUIC) in the first 10 s. Hosts, bytes and first-response times per connection go to net_calls.csv. Runs alone, after every other group, because the VPN adds overhead."),
     _m("L12", "API / Network", "{screen} load on throttled network (~1 Mbps)", "ms", "Lower", ("runs", LOAD), "Developer options",
        "Phone: Developer options → Network download rate limit = 1 Mbps (note the value in env.csv). L3 method."),
     _m("L13", "Offline", "Recovery after reconnect → fresh data shown on {screen}", "ms", "Lower", ("runs", LOAD), "scrcpy",
@@ -119,8 +119,8 @@ METRIC_CATALOGUE = [
        "Search the app on exodus-privacy.eu.org and use the latest report for the Play Store version.", runs=1, phone=True),
     _m("X2", "External SDKs", "Permissions requested (Exodus)", "count", "Lower", ("app", SDK, "C"), "Exodus Privacy",
        "Same Exodus report: permissions count.", runs=1, phone=True),
-    _m("X3", "External SDKs", "Third-party domains contacted on {screen}", "count", "Lower", ("app", SDK, "D"), "PCAPdroid",
-       "PCAPdroid capture for 60 s on {screen}. Count unique domains that don't belong to the app's own company.", runs=1),
+    _m("X3", "External SDKs", "Third-party domains contacted on {screen}", "count", "Lower", ("app", SDK, "D"), "PCAPdroid (bench.py --group net)",
+       "Same capture as L11, 60 s on {screen} in run 1: unique hosts not under the app's own_domains in apps.json. Manual (count the hosts listed in the L11 note) when own_domains is missing for the app.", runs=1),
     _m("X4", "External SDKs", "Start-up lock contention: 'Long monitor contention' events before home", "count", "Lower", ("app", SDK, "E"), "ADB logcat (bench.py)",
        "bench.py --group coldstart clears logcat, cold-starts the app and counts 'Long monitor contention' lines from the app's process until home is up. The longest wait in ms goes in the note.", runs=5, phone=True),
     # ---- RAM & storage
@@ -169,9 +169,19 @@ for _mm in METRIC_CATALOGUE:
 PHONE_METRICS = [m["id"] for m in METRIC_CATALOGUE if m["phone"]]
 BENCH_GROUPS = {  # which bench.py group produces which metric IDs
     "coldstart": ["L1", "X4"], "ram": ["R1", "R2"], "open": ["L15"], "scroll": ["S1", "S2", "S3", "S4", "S5"],
-    "gesture": ["S7"], "idle": ["U4", "U5"], "leak": ["R9"], "live": ["C1", "C2", "C3", "C4"],
+    "gesture": ["S7"], "idle": ["U4", "U5"], "leak": ["R9"], "live": ["C1", "C2", "C3", "C4"], "net": ["L11"],
 }
-AUTOMATED = sorted({mid for ids in BENCH_GROUPS.values() for mid in ids} | {"R3"})
+AUTOMATED = sorted({mid for ids in BENCH_GROUPS.values() for mid in ids} | {"R3"})  # X3 stays manual unless own_domains is set
+
+# Side tables written next to runs.csv by bench.py (diagnostic, never scored):
+#   api_calls.csv  one row per API call RISE logged during a screen open / launch (apilog.py)
+#   net_calls.csv  one row per network connection in the PCAPdroid pass (netcap.py)
+META_COLUMNS = ["timestamp", "module", "module_version", "developer", "app", "device_model", "package", "version", "run"]
+CALL_COLUMNS = META_COLUMNS + ["phase", "seq", "ts", "t_rel_ms", "method", "host", "path", "status", "level",
+                               "duration_ms", "size_bytes", "cache", "api_version", "repeat_of", "artifact", "source"]
+NET_COLUMNS = META_COLUMNS + ["phase", "seq", "t_rel_ms", "proto", "host", "dst_ip", "port", "sni", "first_response_ms",
+                              "bytes_out", "bytes_in", "pkts", "third_party", "artifact", "source"]
+CALLS_FILES = {"api_calls.csv": CALL_COLUMNS, "net_calls.csv": NET_COLUMNS}
 
 GENERIC_WORDS = {"screen": "the screen", "list": "the list", "detail": "the detail screen"}
 
@@ -213,6 +223,8 @@ def load_apps():
     apps = json.loads(APPS_FILE.read_text())
     out = {}
     for name, v in apps.items():
+        if name.startswith("_"):  # notes
+            continue
         if isinstance(v, str):  # old flat shape
             v = {"package": v, "ranked": True}
         v.setdefault("ranked", True)
@@ -342,9 +354,24 @@ def read_me():
     return {}
 
 
-def write_me(developer):
+def write_me(developer=None, **extra):
+    """Merge into ~/.riise-benchmark/me.json: the developer name and per-developer keys (e.g. pcapdroid_api_key)."""
+    me = read_me()
+    if developer:
+        me["developer"] = developer
+    me.update({k: v for k, v in extra.items() if v is not None})
     ME_FILE.parent.mkdir(parents=True, exist_ok=True)
-    ME_FILE.write_text(json.dumps({"developer": developer}, indent=2) + "\n")
+    ME_FILE.write_text(json.dumps(me, indent=2) + "\n")
+
+
+def pcapdroid_key():
+    """PCAPdroid API key for bench.py --group net: me.json (record.py --pcapdroid-key) or $PCAPDROID_API_KEY. Never log it."""
+    return (read_me().get("pcapdroid_api_key") or os.environ.get("PCAPDROID_API_KEY") or "").strip()
+
+
+def own_domains(app):
+    """Domains that belong to the app's own company (apps.json own_domains), for X3."""
+    return list(load_apps().get(canonical_app(app), load_apps().get(app, {})).get("own_domains") or [])
 
 
 def get_developer(cli_value=None):
@@ -380,24 +407,60 @@ def append_rows(folder, rows, meta, module):
     rows: [{"metric", "run", "value", "note", "source"?, "artifact"?, "ts"?}]
     meta: {"app", "pkg", "version", "model", "android", "ram_gb"}
     """
+    out = []
+    for r in rows:
+        mid = r["metric"].split(".", 1)[0]
+        unit = METRICS[mid]["unit"] if mid in METRICS else ""
+        out.append([r.get("ts") or now_iso(), module["name"], module.get("version", module_version(module)),
+                    meta.get("developer", ""), canonical_app(meta["app"]), meta.get("model", ""),
+                    meta.get("ram_gb", ""), meta.get("android", ""), meta.get("pkg", ""), meta.get("version", ""),
+                    r["metric"], r["run"], "" if r["value"] is None else r["value"], unit,
+                    r.get("source", "bench.py"), r.get("artifact", ""), r.get("note", "")])
+    path = append_csv(folder, "runs.csv", RUN_COLUMNS, out)
+    update_state(folder, canonical_app(meta["app"]), rows)
+    return path
+
+
+def append_csv(folder, name, columns, rows):
+    """Append rows (lists or dicts keyed by column) to <folder>/<name>, writing the header on a new file."""
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / "runs.csv"
+    path = folder / name
     new = not path.exists() or path.stat().st_size == 0
     with path.open("a", newline="") as f:
         w = csv.writer(f)
         if new:
-            w.writerow(RUN_COLUMNS)
+            w.writerow(columns)
         for r in rows:
-            mid = r["metric"].split(".", 1)[0]
-            unit = METRICS[mid]["unit"] if mid in METRICS else ""
-            w.writerow([r.get("ts") or now_iso(), module["name"], module.get("version", module_version(module)),
-                        meta.get("developer", ""), canonical_app(meta["app"]), meta.get("model", ""),
-                        meta.get("ram_gb", ""), meta.get("android", ""), meta.get("pkg", ""), meta.get("version", ""),
-                        r["metric"], r["run"], "" if r["value"] is None else r["value"], unit,
-                        r.get("source", "bench.py"), r.get("artifact", ""), r.get("note", "")])
-    update_state(folder, canonical_app(meta["app"]), rows)
+            w.writerow([("" if r.get(c) is None else r.get(c)) for c in columns] if isinstance(r, dict) else r)
     return path
+
+
+def append_calls(folder, rows, meta, module, name, artifact="", source="bench.py"):
+    """Append per-call / per-connection rows (apilog.to_rows / netcap.to_rows) to api_calls.csv or net_calls.csv."""
+    columns = CALLS_FILES[name]
+    stamp = now_iso()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d.update({"timestamp": stamp, "module": module["name"], "module_version": module.get("version", module_version(module)),
+                  "developer": meta.get("developer", ""), "app": canonical_app(meta["app"]), "device_model": meta.get("model", ""),
+                  "package": meta.get("pkg", ""), "version": meta.get("version", ""),
+                  "artifact": d.get("artifact") or (str(artifact) if artifact else ""), "source": d.get("source") or source})
+        out.append(d)
+    return append_csv(folder, name, columns, out)
+
+
+def read_calls(folder, name):
+    """Rows of <folder>/<name> (api_calls.csv / net_calls.csv) as dicts; [] when absent."""
+    path = Path(folder) / name
+    if not path.exists():
+        return []
+    with path.open(newline="") as f:
+        rows = list(csv.DictReader(f))
+    for r in rows:
+        r["app"] = canonical_app(r.get("app", ""))
+    return rows
 
 
 def read_runs(path):

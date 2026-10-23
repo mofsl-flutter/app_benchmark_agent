@@ -141,6 +141,37 @@
         "hide_keyboard"
       ]
     },
-    "_note": "Fixed taps on each app's Home search box/icon (Galaxy A37 screenshots, 2026-10-23); most of these homes animate live prices so uiautomator dump never idles and find: cannot be used. Groww steps unverified: app was signed out."
+    "_note": "Fixed taps on each app's Home search box/icon (Galaxy A37 screenshots, 2026-10-23); most of these homes animate live prices so uiautomator dump never idles and find: cannot be used. Groww steps unverified: app was signed out.",
+    "exercise": {
+      "_note": "Played on the Search screen during the net pass's 60 s X3 window (run 1): clear the query one character at a time, type the second test subject, tap the result tabs. {subject2} = second test_subjects entry. Tab fractions per app from screenshots (Galaxy A37, 2026-10-23).",
+      "default": [
+        "del:8",
+        "sleep:2",
+        "text:{subject2}",
+        "sleep:4",
+        "hide_keyboard",
+        "sleep:2"
+      ],
+      "per_app": {
+        "Angel One": [
+          "tap:0.50 0.083",
+          "sleep:1",
+          "del:8",
+          "sleep:2",
+          "text:{subject2}",
+          "sleep:4",
+          "hide_keyboard",
+          "sleep:1",
+          "tap:0.31 0.15",
+          "sleep:3",
+          "tap:0.51 0.15",
+          "sleep:3",
+          "tap:0.71 0.15",
+          "sleep:3",
+          "tap:0.13 0.15",
+          "sleep:3"
+        ]
+      }
+    }
   }
 }

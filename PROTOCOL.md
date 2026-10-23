@@ -8,7 +8,9 @@ done") and the Portfolio decisions in `archive/CONTEXT.md`.
 
 - **Black box, like for like.** Every app, RISE included, is the installed Play Store release
   build, measured from outside with adb, Perfetto, screen recordings and PCAPdroid. Competitor
-  API timing is not available (TLS pinning); what the user feels is measured instead.
+  API timing is not available (TLS pinning); what the user feels is measured instead. RISE's own
+  API log (every call, as JSON in logcat) is parsed into `api_calls.csv` as a diagnostic for RISE
+  only; for every app a PCAPdroid pass gives hosts, connections and bytes (`net_calls.csv`).
 - **One phone per module.** Each developer measures every app for their module on the same
   phone, same Wi-Fi, same session block. Ranks and 0–100 scores are comparable across modules;
   raw milliseconds are not, because phones differ.
@@ -45,8 +47,11 @@ done") and the Portfolio decisions in `archive/CONTEXT.md`.
    (L7, L8) leave it in the background for the stated time.
 2. The developer unlocks and **types the PIN on the phone**. PINs never go into scripts or notes.
 3. The developer opens the module screen when prompted and presses Enter when it is fully loaded.
-4. `bench.py` takes its readings (RAM, bytes, Perfetto trace, flings, gestures, idle window,
-   leak cycles, live session) without anyone touching the phone, then force-stops the app.
+4. `bench.py` takes its readings (RAM, bytes, the app's API log, Perfetto trace, flings, gestures,
+   idle window, leak cycles, live session) without anyone touching the phone, then force-stops the app.
+   The PCAPdroid pass (`--group net`) is its own block, last and alone, because the VPN adds
+   overhead: capture filtered to the app, launch, open the screen, 8 s settle (L11 window = the L15
+   window), 60 s on the screen in run 1 for X3.
 5. Every value is one row in `runs.csv` with the run number, source, artifact file and note.
 6. **Rotate the app order** on each repeat (run 1: A B C, run 2: B C A, …) to cancel time-of-day
    and server load.
@@ -96,3 +101,5 @@ O1 items. Score Yes / Partial / No / N/A per item; N/A never counts as zero.
   (`~/.riise-benchmark/artifacts/`); never copy them into the shared folder.
 - Never place orders or change holdings or watchlists while measuring.
 - Record only what was measured. A missing value is better than a guessed one.
+- `api_calls.csv` carries no query strings and masks id-like path segments; `net_calls.csv` holds
+  hosts and byte counts only. Raw logs and `.pcap` captures stay in `~/.riise-benchmark/artifacts/`.

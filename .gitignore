@@ -18,3 +18,6 @@ __pycache__/
 *.pyc
 .DS_Store
 .venv/
+
+# PCAPdroid captures from the net pass (kept under ~/.riise-benchmark/artifacts/)
+*.pcap

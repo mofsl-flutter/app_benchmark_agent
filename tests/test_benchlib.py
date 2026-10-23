@@ -171,3 +171,44 @@ class BenchParserTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CallsTablesTests(unittest.TestCase):
+    def test_net_group_and_automated(self):
+        self.assertEqual(B.BENCH_GROUPS["net"], ["L11"])
+        self.assertIn("L11", B.AUTOMATED)
+        self.assertNotIn("X3", B.AUTOMATED)
+        self.assertEqual(len(B.METRIC_CATALOGUE), 50)
+
+    def test_append_calls_round_trip(self):
+        folder = Path(tempfile.mkdtemp())
+        module = {"name": "search", "version": "abc12345"}
+        meta = {"app": "Riise", "developer": "Dev", "pkg": "com.mosl.mobile", "version": "6.2.09", "model": "samsung X"}
+        rows = [{"phase": "open", "run": 1, "seq": 1, "ts": "2026-10-23 13:34:21.050", "t_rel_ms": 0, "method": "GET",
+                 "host": "api.x.com", "path": "/a/{id}", "status": 200, "level": "SUCCESS", "duration_ms": 12,
+                 "size_bytes": None, "cache": "HIT", "api_version": "4.0", "repeat_of": ""}]
+        B.append_calls(folder, rows, meta, module, "api_calls.csv", artifact="/tmp/x.log")
+        B.append_calls(folder, rows, meta, module, "api_calls.csv")
+        got = B.read_calls(folder, "api_calls.csv")
+        self.assertEqual(len(got), 2)
+        self.assertEqual(got[0]["app"], "RISE")
+        self.assertEqual((got[0]["host"], got[0]["path"], got[0]["size_bytes"], got[0]["artifact"]), ("api.x.com", "/a/{id}", "", "/tmp/x.log"))
+        self.assertEqual(list(got[0].keys()), B.CALL_COLUMNS)
+        self.assertEqual(B.read_calls(folder, "net_calls.csv"), [])
+        net = [{"phase": "open", "seq": 1, "t_rel_ms": 5, "proto": "tcp", "host": "h", "dst_ip": "1.2.3.4", "port": 443,
+                "sni": "h", "first_response_ms": 90, "bytes_out": 10, "bytes_in": 20, "pkts": 3, "third_party": "yes", "run": 2}]
+        B.append_calls(folder, net, meta, module, "net_calls.csv")
+        self.assertEqual(list(B.read_calls(folder, "net_calls.csv")[0].keys()), B.NET_COLUMNS)
+
+    def test_me_merge_and_key(self):
+        B.write_me("Dev One")
+        B.write_me(pcapdroid_api_key="k-123")
+        self.assertEqual(B.read_me(), {"developer": "Dev One", "pcapdroid_api_key": "k-123"})
+        self.assertEqual(B.pcapdroid_key(), "k-123")
+        B.write_me("Dev Two")
+        self.assertEqual(B.read_me()["pcapdroid_api_key"], "k-123")
+
+    def test_own_domains(self):
+        self.assertIn("zerodha.com", B.own_domains("Kite"))
+        self.assertIn("motilaloswal.com", B.own_domains("Riise"))
+        self.assertEqual(B.own_domains("Nope"), [])
