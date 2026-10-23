@@ -46,7 +46,10 @@
   "open_tap": {
     "per_app": {}
   },
-  "test_subjects": [],
+  "test_subjects": [
+    "RELIANCE",
+    "INFY"
+  ],
   "skip": [],
   "offline_items": [
     "Cold launch in airplane mode → Search shows cached data",
@@ -69,6 +72,75 @@
     "Offline cached results",
     "Dark mode"
   ],
-  "notes": "",
-  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+  "notes": "Search entry is on the Home screen of every app (search textbox or icon); tapping it opens the Search screen. Flow per run: type the query -> clear the text -> back. Developer confirmed screens on 2026-10-23. test_subjects RELIANCE and INFY are the agent's default (liquid NIFTY stocks every app can find); change if needed. auto_open steps verified on all installed apps except Groww on 2026-10-23 (Kite needs a second tap on the field of its search screen; Kotak Neo needs the All chip after typing because the Home tab preselects a segment). RISE, Kite and Kotak Neo show a device biometric prompt on every cold start: the developer must approve it; drive.py waits.",
+  "auto_open": {
+    "default": [
+      "find:{screen}",
+      "sleep:2",
+      "text:{subject}",
+      "sleep:4",
+      "hide_keyboard"
+    ],
+    "back": [
+      "hide_keyboard",
+      "key:KEYCODE_BACK",
+      "sleep:2"
+    ],
+    "per_app": {
+      "RISE": [
+        "tap:0.71 0.08",
+        "sleep:2",
+        "text:{subject}",
+        "sleep:4",
+        "hide_keyboard"
+      ],
+      "Kite": [
+        "tap:0.33 0.19",
+        "sleep:2",
+        "tap:0.40 0.075",
+        "sleep:1",
+        "text:{subject}",
+        "sleep:4",
+        "hide_keyboard"
+      ],
+      "Groww": [
+        "find:{screen}",
+        "sleep:2",
+        "text:{subject}",
+        "sleep:4",
+        "hide_keyboard"
+      ],
+      "Angel One": [
+        "tap:0.50 0.08",
+        "sleep:2",
+        "text:{subject}",
+        "sleep:4",
+        "hide_keyboard"
+      ],
+      "INDmoney": [
+        "tap:0.92 0.07",
+        "sleep:2",
+        "text:{subject}",
+        "sleep:4",
+        "hide_keyboard"
+      ],
+      "Kotak Neo": [
+        "tap:0.41 0.08",
+        "sleep:2",
+        "text:{subject}",
+        "sleep:3",
+        "hide_keyboard",
+        "tap:0.11 0.15",
+        "sleep:3"
+      ],
+      "SAHI": [
+        "tap:0.43 0.08",
+        "sleep:2",
+        "text:{subject}",
+        "sleep:4",
+        "hide_keyboard"
+      ]
+    },
+    "_note": "Fixed taps on each app's Home search box/icon (Galaxy A37 screenshots, 2026-10-23); most of these homes animate live prices so uiautomator dump never idles and find: cannot be used. Groww steps unverified: app was signed out."
+  }
 }
