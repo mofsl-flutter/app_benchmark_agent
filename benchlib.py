@@ -546,8 +546,10 @@ def expected(module, app=None):
         else:
             out[m["id"]] = module.get("runs", {}).get(m["id"], m["runs"])
     if module["name"] != APP_SCOPE:
+        needs = {"pull_to_refresh": "L6", "pin_on_resume": "L7"}  # facts are observed during these tests
         for k in UX_FACTS:
-            out[f"F.{k}"] = 1
+            if needs.get(k) in out:
+                out[f"F.{k}"] = 1
     return out
 
 

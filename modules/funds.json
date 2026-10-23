@@ -2,13 +2,14 @@
   "name": "funds",
   "title": "Funds",
   "rise": {
-    "screen": "Funds (home card / bottom tab)",
+    "screen": "Funds",
     "list": "funds summary",
-    "detail": "Add funds page",
+    "detail": "Add funds",
     "detail_prompt": "Tap ADD FUNDS now",
-    "detail2": "Withdraw page",
-    "live_ticks": false,
-    "account_sensitive": false
+    "detail2": "Withdraw",
+    "live_ticks": true,
+    "account_sensitive": false,
+    "tab_prompt": "Tap MARGIN now"
   },
   "apps": {
     "Kite": {
@@ -50,27 +51,45 @@
   },
   "test_subjects": [],
   "skip": [
+    "A1",
+    "A2",
+    "C2",
+    "C3",
+    "D1",
+    "L11",
+    "L12",
+    "L13",
+    "L16",
+    "L5",
+    "L6",
+    "L7",
+    "L8",
+    "O1",
+    "R3",
+    "R9",
     "S1",
     "S2",
     "S3",
     "S4",
     "S5",
     "S7",
-    "L13"
+    "U1",
+    "U2",
+    "U3",
+    "U4",
+    "U5",
+    "X3"
   ],
   "runs": {
     "L3": 3,
     "L4": 3,
-    "L5": 3,
-    "L6": 3,
-    "L7": 3,
-    "L12": 3,
     "L14": 3,
-    "L16": 3,
-    "L8": 1,
-    "L11": 1
+    "R2": 3,
+    "L15": 3,
+    "C1": 3,
+    "C4": 3
   },
-  "deviation_note": "Timings taken with timing.py (screen recording + tap detection); 3 runs for screen timings and 1 for L8/L11 to fit one day; scroll metrics not measured (Funds screens are short and do not scroll); L13 not measured. L14 = Funds → Margin details. In scope on 2026-10-23: RISE, INDmoney, Groww, Kotak Neo.",
+  "deviation_note": "Scope agreed on 2026-10-23: Funds load (L3/L4), Margin data load (L14), RAM (R2), data per open (L15) and CPU/data over a 2-minute idle session (C1/C4, live_ticks set only to enable that session; the screen has no live prices). 3 runs each; timings with timing.py. Cold start and phone metrics already covered by the Portfolio run. Add/withdraw money timings are out of the agent (real transactions). In scope: RISE, INDmoney, Groww, Kotak Neo. L14 (Margin) only exists in RISE, so it is reported for RISE and not scored.",
   "offline_items": [
     "Cold launch in airplane mode → Funds shows the last known balance",
     "Cached data shows a 'last updated' time or stale indicator",
@@ -98,6 +117,12 @@
     "Pledge / collateral link",
     "Dark mode"
   ],
-  "notes": "READ-ONLY: accounts belong to other people. Open Funds, Margin, Add funds and Withdraw pages and go Back. Never type an amount, pick a payment method or submit. L5 = tap Add funds → page ready; L16 = tap Withdraw → page ready; L14 = Funds → Margin details.",
-  "_todo": "Confirm each app's Funds path, the Add funds / Withdraw / Margin entries with /benchmark-module funds before the first run."
+  "notes": "READ-ONLY: accounts belong to other people. Open Funds and Margin and go Back. Never type an amount, pick a payment method or submit. L14 = Funds → Margin until margin values are shown.",
+  "_todo": "Confirm each app's Funds path, the Add funds / Withdraw / Margin entries with /benchmark-module funds before the first run.",
+  "app_notes": {
+    "RISE": "Funds opens on the Add Funds tab (amount pre-filled, keypad open, 'Add ₹100' button at the bottom: never tap it). Tabs: Add Funds | Withdraw Funds | Margin. L5 = from Withdraw tab tap Add Funds tab; L16 = tap Withdraw Funds tab; L14 = tap Margin tab.",
+    "INDmoney": "No proper margin screen: L14 not measured (developer, 2026-10-23).",
+    "Groww": "No proper margin screen: L14 not measured (developer, 2026-10-23).",
+    "Kotak Neo": "No proper margin screen: L14 not measured (developer, 2026-10-23)."
+  }
 }

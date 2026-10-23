@@ -51,9 +51,8 @@ class OfflineTests(unittest.TestCase):
 class ModuleRunsTests(unittest.TestCase):
     def test_module_run_overrides(self):
         e = B.expected(B.load_module("funds"))
-        self.assertEqual((e["L3"], e["L8"], e["L16"]), (3, 1, 3))
-        self.assertNotIn("L13", e)
-        self.assertNotIn("S1", e)
+        self.assertEqual(sorted(e), ["C1", "C4", "L14", "L15", "L3", "L4", "R2"])   # agreed Funds scope; no facts without L6/L7
+        self.assertEqual((e["L3"], e["C1"]), (3, 3))
         self.assertEqual(B.expected(B.load_module("mf"))["L3"], 5)
         self.assertEqual(B.expected(B.load_module("portfolio"))["L3"], 5)
 

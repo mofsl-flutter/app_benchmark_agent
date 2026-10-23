@@ -42,7 +42,10 @@ developer to type it in the Claude Code prompt with a leading `!` (for example
 `! python3 bench.py run RISE --module fno`), which runs it in their terminal. Wait until they say it
 finished, then run `python3 bench.py status --module <module>` yourself to see what was recorded.
 The same applies to `timing.py` and `offline.py`: print the command for the developer to run with
-`!`. `preflight.py`, `record.py`, `bench.py status/installed/devices` and `build_report.py` have no
+`!`. In some Claude Code sessions `!` gives the command no keyboard input, and the script exits
+at its first prompt ("needs your terminal"). Then give the developer the full line for a separate
+Terminal window instead: `cd <repo> && python3 bench.py run …`. Nothing from an interrupted run is
+saved, and re-running resumes at the first missing run. `preflight.py`, `record.py`, `bench.py status/installed/devices` and `build_report.py` have no
 prompts; run those yourself.
 
 ## Modes

@@ -295,17 +295,21 @@ def _rank_chart(left, right, apps, labels):
     """Slope chart: technical rank on the left, user-feel rank on the right."""
     n = len(apps)
     h, w, top, gap = 60 + 34 * n, 640, 44, 34
-    y = lambda r: top + (r - 1) * gap
+    pos = {}
+    for side, ranks in (("l", left), ("r", right)):
+        order = sorted((a for a in apps if ranks.get(a) is not None), key=lambda a: (ranks[a], a))
+        pos[side] = {a: i + 1 for i, a in enumerate(order)}  # ties get adjacent slots
+    yl, yr = (lambda a: top + (pos["l"][a] - 1) * gap), (lambda a: top + (pos["r"][a] - 1) * gap)
     out = [f'<svg viewBox="0 0 {w} {h}" width="100%" role="img" aria-label="Technical rank versus user-feel rank">',
            f'<text x="200" y="20" text-anchor="end" class="m">Technical</text><text x="440" y="20" class="m">User feel</text>']
     for a in sorted(apps, key=lambda a: B.is_rise(a)):
         if left.get(a) is None or right.get(a) is None:
             continue
         c = "r" if B.is_rise(a) else "o"
-        out.append(f'<line class="{c}" x1="210" y1="{y(left[a])}" x2="430" y2="{y(right[a])}"/>'
-                   f'<circle class="{c}" cx="210" cy="{y(left[a])}" r="5"/><circle class="{c}" cx="430" cy="{y(right[a])}" r="5"/>'
-                   f'<text x="200" y="{y(left[a]) + 4}" text-anchor="end">#{left[a]} {_e(labels[a])}</text>'
-                   f'<text x="440" y="{y(right[a]) + 4}">#{right[a]} {_e(labels[a])}</text>')
+        out.append(f'<line class="{c}" x1="210" y1="{yl(a)}" x2="430" y2="{yr(a)}"/>'
+                   f'<circle class="{c}" cx="210" cy="{yl(a)}" r="5"/><circle class="{c}" cx="430" cy="{yr(a)}" r="5"/>'
+                   f'<text x="200" y="{yl(a) + 4}" text-anchor="end">#{left[a]} {_e(labels[a])}</text>'
+                   f'<text x="440" y="{yr(a) + 4}">#{right[a]} {_e(labels[a])}</text>')
     out.append("</svg>")
     return "".join(out)
 
@@ -428,7 +432,8 @@ def render_html(ctx):
             badge = f" <span class='c-{conf}' title='spread {spread}%'>●</span>" if conf else ""
             cls = " class='best'" if best is not None and v == best and a in have else ""
             cells.append(f"<td><span{cls}>{_num(v)}</span>{badge}</td>")
-        p.append(f"<tr><td class='tx' title='{_e(m['category'])}'>{mid} · {_e(B.render(m['name'], ctx['module']))}</td><td>{_e(m['unit'])} {'↓' if m['better'] == 'Lower' else '↑'}</td>{''.join(cells)}</tr>")
+        solo = " <span class='chip'>one app only, not scored</span>" if len(have) < 2 else ""
+        p.append(f"<tr><td class='tx' title='{_e(m['category'])}'>{mid} · {_e(B.render(m['name'], ctx['module']))}{solo}</td><td>{_e(m['unit'])} {'↓' if m['better'] == 'Lower' else '↑'}</td>{''.join(cells)}</tr>")
     p.append("</table></div></section>")
 
     # Method
@@ -478,9 +483,9 @@ def build(module, folder, rows, app_rows, apps, developer, model, out_path):
                         f"their technical scores leave out the missing categories, so compare their ranks with care.")
     if module.get("runs") or module.get("skip"):
         dev = [f"{k} {v} run(s)" for k, v in sorted(module.get("runs", {}).items())]
-        warnings.append("Protocol deviations set in the module file: "
-                        + "; ".join(x for x in (", ".join(dev), "not measured: " + ", ".join(module["skip"]) if module.get("skip") else "") if x)
-                        + (f". {module['deviation_note']}" if module.get("deviation_note") else ""))
+        warnings.append("Protocol deviations (module file): "
+                        + (module["deviation_note"] if module.get("deviation_note") else
+                           "; ".join(x for x in (", ".join(dev), f"{len(module.get('skip', []))} metric(s) not measured") if x)))
     empty = [a for a, n in holdings.items() if n == 0 and a in ranked]
     if empty:
         warnings.append(f"{', '.join(empty)} had an empty account during the test (*).")

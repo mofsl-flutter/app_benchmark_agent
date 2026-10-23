@@ -315,7 +315,7 @@ def main():
             res = m("Pull down to refresh now")
         elif t == "L14":
             ask("Be on {screen}, on its first tab / section. Press Enter.".format(**words))
-            res = m("Tap the NEXT tab or section now")
+            res = m(module["rise"].get("tab_prompt", "Tap the NEXT tab or section now"))
             ask("Go back to the first tab / section. Press Enter.")
         else:
             ask("Be on {screen}, with the app icon reachable from the home screen. Press Enter.\n"
