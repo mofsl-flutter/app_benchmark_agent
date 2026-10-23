@@ -203,8 +203,9 @@ def build_workbook(out, *, apps, device_label, module, metrics=None, weights=Non
                     layout["runs"][(mid, a)] = (name, r)
                     r += 1
         last = r - 1
-        ws.conditional_formatting.add(f"O5:O{last}", CellIsRule(operator="greaterThan", formula=["0.2"],
-                                      fill=PatternFill("solid", fgColor="F8CBAD"), font=Font(name=F, color="9C0006")))
+        if last >= 5:  # a sheet with no applicable metrics (e.g. live groups when live_ticks is false) has no rows
+            ws.conditional_formatting.add(f"O5:O{last}", CellIsRule(operator="greaterThan", formula=["0.2"],
+                                          fill=PatternFill("solid", fgColor="F8CBAD"), font=Font(name=F, color="9C0006")))
         setw(ws, {"A": 6, "B": 46, "C": 7, "D": 13, "E": 22, "F": 14, "G": 9, "H": 9, "I": 9, "J": 9, "K": 9,
                   "L": 10, "M": 9, "N": 9, "O": 10, "P": 36})
         ws.freeze_panes = "G5"

@@ -29,14 +29,36 @@ they are the method. `docs/RISE Benchmark Plan.md` is the background and
 
 ## How bench.py and preflight.py are run
 
-`bench.py run …` pauses with "Press Enter" prompts while the developer works the phone. Those
-prompts need a terminal, and your Bash tool has none: if you run it yourself it stops at the first
-prompt with exit code 2. So for every `bench.py run` command: print the exact command and ask the
-developer to type it in the Claude Code prompt with a leading `!` (for example
-`! python3 bench.py run RISE --module fno`), which runs it in their terminal. Wait until they say it
-finished, then run `python3 bench.py status --module <module>` yourself to see what was recorded.
-`preflight.py`, `record.py`, `bench.py status/installed/devices` and `build_report.py` have no
-prompts; run those yourself.
+`bench.py run …` pauses with "Press Enter" prompts while someone works the phone. Those prompts
+need a terminal, and your Bash tool has none, so **never call `bench.py run` directly**. Run it
+through the driver instead, with the same arguments:
+
+    python3 drive.py run "<app>" --module <module> --runs k [--group …] [--with-r3] [--redo N]
+
+`drive.py` runs bench.py in a pseudo-terminal, and at each prompt works the phone over adb and
+presses Enter: it waits for the app's home screen, opens the module screen with the module's
+`auto_open` steps (default: tap the UI node named like the screen, type the first `test_subjects`
+symbol, hide the keyboard), and plays the back steps for the leak cycles. It never types a PIN,
+password or OTP: on a login / PIN screen it waits up to five minutes for the developer and then
+stops the run with `q`, saving nothing for that run. Its log goes to
+`~/.riise-benchmark/artifacts/drive-<module>-<app>-<stamp>.log`; the tail of the output tells you
+what it did at each prompt. Run one driver at a time (the phone is shared), in the background
+with a 10-minute timeout, and read `python3 bench.py status --module <module>` after it exits.
+
+Before the first `drive.py run` of a module, check the open steps really reach the screen:
+`python3 drive.py open "<app>" --module <module>` launches the app, runs the steps and prints
+the focused window, the keyboard state and the texts on screen. If it fails or lands elsewhere,
+`python3 drive.py find "<text>"` lists the UI nodes matching a text on the current screen with
+their fractions; write per-app steps into `modules/<module>.json` under
+`auto_open.per_app["<app>"]` (forms: `find:<text>`, `tap:X Y`, `swipe:X1 Y1 X2 Y2 [ms]`,
+`text:<string>`, `key:<KEYCODE>`, `sleep:<s>`, `hide_keyboard`; fractions 0..1). `auto_open` is
+not part of the module version, so adding it does not flag earlier results.
+
+If the driver stops with `q` or cannot open the screen after you fixed the steps, fall back to the
+developer: print the exact `bench.py run` command and ask them to run it in a separate Terminal
+window (`cd` to the repo first; the Claude Code `!` prefix has no TTY either), then read the
+status when they say it finished. `preflight.py`, `record.py`, `bench.py status/installed/devices`
+and `build_report.py` have no prompts; run those yourself.
 
 ## Modes
 
@@ -66,26 +88,34 @@ Follow these steps in order. Say which step you are on in one line each time.
 5. **Pre-flight.** `python3 preflight.py --module <module> [--speedtest <Mbps>] [--holdings "..."] --notes "<logged-in answers>"`.
    Offer `--fix` for Show taps. On exit code 1, stop (hard rule 5).
 6. **Phone-scoped metrics first.** `python3 bench.py status --module _app`. If RISE (and each
-   installed competitor) lacks `L1`/`X4`/`R1` for this phone, have the developer run
-   `! python3 bench.py run "<app>" --module _app --runs 5` for each app, then collect the manual
+   installed competitor) lacks `L1`/`X4`/`R1` for this phone, run
+   `python3 drive.py run "<app>" --module _app --runs 5` for each app, then collect the manual
    `_app` metrics (`L2`, `R4`–`R8`, `X1`, `X2`, `A3`, `A4`) with `record.py --module _app` as in
    step 8. These are measured once per phone and reused by every module; do not repeat them per
    module.
 7. **Automated groups, per app, rotating the order.** `--runs k` means "runs 1..k, skipping the
    ones already recorded", so rotation is done by repeat number: for k = 1 to 5, go through the
-   installed apps in an order rotated by k (k=1: A B C, k=2: B C A, k=3: C A B, …) and have the
-   developer run `! python3 bench.py run "<app>" --module <module> --runs k` (default groups
-   `ram,open,scroll`). After the five repeats, per app:
-   - `! python3 bench.py run "<app>" --module <module> --group ram --with-r3 --runs 1` (R3, a
+   installed apps in an order rotated by k (k=1: A B C, k=2: B C A, k=3: C A B, …) and run
+   `python3 drive.py run "<app>" --module <module> --runs k` (default groups
+   `ram,open,scroll`). Before the first one, verify the open steps per app with
+   `python3 drive.py open "<app>" --module <module>` (see "How bench.py … are run"). After the
+   five repeats, per app:
+   - `python3 drive.py run "<app>" --module <module> --group ram --with-r3 --runs 1` (R3, a
      5-minute soak; one per app).
-   - `! python3 bench.py run "<app>" --module <module> --group gesture --runs 5` if the module
+   - `python3 drive.py run "<app>" --module <module> --group gesture --runs 5` if the module
      defines gestures for the app (bench.py prints them and asks before playing); otherwise tell
      the developer S7 is recorded by hand.
-   - `! python3 bench.py run "<app>" --module <module> --group leak --runs 1`.
+   - `python3 drive.py run "<app>" --module <module> --group leak --runs 1` (the driver plays
+     the ten open/back cycles with the module's open and back steps).
    - During market hours (09:15–15:30 IST, Mon–Fri) and only when the module has
      `live_ticks: true`: `--group idle --with-video --runs 3` and `--group live --runs 3 --live-minutes 10`.
    Re-running the same command resumes at the first missing run, so an interrupted session is
    never lost. To measure a run again, add `--redo N`.
+   If bench.py prints "reported no frames; using N SurfaceFlinger display frames", that is its
+   fallback for apps (Flutter on Android 16) whose frames Perfetto never attributes to the app:
+   S1–S5 are then scored from display-frame intervals and the row note says so. It is not an
+   error and not a wrong screen; mention it in the report because those S1 values are on a
+   stricter scale than FrameTimeline jank.
 8. **Manual metrics, per app.** `python3 record.py --module <module> --app "<app>" --list` shows
    what is still missing. For each missing metric, show the developer the method text from
    `METRICS.md` (one metric at a time), wait for the value, then record it:
@@ -94,7 +124,7 @@ Follow these steps in order. Say which step you are on in one line each time.
    Record the method or observation in `--note` so a reviewer can repeat it.
 9. **Spread check.** After five runs of a metric, if (max − min) ÷ median > 0.2, say so and ask for
    a sixth run that replaces the outlier: for bench.py metrics
-   `! python3 bench.py run "<app>" --module <module> --group <group> --redo <n>`; for manual
+   `python3 drive.py run "<app>" --module <module> --group <group> --redo <n>`; for manual
    metrics `record.py … --run <n>` (the replaced value is copied into the note automatically).
    The newest row for a run wins; the workbook keeps five columns.
 10. **Module report.** When `record.py --list` is clean for every app (or the developer stops):
@@ -136,7 +166,12 @@ Create or edit `modules/<name>.json`. Ask these, one at a time, in plain words:
    forms are allowed, with screen **fractions** 0..1 so they land on the same spot on any phone:
    `input tap X Y`, `input swipe X1 Y1 X2 Y2 [ms]`, `input keyevent KEYCODE_BACK`. Example:
    `{"label": "chart 1W", "cmd": "input tap 0.42 0.55"}`. Get fractions from a screenshot
-   (pixel ÷ width or height). `test_subjects` (symbols) for quote-style modules.
+   (pixel ÷ width or height) or from `python3 drive.py find "<text>"`. `test_subjects` (symbols)
+   for quote- and search-style modules.
+   Also `auto_open` (how `drive.py` reaches the screen at each prompt): `default` steps, `back`
+   steps and `per_app` overrides, in the step forms listed under "How bench.py … are run". Leave
+   it out when the default (tap the node named like the screen, type the first test subject,
+   hide the keyboard) works; it is not part of the module version.
 6. Offline items and data items if the seeded lists do not fit.
 
 Write the JSON with the schema used by `modules/portfolio.json`. Never overwrite an existing

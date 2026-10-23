@@ -71,10 +71,12 @@ cloned folder, it is picked up automatically together with its three slash comma
    competitor apps are installed and shows the plan table; runs `preflight.py` (it stops on a hard
    failure such as private DNS fixed or battery under 50 %); measures the phone-scoped metrics
    (`_app`) once; then goes app by app.
-4. **When it prints a `bench.py run …` command, you run it**, typed into the Claude Code prompt
-   with a leading `!` (for example `! python3 bench.py run RISE --module fno --runs 1`). The script
-   pauses with "Press Enter" prompts while you unlock the phone, enter the PIN and open the screen.
-   Tell the agent when it finishes; it reads what was recorded and continues.
+4. **The agent runs `bench.py` itself** through `drive.py`, which answers the "Press Enter"
+   prompts after doing the phone work over adb (open the screen, type the test symbol, go back).
+   Keep the phone unlocked and nearby: when an app shows a PIN or login screen the driver waits
+   up to five minutes for you to clear it (it never types a PIN), then gives up on that run. If
+   it cannot reach a screen, the agent asks you to run the printed `bench.py run …` command in a
+   separate Terminal window instead.
 5. **Manual metrics** (scrcpy timings, offline items, data items, Exodus, Play Store, storage): the
    agent shows the method for one metric at a time and records your value with `record.py`.
 6. **Stop any time.** `/benchmark <module>` again resumes at the first missing run.
@@ -105,9 +107,12 @@ The agent checks your tools and phone, confirms the module's screens with you, r
 pre-flight, measures the phone-scoped metrics once, then drives `bench.py` and `record.py` app by
 app. Stop any time; `/benchmark <module>` again resumes at the first missing run.
 
-`bench.py run` prompts you to work the phone, so it must run in your own terminal; in Claude
-Code, type it with a leading `!` (`! python3 bench.py run RISE --module fno`). By hand, the same
-steps are:
+`bench.py run` prompts for someone to work the phone. The agent runs it through
+`python3 drive.py run RISE --module fno` (same arguments), which does the phone work over adb and
+answers the prompts; `drive.py open RISE --module fno` tries the screen-opening steps alone and
+`drive.py find "Search"` lists matching UI nodes to write `auto_open` steps for a module. Run
+`bench.py` directly only in a real terminal (the Claude Code `!` prefix has no TTY). By hand, the
+same steps are:
 
 ```bash
 python3 preflight.py --module fno
