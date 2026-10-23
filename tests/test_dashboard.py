@@ -40,7 +40,7 @@ class DashboardTests(unittest.TestCase):
         runs = {"RISE": {"L3": [300, 310, 1000]}, "Groww": {"L3": [1200, 1250]}}
         facts = {"RISE": {"pin_on_resume": False, "pull_to_refresh": False}, "Groww": {"pin_on_resume": True, "pull_to_refresh": True}}
         ux = D.ux_scores(med, runs, facts, ["RISE", "Groww"], RUBRIC)
-        self.assertEqual(ux["speed"], {"RISE": 85.0, "Groww": 30.0})
+        self.assertEqual(ux["speed"], {"RISE": 100, "Groww": 30})   # L4 only RISE has: not counted
         self.assertEqual(ux["smooth"], {"RISE": 100, "Groww": 30})
         self.assertEqual(ux["offline"], {"RISE": 70})
         self.assertEqual(ux["friction"], {"RISE": 50, "Groww": 50})

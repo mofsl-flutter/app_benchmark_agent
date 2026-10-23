@@ -124,6 +124,10 @@ def band(ms, bands):
 def ux_scores(med, runs, facts, apps, rubric):
     """{criterion: {app: 0-100}}; a criterion with no data for an app is left out for that app."""
     out = {k: {} for k in rubric}
+    # like the technical score, a timing counts only when at least two apps have it
+    shared = {x for x in B.METRICS if sum(1 for a in apps if x in med.get(a, {})) >= 2}
+    med = {a: {x: v for x, v in med.get(a, {}).items() if x in shared or not x.startswith("L")} for a in apps}
+    runs = {a: {x: v for x, v in runs.get(a, {}).items() if x in shared} for a in apps}
     for a in apps:
         m = med.get(a, {})
         if "speed" in rubric:
@@ -205,7 +209,7 @@ def actions(med, runs, facts, ranked, weights, rubric, limit=8):
         new_med[rise][mid] = tgt
         new_runs = copy.deepcopy(runs)
         if mid in new_runs.get(rise, {}):
-            new_runs[rise][mid] = [tgt]  # a met target is a steady one
+            new_runs[rise][mid] = [tgt] * len(new_runs[rise][mid])  # a met target is a steady one, same run count
         cands.append({"id": mid, "kind": "metric", "category": B.METRICS[mid]["category"], "from": med[rise][mid], "to": tgt,
                       "unit": B.METRICS[mid]["unit"], "better": B.METRICS[mid]["better"], "best_app": best_app,
                       "best": med[best_app][mid], "set_med": {mid: tgt}, "set_facts": {},
@@ -238,7 +242,7 @@ def actions(med, runs, facts, ranked, weights, rubric, limit=8):
             new_med[rise].update(c["set_med"])
             for k, v in c["set_med"].items():
                 if k in new_runs.get(rise, {}):
-                    new_runs[rise][k] = [v]
+                    new_runs[rise][k] = [v] * len(new_runs[rise][k])
             new_facts.setdefault(rise, {}).update(c["set_facts"])
         combined = evaluate(new_med, new_runs, new_facts)
     return chosen, combined
