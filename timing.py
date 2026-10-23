@@ -39,8 +39,9 @@ TESTS = {
     "L8": "Resume after 5 min in background",
     "L12": "{screen} first open on a throttled network",
     "L14": "Tab / sub-section switch on {screen}",
+    "L16": "{detail2} open from {screen}",
 }
-DEFAULT_TESTS = "L3,L5,L6,L4,L14,L7"
+DEFAULT_TESTS = "L3,L5,L16,L6,L4,L14,L7"
 
 REC_SECONDS = 12
 FPS = 60
@@ -245,7 +246,7 @@ def main():
     if skipped:
         print(f"  Not measured for module {module['name']}: {', '.join(skipped)}")
     words = {"screen": screen, "detail": module["rise"].get("detail", "the detail screen"),
-             "list": module["rise"].get("list", "the list")}
+             "list": module["rise"].get("list", "the list"), "detail2": module["rise"].get("detail2", "the second detail screen")}
 
     developer = B.get_developer(a.developer)
     adb = Adb(a.serial); adb.ensure_device(); bench.ensure_screen_ready(adb)
@@ -302,9 +303,13 @@ def main():
             ask("Open another tab of the app and let it load. Press Enter.")
             res = m("Open {screen} now")
         elif t == "L5":
-            ask("Be on {screen}, with the {list} visible. Press Enter.".format(**words))
-            res = m("Tap the FIRST item now")
-            ask("Go back to {screen} (Back only). Press Enter.".format(**words))
+            ask("Be on {screen}. Press Enter.".format(**words))
+            res = m(module["rise"].get("detail_prompt", "Tap the FIRST item now"))
+            ask("Go back to {screen} (Back only, submit nothing). Press Enter.".format(**words))
+        elif t == "L16":
+            ask("Be on {screen}. Press Enter.".format(**words))
+            res = m("Open {detail2} now")
+            ask("Go back to {screen} (Back only, submit nothing). Press Enter.".format(**words))
         elif t == "L6":
             ask("Be at the top of {screen}. Press Enter.".format(**words))
             res = m("Pull down to refresh now")

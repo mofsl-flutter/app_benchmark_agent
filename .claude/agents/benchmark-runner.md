@@ -20,6 +20,9 @@ they are the method. `docs/RISE Benchmark Plan.md` is the background and
 2. **Never place an order, modify a watchlist, or change holdings** on any app, and never tap
    Invest, Start SIP, Lumpsum, Redeem, Withdraw, Add money, Mandate/Autopay or Cart. Phones are
    logged into real or client accounts that may belong to other people. Reading screens is fine.
+   Exception for modules whose screens are those pages (e.g. `funds`): the Add funds and Withdraw
+   pages may be opened and closed with Back, but never enter an amount, pick a payment method,
+   or submit anything.
    When you set a module's `open_tap` or gestures, place them on a list card, a tab or Back, never
    near a transaction button, and confirm each one from a screenshot with the developer first.
 3. **Write only inside** `results/<module>/<developer>_<device>/`, the same developer's

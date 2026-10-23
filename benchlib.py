@@ -81,6 +81,9 @@ METRIC_CATALOGUE = [
        "On {screen}, tap a sibling tab or sub-section (e.g. Overview → Technicals). Frame-count from the tap to the new content fully drawn. Note which tab in the note."),
     _m("L15", "API / Network", "Data per {screen} open (received + sent, open + 8 s)", "KB", "Lower", ("runs", LOAD), "ADB netstats (bench.py)",
        "bench.py --group open: the app's UID byte counter from dumpsys netstats before the tap that opens {screen} and 8 s after it is loaded."),
+    _m("L16", "Loading Time", "{detail2} open from {screen}", "ms", "Lower", ("runs", LOAD), "timing.py",
+       "On {screen}, tap the entry for {detail2} and measure until it is fully drawn (timing.py --tests L16). Open and go Back only; submit nothing.",
+       applies="detail2"),
     # ---- Scroll / gestures
     _m("S1", "Scroll & Gesture", "Janky frames while scrolling {list} (Medium account)", "%", "Lower", ("runs", SCROLL), "Perfetto (bench.py)",
        "bench.py --group scroll records a Perfetto FrameTimeline trace during 10 identical scripted flings on {list}. Janky = frames with a jank type other than None / Buffer Stuffing. Same for Native and Flutter apps."),
@@ -177,14 +180,14 @@ UX_FACTS = {
     "pull_to_refresh": "{screen} has pull-to-refresh",
 }
 
-GENERIC_WORDS = {"screen": "the screen", "list": "the list", "detail": "the detail screen"}
+GENERIC_WORDS = {"screen": "the screen", "list": "the list", "detail": "the detail screen", "detail2": "a second detail screen"}
 
 
 def render(text, module=None):
     """Fill {screen} {list} {detail} from a module definition (generic words for _app or None)."""
     words = dict(GENERIC_WORDS)
     if module and module.get("rise"):
-        for k in ("screen", "list", "detail"):
+        for k in ("screen", "list", "detail", "detail2"):
             if module["rise"].get(k):
                 words[k] = module["rise"][k]
     return text.format(**words)

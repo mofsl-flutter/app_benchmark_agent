@@ -10,7 +10,7 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 |---|---|
 | `.claude/agents/benchmark-runner.md` | The agent. `/benchmark <module>`, `/benchmark-report`, `/benchmark-module <name>` |
 | `PROTOCOL.md` | How every run is done (pre-flight, order, run counts, market hours, safety) |
-| `METRICS.md` | The 50 metrics: method, tool, unit, expected runs. Generated from `benchlib.py` |
+| `METRICS.md` | The 51 metrics: method, tool, unit, expected runs. Generated from `benchlib.py` |
 | `modules/<name>.json` | One file per module: RISE screen, list, detail, competitor screens, scroll/gesture scripts, offline and data items |
 | `apps.json` | App registry (package names, ranked or not). `RISE UAT` is never ranked |
 | `weights.json` | Scorecard 1 (technical) category weights (lead's sign-off) |

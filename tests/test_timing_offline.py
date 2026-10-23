@@ -43,17 +43,18 @@ class TimingTests(unittest.TestCase):
 
 class OfflineTests(unittest.TestCase):
     def test_every_seeded_item_has_a_step(self):
-        for name in ("portfolio", "mf"):
+        for name in ("portfolio", "mf", "funds"):
             phases = [offline.phase_of(it) for it in B.load_module(name)["offline_items"]]
             self.assertEqual(sorted(phases), sorted(["cold", "cold", "lost", "lost", "lost", "reconnect", "reconnect", "detail", "end"]))
 
 
 class ModuleRunsTests(unittest.TestCase):
     def test_module_run_overrides(self):
-        m = B.load_module("mf")
-        e = B.expected(m)
-        self.assertEqual((e["L3"], e["L8"], e["S1"]), (3, 1, 5))
+        e = B.expected(B.load_module("funds"))
+        self.assertEqual((e["L3"], e["L8"], e["L16"]), (3, 1, 3))
         self.assertNotIn("L13", e)
+        self.assertNotIn("S1", e)
+        self.assertEqual(B.expected(B.load_module("mf"))["L3"], 5)
         self.assertEqual(B.expected(B.load_module("portfolio"))["L3"], 5)
 
 

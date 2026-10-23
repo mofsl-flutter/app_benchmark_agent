@@ -102,7 +102,7 @@ def main():
         time.sleep(10)
         ask_items("lost")
         if by_phase.get("detail"):
-            ask(f"Tap the first item to open {detail} (still offline). Look, then press Enter.")
+            ask(f"Open {detail} (still offline; open only, submit nothing). Look, then press Enter.")
             ask_items("detail")
             ask(f"Press Back to {screen}. Press Enter.")
         if by_phase.get("cold"):

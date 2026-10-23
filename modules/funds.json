@@ -1,0 +1,103 @@
+{
+  "name": "funds",
+  "title": "Funds",
+  "rise": {
+    "screen": "Funds (home card / bottom tab)",
+    "list": "funds summary",
+    "detail": "Add funds page",
+    "detail_prompt": "Tap ADD FUNDS now",
+    "detail2": "Withdraw page",
+    "live_ticks": false,
+    "account_sensitive": false
+  },
+  "apps": {
+    "Kite": {
+      "screen": null
+    },
+    "Coin": {
+      "screen": null
+    },
+    "Groww": {
+      "screen": "Balance / Funds (confirm)"
+    },
+    "Angel One": {
+      "screen": null
+    },
+    "INDmoney": {
+      "screen": "Funds / Balance (confirm)"
+    },
+    "Kotak Neo": {
+      "screen": "Funds (confirm)"
+    },
+    "SAHI": {
+      "screen": null
+    },
+    "Dhan": {
+      "screen": null
+    }
+  },
+  "scroll": {
+    "x_frac": 0.5,
+    "y_from_frac": 0.75,
+    "y_to_frac": 0.3,
+    "per_app": {}
+  },
+  "gestures": {
+    "per_app": {}
+  },
+  "open_tap": {
+    "per_app": {}
+  },
+  "test_subjects": [],
+  "skip": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S7",
+    "L13"
+  ],
+  "runs": {
+    "L3": 3,
+    "L4": 3,
+    "L5": 3,
+    "L6": 3,
+    "L7": 3,
+    "L12": 3,
+    "L14": 3,
+    "L16": 3,
+    "L8": 1,
+    "L11": 1
+  },
+  "deviation_note": "Timings taken with timing.py (screen recording + tap detection); 3 runs for screen timings and 1 for L8/L11 to fit one day; scroll metrics not measured (Funds screens are short and do not scroll); L13 not measured. L14 = Funds → Margin details. In scope on 2026-10-23: RISE, INDmoney, Groww, Kotak Neo.",
+  "offline_items": [
+    "Cold launch in airplane mode → Funds shows the last known balance",
+    "Cached data shows a 'last updated' time or stale indicator",
+    "Network lost while on Funds → balance stays visible (no blank screen or crash)",
+    "Clear offline message or banner shown",
+    "Auto-refresh on reconnect (no manual pull needed)",
+    "No forced re-login or PIN after reconnect",
+    "Add funds page opens offline or explains why not",
+    "Cached balance is clearly not presented as live",
+    "No crash or ANR during offline ↔ online transitions"
+  ],
+  "data_items": [
+    "Available balance / cash",
+    "Margin available",
+    "Margin used / utilised",
+    "Margin breakdown (collateral, SPAN, exposure)",
+    "Withdrawable amount",
+    "Opening balance",
+    "Pay-in today",
+    "Unsettled / blocked amount",
+    "Add funds entry point",
+    "Withdraw entry point",
+    "UPI / netbanking options on Add funds",
+    "Transaction history / ledger link",
+    "Pledge / collateral link",
+    "Dark mode"
+  ],
+  "notes": "READ-ONLY: accounts belong to other people. Open Funds, Margin, Add funds and Withdraw pages and go Back. Never type an amount, pick a payment method or submit. L5 = tap Add funds → page ready; L16 = tap Withdraw → page ready; L14 = Funds → Margin details.",
+  "_todo": "Confirm each app's Funds path, the Add funds / Withdraw / Margin entries with /benchmark-module funds before the first run."
+}
