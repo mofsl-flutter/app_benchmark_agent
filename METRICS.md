@@ -20,6 +20,7 @@ Placeholders `{screen}`, `{list}` and `{detail}` are filled from each module's d
 | L13 | Offline | Recovery after reconnect → fresh data shown on {screen} | ms | Lower | 5 | scrcpy | module |
 | L14 | Loading Time | In-screen tab / sub-section switch on {screen}, tap to content | ms | Lower | 5 | scrcpy | module |
 | L15 | API / Network | Data per {screen} open (received + sent, open + 8 s) | KB | Lower | 5 | ADB netstats (bench.py) | module |
+| L16 | Loading Time | {detail2} open from {screen} | ms | Lower | 5 | timing.py | if detail2 |
 | S1 | Scroll & Gesture | Janky frames while scrolling {list} (Medium account) | % | Lower | 5 | Perfetto (bench.py) | module |
 | S2 | Scroll & Gesture | Frame duration – 50th percentile | ms | Lower | 5 | Perfetto (bench.py) | module |
 | S3 | Scroll & Gesture | Frame duration – 90th percentile | ms | Lower | 5 | Perfetto (bench.py) | module |
@@ -147,6 +148,12 @@ On {screen}, tap a sibling tab or sub-section (e.g. Overview → Technicals). Fr
 *API / Network · KB · Lower is better · 5 run(s) · automated by bench.py*
 
 bench.py --group open: the app's UID byte counter from dumpsys netstats before the tap that opens {screen} and 8 s after it is loaded.
+
+### L16 — {detail2} open from {screen}
+
+*Loading Time · ms · Lower is better · 5 run(s) · manual, recorded with record.py*
+
+On {screen}, tap the entry for {detail2} and measure until it is fully drawn (timing.py --tests L16). Open and go Back only; submit nothing.
 
 ### S1 — Janky frames while scrolling {list} (Medium account)
 

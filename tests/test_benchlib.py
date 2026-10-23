@@ -14,10 +14,10 @@ import benchlib as B  # noqa: E402
 
 
 class CatalogueTests(unittest.TestCase):
-    def test_fifty_metrics_with_unique_ids(self):
+    def test_catalogue_size_and_unique_ids(self):
         ids = [m["id"] for m in B.METRIC_CATALOGUE]
-        self.assertEqual(len(ids), 50)
-        self.assertEqual(len(set(ids)), 50)
+        self.assertEqual(len(ids), 51)  # 50 + L16 (second detail screen, 23 Oct 2026)
+        self.assertEqual(len(set(ids)), 51)
         for new in ("L14", "L15", "S7", "U4", "U5", "R9", "X4"):
             self.assertIn(new, ids)
 

@@ -36,6 +36,9 @@ def main():
     p.add_argument("--holdings", help="holdings / watchlist size per app, free text")
     p.add_argument("--notes", default="")
     p.add_argument("--no-env", action="store_true", help="only check; do not write env.csv")
+    p.add_argument("--min-battery", type=int, default=MIN_BATTERY,
+                   help=f"lowest battery % allowed (default {MIN_BATTERY}); a lower value is written to env.csv notes. "
+                        "Only for modules without battery/temperature metrics (C2, C3), with the phone charging.")
     a = p.parse_args()
 
     module = B.load_module(a.module)
@@ -59,9 +62,17 @@ def main():
     level = re.search(r"level:\s*(\d+)", bat)
     level = int(level.group(1)) if level else None
     env["battery_pct"] = level
-    if level is not None and level < MIN_BATTERY:
-        hard.append(f"Battery at {level} %. Charge above {MIN_BATTERY} % first.")
     charging = "USB powered: true" in bat or "AC powered: true" in bat or "Wireless powered: true" in bat
+    floor = a.min_battery
+    if floor < MIN_BATTERY:
+        measures_battery = any(B.metric_applies(m, module)[0] for m in ("C2", "C3"))
+        if measures_battery or not charging:
+            hard.append(f"--min-battery {floor} needs a module without C2/C3 and the phone charging.")
+            floor = MIN_BATTERY
+        else:
+            a.notes = (a.notes + "; " if a.notes else "") + f"battery floor lowered to {floor} % (charging, no battery metrics)"
+    if level is not None and level < floor:
+        hard.append(f"Battery at {level} %. Charge above {floor} % first.")
     env["charging"] = "yes" if charging else "no"
     if charging:
         soft.append("Phone is charging: temperature readings (C3) run high. Prefer wireless debugging, unplugged.")
