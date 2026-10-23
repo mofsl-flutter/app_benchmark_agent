@@ -1,0 +1,1005 @@
+{
+  "section": "J",
+  "title": "Code structure and quality",
+  "intro": "This section covers how the module is built rather than what it shows. Today one 3,304-line cubit owns every tab, navigation, a widget-owned TabController and analytics; states carry no equality, signals are sent as states, many imports are undeclared, 61 lints are switched off, and there is duplicated and dead code. The changes start with behaviour-preserving moves (helpers, deletions, typing, declared dependencies) and leave the high-risk per-tab split for later behind a flag, keeping the cubit's public members that other packages use.",
+  "measured": [
+    {
+      "metric": "Cubit size",
+      "current": "3,304 lines, ~40 state classes in one state file",
+      "expected": "< 800 lines per cubit after split"
+    },
+    {
+      "metric": "Undeclared imported packages",
+      "current": "26 in lib/, 8 in test/ (2 would form cycles)",
+      "expected": "0 (cycles broken)"
+    },
+    {
+      "metric": "Ignored lints in analysis_options.yaml",
+      "current": "61",
+      "expected": "< 30 after groups 1-2"
+    },
+    {
+      "metric": "print / debugPrint / dev.log calls",
+      "current": "2 / 45 / 4 (+6 commented prints)",
+      "expected": "0 / near 0 / 0"
+    },
+    {
+      "metric": "Color(0x...) literals",
+      "current": "38 in 16 files (shadow C0C0C4 in 5 files)",
+      "expected": "0-1"
+    },
+    {
+      "metric": "dynamic (outside Map/List generics)",
+      "current": "59",
+      "expected": "< 15"
+    },
+    {
+      "metric": "Dead code",
+      "current": "7 confirmed unreferenced files (~1,650 lines) + 7 cubit methods",
+      "expected": "0"
+    },
+    {
+      "metric": "Semantics/semanticLabel/TextScaler uses",
+      "current": "0",
+      "expected": "all icon-only controls labelled"
+    }
+  ],
+  "changes": [
+    {
+      "id": "J1",
+      "title": "Split the cubit, starting with pure helpers",
+      "summary": "MoGetQuoteCubit is 3,304 lines with about 40 state classes and many mutable public fields. Start by moving pure formatting/mapping code into tested helper classes with no behaviour change; split per-tab cubits later behind a flag.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "High",
+      "risk_reason": "The full split touches the cubit's core state flow and its public API, which other packages use (trader_native_charts calls updateSelectedScripId and sets indexQuoteDetail; trader_orders market_depth_sheet uses isDepthExpanded; mo_portfolio_2_0 calls getIt<MoGetQuoteCubit>().setAlert and reads quoteScripDetails; super_app trader_bloc.dart:69 provides an app-level instance). Step 1 alone is Low risk.",
+      "effort": "L",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "1518-1554, 2609-2812, 3030-3125",
+          "change": "Step 1: move formatExpiry, _formatStrikePrice, financial chart mapping (_createFinancialChartData, _getDataForTab, _formatYear, _formatCurrency, _comparePeriods, _getMonthNumber), _processBuildupData and the merge switches into helper classes."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/helper/quote_formatters.dart",
+          "lines": "new",
+          "change": "Pure static functions (expiry, strike, currency)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/domain/financial_chart_mapper.dart",
+          "lines": "new",
+          "change": "FinancialOverview -> FinancialChartData mapping."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/domain/quote_section_merger.dart",
+          "lines": "new",
+          "change": "_mergeSectionData / _mergeFundamentalSectionData / _mergeTechnicalSectionData."
+        }
+      ],
+      "current": "One cubit holds header/dashboard, futures, options, index, Overview, Fundamentals, Technicals, News/Events, Transactions, financial chart state, navigation and analytics. Every emit goes to every BlocBuilder on the page, so each widget needs a long buildWhen list, and the class cannot be tested in parts. About 700 lines are pure functions that do not need cubit state.",
+      "steps": [
+        "Step 1 (Low risk, S-M): move pure helpers to new files; keep thin private wrappers in the cubit that delegate, so call sites and tests do not change. Add unit tests for the helpers (K4).",
+        "Step 2 (Medium): introduce a QuoteHeaderController/hub owning scripId, dashboard, broadcast symbol and live tick (single subscription), exposed as a ValueListenable or small cubit.",
+        "Step 3 (High, behind Remote Config 'quote_split_cubits', default off): per-tab cubits in this order, each provided under the content area: QuoteTechnicalsCubit (~170 lines), QuoteNewsEventsCubit (~200), QuoteTransactionsCubit (~150), QuoteFundamentalsCubit (~550), QuoteOverviewCubit (~450), QuoteDerivativesCubit (~600).",
+        "Keep MoGetQuoteCubit as a facade with the members used outside the module (setAlert, updateSelectedScripId, indexQuoteDetail, isDepthExpanded, quoteScripDetails) until those callers are migrated."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "2763-2771",
+        "code": "  String _formatYear(final String period) =>\n      period.isEmpty ? '' : '${period.split(\" \")[0]} 20${period.split(\" \")[1]}';\n\n  String _formatCurrency(final double value) {\n    if (value == 0) return '₹0';\n    if (value >= 10000000) return '₹${(value / 10000000).toStringAsFixed(2)}Cr';\n    if (value >= 100000) return '₹${(value / 100000).toStringAsFixed(2)}L';\n    return '₹${value.toStringAsFixed(2)}';\n  }"
+      },
+      "after_code": {
+        "code": "// domain/financial_chart_mapper.dart (pure, unit-tested)\nclass FinancialChartMapper {\n  const FinancialChartMapper();\n  FinancialChartData map(FinancialOverview data, FinancialMainTab main, FinancialSubTab sub) {\n    /* body moved verbatim from _createFinancialChartData */\n  }\n  static String formatYear(final String period) { /* I5 guard */ }\n  static String formatCurrency(final double value) { /* moved verbatim */ }\n}\n\n// mo_get_quote_cubit.dart keeps the same private entry points\nFinancialChartData _createFinancialChartData({\n  required final FinancialOverview data,\n  required final FinancialMainTab mainTab,\n  required final FinancialSubTab subTab,\n}) => _chartMapper.map(data, mainTab, subTab);\n\nfinal FinancialChartMapper _chartMapper = const FinancialChartMapper();"
+      },
+      "safety": [
+        "Step 1 moves code verbatim behind the same private methods: output is identical and existing 134 cubit tests keep passing.",
+        "Steps 2-3 ship behind a Remote Config flag; the facade keeps the external API unchanged."
+      ],
+      "regression_checks": [
+        "Step 1: full cubit test suite; Financials chart for all tabs; options strike labels; futures expiry labels.",
+        "Step 3: full quote regression on cash, futures, options, index; charts screen, market depth sheet in Orders, portfolio Set Alert."
+      ],
+      "after_improvement": "Cubit file under ~2,600 lines after step 1 and under ~800 per class after step 3; helpers covered by fast unit tests.",
+      "depends_on": [
+        "I5"
+      ],
+      "verify": false
+    },
+    {
+      "id": "J2",
+      "title": "Move navigation and BuildContext out of the cubit",
+      "summary": "The cubit navigates (Navigator.pushNamed, Routes.navigateToReplacement, CommonRoute.navigateToWebView, MaterialPageRoute), takes BuildContext parameters and stores a TabController. Move these to a UI-side navigator and keep only data preparation in the cubit.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Same routes and arguments are used, but call sites in widgets and in mo_portfolio_2_0 (setAlert) change; back-stack behaviour must be re-checked.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "1762-1848, 3136-3189",
+          "change": "Replace navigateToCharts/navigateToOptionChain/navigateToResearchReport/setAlert(context, ...) with methods that return ChartsArguments / OptionChainArgument / alert URL."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/helper/mo_get_quote_navigator.dart",
+          "lines": "1-558",
+          "change": "Add QuoteNavigation.openCharts/openOptionChain/openReport/openAlert(context, args)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+          "lines": "452-474",
+          "change": "Call the navigator with args from the cubit."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+          "lines": "756-762",
+          "change": "Same."
+        }
+      ],
+      "current": "navigateToCharts (1762-1807) and navigateToOptionChain (1810-1848) build arguments and push routes with a BuildContext passed into the cubit; setAlert (3141-3172) awaits an API call and then uses the context to open a web view; setTabController (3136-3138) keeps a widget-owned TabController. This ties the cubit to the widget tree, makes the methods untestable without a navigator, and caused I1.",
+      "steps": [
+        "Add buildChartsArguments(), buildOptionChainArguments() and Future<PriceAlertResponse?> fetchAlertTarget(scripCode, exchange) to the cubit (pure/data).",
+        "Create QuoteNavigation in helper/ with the existing Navigator/Routes/CommonRoute calls copied verbatim.",
+        "Update the four widget call sites.",
+        "Keep setAlert(context, ...) as a deprecated wrapper that calls the new pair, because mo_portfolio_2_0 calls it in three files.",
+        "Remove tabController from the cubit; the swipe handler asks the cubit for the next section and calls changeSection."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "3136-3156",
+        "code": "  void setTabController(final TabController controller) {\n    tabController = controller;\n  }\n\n  /// Set alert for current scrip\n  Future<void> setAlert(\n      final BuildContext context, final String scripCode, final int exchangeCode) async {\n    logAlertSetEvent();\n    try {\n      // ignore: always_specify_types\n      final info = getIt<UserManager>().getLoginInfo();\n      // ignore: always_specify_types\n      final response = await _repository.setPriceAlert(\n        clientCode: info.clientCode,\n        scripCode: scripCode,\n        exchangeCode: exchangeCode,\n      );\n\n      debugPrint('Alert Response :: ${response.url}');\n      if (!context.mounted) return;"
+      },
+      "after_code": {
+        "code": "// cubit: data only\nFuture<PriceAlertTarget?> fetchAlertTarget(final String scripCode, final int exchangeCode) async {\n  logAlertSetEvent();\n  final info = getIt<UserManager>().getLoginInfo();\n  final response = await _repository.setPriceAlert(\n    clientCode: info.clientCode, scripCode: scripCode, exchangeCode: exchangeCode);\n  return PriceAlertTarget(url: response.url, external: response.launchTarget == LaunchTarget.External);\n}\n\n@Deprecated('Use fetchAlertTarget + QuoteNavigation.openAlert')\nFuture<void> setAlert(BuildContext context, String scripCode, int exchangeCode) async {\n  final target = await fetchAlertTarget(scripCode, exchangeCode);\n  if (target != null && context.mounted) QuoteNavigation.openAlert(context, target);\n}\n\n// helper/mo_get_quote_navigator.dart\nstatic Future<void> openAlert(BuildContext context, PriceAlertTarget t) =>\n    CommonRoute.navigateToWebView(context, WebpagePath.webviewRoute,\n        openInWebBrowser: t.external,\n        arguments: WebViewArguments(selectedURL: t.url, pageTitle: 'Set Alert'));"
+      },
+      "safety": [
+        "Route names, arguments and replace/push choice are copied unchanged.",
+        "Deprecated wrapper keeps the external setAlert callers in mo_portfolio_2_0 working."
+      ],
+      "regression_checks": [
+        "Chart button (app bar scrolled and info card), with replace=false.",
+        "Option chain from index and stock.",
+        "Set Alert from quote and from portfolio stock/bond/dividend sheets.",
+        "Reports button."
+      ],
+      "after_improvement": "Navigation methods become testable without a widget tree; the cubit no longer holds widget objects.",
+      "depends_on": [
+        "I1"
+      ],
+      "verify": false
+    },
+    {
+      "id": "J3",
+      "title": "Inject connectivity, clock and analytics",
+      "summary": "The cubit calls the global checkInternetConnectivity(), DateTime.now() is read directly, and analytics go through singletons (MoEngageQuotePageHelper.instance, QuoteRevampCleverTapHelper.instance). Pass them in through the constructor with defaults so tests can control them.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Constructor gets optional parameters whose defaults are today's globals, so DI registration and runtime behaviour do not change.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "225, 1896-1906",
+          "change": "Add optional ConnectivityChecker, Clock and QuoteAnalytics parameters; use them instead of globals."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/helper/mo_get_quote_moengage_logging.dart",
+          "lines": "14-30",
+          "change": "Route events through cubit.analytics instead of MoEngageQuotePageHelper.instance."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/locator.module.dart",
+          "lines": "20",
+          "change": "Regenerated by build_runner; factory still passes only the repository."
+        }
+      ],
+      "current": "changeSection awaits the global checkInternetConnectivity() (trader_core connectivity_manager.dart:190), which the test suite cannot fake (test comment at mo_get_quote_cubit_test.dart:3445-3449 says so; the suite only mocks the connectivity channel to return 'wifi'). Analytics events are fired from an extension on the cubit through static helpers, and time-based logic uses DateTime.now().",
+      "steps": [
+        "Define typedef ConnectivityChecker = Future<bool> Function({bool force}); and a small QuoteAnalytics interface with the methods the extension already calls.",
+        "MoGetQuoteCubit(this._repository, {ConnectivityChecker? connectivity, DateTime Function()? now, QuoteAnalytics? analytics}) with defaults to the current globals.",
+        "Mark the extra parameters @ignoreParam (injectable) or keep them optional so the generated factory is unchanged.",
+        "Use the injected checker in changeSection and in the reconnect listener (H6)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "1896-1906",
+        "code": "    // Check internet connectivity for fundamentals section\n    final bool hasInternet = await checkInternetConnectivity();\n    if (!hasInternet) {\n      final ErrorException error = ErrorException(\n        key: 'nointernetconnection',\n        message: 'Please check your internet connection and try again.',\n      );\n      emit(MoGetQuoteSectionError(\n          section, error, \"Please check your internet connection and try again.\"));\n      return;\n    }"
+      },
+      "after_code": {
+        "code": "typedef ConnectivityChecker = Future<bool> Function({bool force});\n\nclass MoGetQuoteCubit extends Cubit<MoGetQuoteState> {\n  MoGetQuoteCubit(\n    this._repository, {\n    @ignoreParam ConnectivityChecker? connectivity,\n    @ignoreParam DateTime Function()? now,\n    @ignoreParam QuoteAnalytics? analytics,\n  })  : _hasInternet = connectivity ?? checkInternetConnectivity,\n        _now = now ?? DateTime.now,\n        analytics = analytics ?? const MoEngageQuoteAnalytics(),\n        super(MoGetQuoteInitial());\n\n  final ConnectivityChecker _hasInternet;\n  final DateTime Function() _now;\n  final QuoteAnalytics analytics;\n\n  // changeSection\n  final bool hasInternet = await _hasInternet();"
+      },
+      "safety": [
+        "Defaults are the same functions used today.",
+        "Generated DI factory keeps calling MoGetQuoteCubit(repository)."
+      ],
+      "regression_checks": [
+        "Tab switch online/offline shows the same no-internet section error.",
+        "MoEngage/CleverTap events still fire (check debug event log for screen_viewed and tab_switched)."
+      ],
+      "after_improvement": "Offline, time and analytics paths become unit-testable (K3).",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "J4",
+      "title": "Give states value equality with a version",
+      "summary": "No state class overrides == (none use Equatable), so every emit rebuilds every matching builder even when nothing changed, e.g. three identical MoGetQuoteFundamentalLoaded in a row. Add Equatable with a cheap version prop; do not deep-compare protobuf payloads.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Bloc skips an emit equal to the current state; event-like states that are re-emitted on purpose (SectionChanged, AccordionExpanded) must keep firing, so they need a sequence number in props.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_state.dart",
+          "lines": "1-290",
+          "change": "abstract class MoGetQuoteState extends Equatable; data states props = [data.version]; event-like states props include a seq."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/domain/overview_data_manager.dart",
+          "lines": "16-104",
+          "change": "Add int version, incremented in copyWith only when a field reference changes (identical check)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/domain/fundamental_data_manager.dart",
+          "lines": "7-47",
+          "change": "Same."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/domain/technical_data_manager.dart",
+          "lines": "6-50",
+          "change": "Same."
+        }
+      ],
+      "current": "State classes are plain classes (mo_get_quote_state.dart:5-290). The loadEssentialFundamentalData test expects three MoGetQuoteFundamentalLoaded in a row (test:1060-1064) because the foreground pass and each background section emit even when data is unchanged; each emit rebuilds the Fundamentals widgets and StickyChipsSection.",
+      "steps": [
+        "Add equatable to pubspec (J6) and make MoGetQuoteState extend Equatable with props => const [] for empty states.",
+        "Data managers: version field; copyWith computes changed = !identical(a, this.a) || ...; returns this when nothing changed.",
+        "MoGetQuoteOverviewLoaded/FundamentalLoaded/TechnicalLoaded: props => [data.version].",
+        "SectionChanged, SectionChangeLoading, AccordionExpanded, ButtonVisibilityChanged, ScripIdChanged: add a static int _seq counter to props so repeated emits still go out (until J5 turns them into events).",
+        "Run all tests; update K2 expectations (one FundamentalLoaded instead of three when data is unchanged)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_state.dart",
+        "lines": "69-84",
+        "code": "// Data Loading States\nclass MoGetQuoteOverviewLoaded extends MoGetQuoteState {\n  final OverviewDataManager data;\n\n  MoGetQuoteOverviewLoaded({\n    required this.data,\n  });\n}\n\nclass MoGetQuoteFundamentalLoaded extends MoGetQuoteState {\n  final FundamentalDataManager data;\n\n  MoGetQuoteFundamentalLoaded({\n    required this.data,\n  });\n}"
+      },
+      "after_code": {
+        "code": "abstract class MoGetQuoteState extends Equatable {\n  const MoGetQuoteState();\n  @override\n  List<Object?> get props => const <Object?>[];\n}\n\nclass MoGetQuoteOverviewLoaded extends MoGetQuoteState {\n  const MoGetQuoteOverviewLoaded({required this.data});\n  final OverviewDataManager data;\n  @override\n  List<Object?> get props => <Object?>[data.version]; // cheap, no proto compare\n}\n\nclass MoGetQuoteSectionChanged extends MoGetQuoteState {\n  MoGetQuoteSectionChanged(this.section, {this.shouldScroll = true}) : seq = _next++;\n  final MoGetQuoteSections section;\n  final bool shouldScroll;\n  final int seq; // keeps intentional re-emits\n  static int _next = 0;\n  @override\n  List<Object?> get props => <Object?>[section, shouldScroll, seq];\n}"
+      },
+      "safety": [
+        "Event-like states keep firing because seq differs on every emit.",
+        "Only truly unchanged data states are dropped, which does not change what is shown."
+      ],
+      "regression_checks": [
+        "Full quote regression; especially chip scroll, accordion expand from chips, exchange toggle, and tab re-selection.",
+        "Count rebuilds of FundamentalsScreen with DevTools 'Track widget rebuilds' before/after."
+      ],
+      "after_improvement": "Fewer redundant rebuilds (e.g. 3 -> 1 Fundamentals rebuild for unchanged data); buildWhen can use prev != curr.",
+      "depends_on": [
+        "J6"
+      ],
+      "verify": false
+    },
+    {
+      "id": "J5",
+      "title": "Turn event-like states into a side-effect stream",
+      "summary": "AccordionExpanded, ButtonVisibilityChanged, ScripIdChanged, NewsTabChanged and SectionChanged(shouldScroll) are one-off signals emitted as states. Each one replaces the last data state, so builders without a tight buildWhen fall back to defaults. Send them on a separate stream.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes how listeners receive scroll/streaming/visibility signals; each consumer must be moved in the same change.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "1283-1288, 1424-1432, 3191-3202, 3235-3239",
+          "change": "Add a broadcast StreamController<QuoteUiEvent> and emit events there."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+          "lines": "63-68",
+          "change": "Listen to ScripChanged event for streaming."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+          "lines": "76-81",
+          "change": "Same."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_chips_section.dart",
+          "lines": "129-173",
+          "change": "Accordion/news-tab events via listener."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/news/events_content_widget.dart",
+          "lines": "47-48",
+          "change": "Add buildWhen limited to corporate-action states."
+        }
+      ],
+      "current": "notifyAccordionExpanded (3191-3202) emits a state that StickyChipsSection reacts to; updateButtonVisibility (1424-1432) is called on every scroll threshold crossing and emits a state; updateSelectedScripId emits ScripIdChanged after a network call. Because the cubit has a single current state, after one of these emits the current state is no longer the data state: EventsContentWidget (BlocBuilder without buildWhen, 47-48) and StockInfoCard._buildPriceInfo (no buildWhen, 254-270) rebuild on every one of them.",
+      "steps": [
+        "sealed class QuoteUiEvent { AccordionExpand, ButtonVisibility, ScripChanged, NewsTabChanged, ScrollToSection }.",
+        "final StreamController<QuoteUiEvent> _events = StreamController.broadcast(); Stream<QuoteUiEvent> get uiEvents => _events.stream; close it in close().",
+        "Emit both the old state and the new event for one release (flag), move consumers to uiEvents, then stop emitting the old states.",
+        "Button visibility becomes a ValueNotifier<ButtonVisibility> read by the two button rows."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "3191-3202",
+        "code": "  void notifyAccordionExpanded(final int accordionIndex, final MoGetQuoteSections section,\n      {final bool shouldScrollToFocus = true,\n      final bool fromChips = false,\n      final bool isExpanded = false}) {\n    emit(MoGetQuoteAccordionExpanded(\n      accordionIndex: accordionIndex,\n      section: section,\n      shouldScrollToFocus: shouldScrollToFocus,\n      fromChips: fromChips,\n      isExpanded: isExpanded,\n    ));\n  }"
+      },
+      "after_code": {
+        "code": "sealed class QuoteUiEvent { const QuoteUiEvent(); }\nclass AccordionExpand extends QuoteUiEvent {\n  const AccordionExpand(this.index, this.section, {this.scroll = true, this.fromChips = false, this.isExpanded = false});\n  final int index; final MoGetQuoteSections section;\n  final bool scroll, fromChips, isExpanded;\n}\n\nfinal StreamController<QuoteUiEvent> _events = StreamController<QuoteUiEvent>.broadcast();\nStream<QuoteUiEvent> get uiEvents => _events.stream;\n\nvoid notifyAccordionExpanded(int i, MoGetQuoteSections s,\n    {bool shouldScrollToFocus = true, bool fromChips = false, bool isExpanded = false}) {\n  if (!_events.isClosed) {\n    _events.add(AccordionExpand(i, s, scroll: shouldScrollToFocus, fromChips: fromChips, isExpanded: isExpanded));\n  }\n}\n\n@override\nFuture<void> close() async { await _events.close(); return super.close(); }"
+      },
+      "safety": [
+        "Transition release emits both forms so no consumer misses a signal.",
+        "Data states stay the current state, so builders see consistent data."
+      ],
+      "regression_checks": [
+        "Accordion expand from chips and from Overview cards scrolls correctly.",
+        "Live price after exchange toggle and expiry change.",
+        "Chart/option-chain buttons appear after scroll."
+      ],
+      "after_improvement": "Data states are no longer replaced by signals; fewer rebuilds of widgets without buildWhen.",
+      "depends_on": [
+        "J4"
+      ],
+      "verify": false
+    },
+    {
+      "id": "J6",
+      "title": "Declare every imported package in pubspec",
+      "summary": "pubspec.yaml declares 9 non-SDK dependencies, but lib/ imports 26 more packages and test/ imports 8 undeclared dev packages. It resolves only because of the workspace. Declare them, and break the two dependency cycles.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Build metadata only; same versions as the workspace. The two cycles need a design choice and are listed as a separate step.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/pubspec.yaml",
+          "lines": "12-34",
+          "change": "Add the missing dependencies and dev_dependencies with the workspace constraints."
+        }
+      ],
+      "current": "Imported in lib/ but not declared: mofsl_ui_library, mosl_broadcaster, trader_widget_ui, trader_trading_core, trader_orders, trader_webpage, shimmer, trader_common_repository, rise_deeplink, rect_getter, mosl_security, intl, trader_watchlist, base_network, flutter_initicon, carousel_slider, trader_research_product, trader_report_news, trader_bottom_bar, syncfusion_flutter_gauges, mosl_socket_core, mo_basket_bulk_order, meta, get, dropdown_button2, cached_network_image. Imported in test/ but not declared: mocktail, bloc_test, hive, shared_preferences, mosl_socket_security, mosl_security, mosl_broadcaster, base_network. trader_orders and trader_watchlist already depend on mo_get_quote (their pubspecs list it), so declaring them creates cycles. depend_on_referenced_packages is ignored in analysis_options.yaml, so none of this is reported.",
+      "steps": [
+        "Add the 24 non-cyclic packages under dependencies with the same source/constraint the workspace uses (path for local packages, git/hosted as in super_app's pubspec).",
+        "Add mocktail, bloc_test, hive, shared_preferences, mosl_socket_security, mosl_security, mosl_broadcaster, base_network to dev_dependencies (those already in dependencies stay there).",
+        "Cycles: replace the trader_orders imports (place_order_navigator, cas_info_sheet, place_order_validator, advanced_option_model, bulk_basket_order_arguments) and trader_watchlist's watchlist_utils with RiseAppModule hooks or move them to trader_core; until then document the cycle and verify 'melos list --cycles' and 'dart pub get' succeed.",
+        "Re-enable depend_on_referenced_packages (J7) once done."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/pubspec.yaml",
+        "lines": "12-33",
+        "code": "dependencies:\n  flutter:\n    sdk: flutter\n  flutter_bloc: ^9.1.1\n  injectable: ^2.7.1+4\n  get_it: ^8.0.3\n  trader_app:\n    path: ../trader_app\n  trader_proto_gen:\n    path: ../trader_proto_gen\n  trader_network:\n    path: ../trader_network\n  trader_core:\n    path: ../trader_core\n  trader_widgets:\n    path: ../trader_widgets\n  mo_option_chain:\n    path: ../mo_option_chain\n\ndev_dependencies:\n  flutter_test:\n    sdk: flutter"
+      },
+      "after_code": {
+        "code": "dependencies:\n  # ... existing entries\n  mofsl_ui_library: any        # resolved by workspace override (git)\n  mosl_broadcaster: any\n  mosl_security: any\n  mosl_socket_core: any\n  trader_widget_ui:\n    path: ../trader_widget_ui\n  trader_trading_core:\n    path: ../trader_trading_core\n  trader_webpage:\n    path: ../trader_webpage\n  # ... remaining local packages (rise_deeplink, trader_common_repository, ...)\n  shimmer: ^3.0.0              # use the workspace's resolved constraint\n  intl: any                    # overridden to any monorepo-wide\n  rect_getter: ^1.1.0\n  # trader_orders / trader_watchlist: cycle - see step 3\n\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\n  mocktail: ^1.0.0\n  bloc_test: ^10.0.0\n  # ... hive, shared_preferences, mosl_socket_security, base_network"
+      },
+      "safety": [
+        "Versions match what pubspec.lock already resolves, so the build output does not change (compare pubspec.lock before/after: no version changes expected)."
+      ],
+      "regression_checks": [
+        "dart pub get at the workspace root; melos bootstrap; flutter test in the package; debug build of super_app."
+      ],
+      "after_improvement": "Package dependencies are explicit; lint can catch new undeclared imports.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "J7",
+      "title": "Re-enable a safe lint subset and remove prints",
+      "summary": "analysis_options.yaml sets 61 diagnostics to ignore, including several that hide real bugs. Turn a first safe group back on as warnings and remove the print/debugPrint calls they flag.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Analyzer settings and log calls only; no runtime behaviour change except fewer log lines.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/analysis_options.yaml",
+          "lines": "16-77",
+          "change": "Remove ignores for the first group (listed in steps)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "2962, 2975-2976",
+          "change": "Remove the two print() calls that log the recent-search list."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/news/news_content_widget.dart",
+          "lines": "108, 119",
+          "change": "Remove per-item debugPrint inside build."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/custom_painter/buildup_chart_painter.dart",
+          "lines": "105, 349, 358, 365, 397, 436",
+          "change": "Delete commented-out print lines."
+        }
+      ],
+      "current": "Ignored today include avoid_print, depend_on_referenced_packages, unused_element, unused_field, unused_local_variable, dead_code, dead_null_aware_expression (would have flagged the '?? 0' bug in I5), empty_catches, unnecessary_null_comparison, invalid_use_of_protected_member, prefer_const_constructors, and even return_of_invalid_type, return_without_value, use_of_void_result and not_assigned_potentially_non_nullable_local_variable. The lib has 2 print calls (cubit 2962 and 2975 print every recent-search item on each Overview load), 45 debugPrint calls (several inside build methods), 4 dev.log calls and 6 commented-out prints.",
+      "steps": [
+        "Group 1 (now): dead_null_aware_expression, unnecessary_null_comparison, unused_element, unused_field, unused_local_variable, dead_code, avoid_print, empty_catches -> warning. Fix the findings (most are deletions, J11).",
+        "Group 2 (after J6): depend_on_referenced_packages, implementation_imports -> warning.",
+        "Group 3: prefer_const_constructors, prefer_const_constructors_in_immutables -> info, fix with dart fix --apply.",
+        "Group 4: remove ignores for error-class diagnostics (return_of_invalid_type, return_without_value, use_of_void_result, body_might_complete_normally_catch_error, invalid_return_type_for_catch_error) and fix each.",
+        "Replace remaining debugPrint with a kDebugMode-guarded logger (mosl_app_logger) and never log inside build().",
+        "Add 'dart analyze --fatal-warnings packages/mo_get_quote' to CI after group 1."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/analysis_options.yaml",
+        "lines": "16-24",
+        "code": "  errors:\n    depend_on_referenced_packages: ignore\n    non_constant_identifier_names: ignore\n    library_prefixes: ignore\n    avoid_print: ignore\n    avoid_returning_null_for_void: ignore\n    unnecessary_import: ignore\n    deprecated_member_use: ignore\n    unused_element: ignore"
+      },
+      "after_code": {
+        "code": "  errors:\n    # group 1 re-enabled as warnings\n    avoid_print: warning\n    unused_element: warning\n    unused_field: warning\n    unused_local_variable: warning\n    dead_code: warning\n    dead_null_aware_expression: warning\n    unnecessary_null_comparison: warning\n    empty_catches: warning\n    # still ignored (later groups)\n    depend_on_referenced_packages: ignore\n    non_constant_identifier_names: ignore\n    # ..."
+      },
+      "safety": [
+        "Lint changes do not affect the compiled app.",
+        "Removing print/debugPrint does not change behaviour; debugPrint already does nothing useful in release beyond log noise."
+      ],
+      "regression_checks": [
+        "dart analyze shows 0 warnings for the enabled group.",
+        "Smoke test quote open after removing logs."
+      ],
+      "after_improvement": "0 print calls; debugPrint count from 45 to near 0; the analyzer flags dead null-aware fallbacks and unused code going forward.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "J8",
+      "title": "Replace hardcoded colours with tokens",
+      "summary": "lib/ has 38 Color(0x...) literals in 16 files and 33 Colors.white/black/grey/red/green uses. The same shadow colour Color(0xFFC0C0C4) is copied into 5 files. Centralise first (no visual change), then map to mofsl-ui-library tokens with design review.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Step 1 keeps the exact same values; step 2 may change shades slightly and needs design sign-off.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/options_overlay.dart",
+          "lines": "157-164",
+          "change": "Use QuoteShadows.soft(context)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/trading_bottom_action_bar.dart",
+          "lines": "49",
+          "change": "Same."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/common/mo_get_quote_sticky_header.dart",
+          "lines": "35",
+          "change": "Same."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+          "lines": "195",
+          "change": "Same."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/mo_get_quote_about_company/about_company_screen.dart",
+          "lines": "56",
+          "change": "Same."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/ltp_graph_utils.dart",
+          "lines": "file",
+          "change": "9 literals (file is unreferenced; delete with J11 instead)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/custom_painter/buildup_chart_painter.dart",
+          "lines": "file",
+          "change": "5 literals -> theme tokens passed into the painter."
+        }
+      ],
+      "current": "Shadow Color(0xFFC0C0C4) with opacity 0.15-0.24 appears in trading_bottom_action_bar.dart:49, options_overlay.dart:160, mo_get_quote_sticky_header.dart:35, market_updates_accordion.dart:195 and about_company_screen.dart:56. Painters (buildup_chart_painter, ltp_graph_painter, custom_financial_overview_chart, slider_painter, moving_average_chart_painter) hardcode chart colours, so dark mode relies on ad-hoc checks. .claude/rules/design-tokens.md forbids inline hex values.",
+      "steps": [
+        "Add lib/res/quote_colors.dart with QuoteShadows.soft(context, opacity) returning the exact current BoxShadow; replace the 5 copies.",
+        "For painters, pass colours from context tokens in the widget into the painter constructor (same values for light theme).",
+        "Step 2: map each literal to the nearest mofsl-ui-library token (e.g. a neutral shadow token) and get design approval on screenshots in light/dark.",
+        "Add a CI grep check that fails on new 'Color(0x' in packages/mo_get_quote/lib."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/options_overlay.dart",
+        "lines": "152-165",
+        "code": "  BoxDecoration _buildMenuDecoration(final BuildContext context) {\n    return BoxDecoration(\n      color: context.surfaceBackgroundNeutralSubtle,\n      borderRadius: MOSpacing.borderRadius12,\n      border: context.isMODarkTheme ? null : Border.all(color: context.surfaceBorderNeutralNormal, width: MOSpacing.borderWidth02),\n      boxShadow:  context.isMODarkTheme ? null\n      :[\n        BoxShadow(\n          color: const Color(0xFFC0C0C4).withOpacity(0.2),\n          blurRadius: 18,\n          spreadRadius: 1.4,\n        ),\n      ],\n    );"
+      },
+      "after_code": {
+        "code": "// lib/res/quote_colors.dart\nclass QuoteShadows {\n  static const Color _base = Color(0xFFC0C0C4); // step 2: replace with DS token\n  static List<BoxShadow>? soft(BuildContext context,\n          {double opacity = 0.2, double blur = 18, double spread = 1.4, Offset offset = Offset.zero}) =>\n      context.isMODarkTheme\n          ? null\n          : <BoxShadow>[BoxShadow(color: _base.withOpacity(opacity), blurRadius: blur, spreadRadius: spread, offset: offset)];\n}\n\n// options_overlay.dart\nboxShadow: QuoteShadows.soft(context),"
+      },
+      "safety": [
+        "Step 1 passes the same colour, opacity, blur and spread, so pixels are identical (can be checked with goldens from K6)."
+      ],
+      "regression_checks": [
+        "Light and dark theme screenshots of bottom bar, More menu, sticky headers, market updates, 15-min build-up chart."
+      ],
+      "after_improvement": "Color(0x...) literals in lib from 38 to 1 (the token placeholder) after step 1+2; one place to change the shadow.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "J9",
+      "title": "Replace dynamic with typed models and BackHandler",
+      "summary": "There are 59 uses of dynamic outside Map/List generics. In the screen, flash-news data is dynamic and the bottom bar is reached through '_bottomBarKey.currentState as dynamic'. Use the proto type and a small BackHandler interface.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Type changes only; the same objects and methods are used, so behaviour does not change, and the compiler now checks member access.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "44, 83, 155-162, 333, 400, 462",
+          "change": "dynamic -> FlashNewsListResponse / FlashNews item; key typed with BackHandler."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_bottom_action_bar.dart",
+          "lines": "33, 212-219",
+          "change": "_QuoteBottomActionBarState implements BackHandler."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/domain/fundamental_data_manager.dart",
+          "lines": "64-72",
+          "change": "_hasFinancialData(FinancialOverview) instead of dynamic."
+        }
+      ],
+      "current": "mo_get_quote_screen.dart reads marketUpdatesData as dynamic (83) and caches it in 'dynamic _cachedNewsData' (44); member typos would only fail at runtime. onPopInvokedWithResult (155-162) casts currentState to dynamic and calls handleBackPress() by name. fundamental_data_manager.dart:64 takes 'final dynamic financialData'. Other hot spots: corporate_action_helper.dart (6), custom_financial_overview_chart.dart (6), market_depth_clevertap_helper.dart (5).",
+      "steps": [
+        "abstract interface class BackHandler { bool handleBackPress(); } in lib/ui/widgets/.",
+        "final GlobalKey<State<QuoteBottomActionBar>> _bottomBarKey; read as (_bottomBarKey.currentState as BackHandler?)?.handleBackPress() ?? false.",
+        "Type the flash-news fields with flash.FlashNewsListResponse (already the type in OverviewDataManager.marketUpdatesData).",
+        "Fix remaining dynamic hot spots file by file when touched."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+        "lines": "155-163",
+        "code": "      canPop: Platform.isIOS,\n      onPopInvokedWithResult: (final bool didPop, final dynamic result) {\n        if (!didPop) {\n          final dynamic state = _bottomBarKey.currentState as dynamic;\n          final bool handled = state?.handleBackPress() ?? false;\n          if (!handled) {\n            Navigator.pop(context);\n          }\n        }"
+      },
+      "after_code": {
+        "code": "abstract interface class BackHandler {\n  bool handleBackPress();\n}\n\n// quote_bottom_action_bar.dart\nclass _QuoteBottomActionBarState extends State<QuoteBottomActionBar> implements BackHandler { /* ... */ }\n\n// mo_get_quote_screen.dart\n      onPopInvokedWithResult: (final bool didPop, final Object? result) {\n        if (didPop) return;\n        final BackHandler? handler = _bottomBarKey.currentState as BackHandler?;\n        if (!(handler?.handleBackPress() ?? false)) Navigator.pop(context);\n      },"
+      },
+      "safety": [
+        "Same method is called on the same object; only static typing changes."
+      ],
+      "regression_checks": [
+        "Android back with and without the More overlay open.",
+        "Flash-news banner shows and closes."
+      ],
+      "after_improvement": "dynamic uses in the screen from 7 to 0; back handling checked at compile time.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "J10",
+      "title": "Remove duplicated widgets and helpers",
+      "summary": "Several pieces are copied: _formatTimeAgo twice in the screen file, _buildActionButton in four widgets, _buildPLSummary in two, two sticky header implementations, and MarketSegmentTabs/AnalysisTypeTabs which differ only in variant and the cubit hand-off.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Extracting identical code into one widget/function; output stays the same.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "365-396, 554-583",
+          "change": "Delete the unused State copy (365-396); move the other to helper/time_ago.dart."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+          "lines": "407-425",
+          "change": "Use shared QuoteCircleIconButton."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+          "lines": "733-754",
+          "change": "Same."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/widgets/header/market_depth_action_buttons_widget.dart",
+          "lines": "107",
+          "change": "Same (check visual first)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_bottom_action_bar.dart",
+          "lines": "221-260",
+          "change": "Use shared RealisedPlSummary widget."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/transaction/transaction_screen.dart",
+          "lines": "419",
+          "change": "Same."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/mo_get_quote_about_company/about_company_screen.dart",
+          "lines": "35-60, 185",
+          "change": "Reuse MoGetQuoteStickyHeader instead of its own _StickyHeaderDelegate decoration."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_tabs.dart",
+          "lines": "7-203",
+          "change": "One QuoteTabs widget with a variant parameter and an optional onControllerChanged callback."
+        }
+      ],
+      "current": "mo_get_quote_screen.dart has _formatTimeAgo at 365 (in _MoGetQuoteScreenState, never called) and again at 554 (used at 516). _buildActionButton is identical in mo_get_quote_app_bar.dart:407 and stock_info_card.dart:733 (also in dead exchange_controls.dart:178 and in market_depth_action_buttons_widget.dart:107). _buildPLSummary exists in quote_bottom_action_bar.dart:221 and transaction_screen.dart:419. quote_tabs.dart has two 95-line widgets with the same controller lifecycle code (47-56 vs 148-157).",
+      "steps": [
+        "Delete the unused _formatTimeAgo at 365 and move the used one to a top-level formatTimeAgo(int seconds, {DateTime? now}) with tests.",
+        "Create ui/widgets/common/quote_circle_icon_button.dart and replace the copies.",
+        "Create ui/widgets/common/realised_pl_summary.dart; diff the two _buildPLSummary bodies first and keep any difference as a parameter.",
+        "Merge MarketSegmentTabs and AnalysisTypeTabs into QuoteTabs(variant:, isScrollable:, onControllerChanged:), keeping both class names as thin wrappers for one release.",
+        "Point about_company_screen at MoGetQuoteStickyHeader if layouts match; otherwise extract only the shared decoration."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/quote_tabs.dart",
+        "lines": "47-56",
+        "code": "  void _updateTabController() {\n    _tabController.removeListener(_handleTabSelection);\n    _tabController.dispose();\n    _tabController = TabController(\n      length: widget.tabs.length,\n      vsync: this,\n      initialIndex: widget.selectedIndex.clamp(0, widget.tabs.length - 1),\n    );\n    _tabController.addListener(_handleTabSelection);\n  }"
+      },
+      "after_code": {
+        "code": "class QuoteTabs extends StatefulWidget {\n  const QuoteTabs({\n    super.key,\n    required this.tabs,\n    required this.selectedIndex,\n    required this.onTabSelected,\n    this.variant = MOTabsVariant.underlined,\n    this.isScrollable = true,\n    this.onControllerChanged, // replaces the direct cubit hand-off\n  });\n  final List<String> tabs;\n  final int selectedIndex;\n  final ValueChanged<int> onTabSelected;\n  final MOTabsVariant variant;\n  final bool isScrollable;\n  final ValueChanged<TabController?>? onControllerChanged;\n  // State: one copy of initState/didUpdateWidget/_updateTabController/dispose\n}\n\nclass MarketSegmentTabs extends StatelessWidget { /* wraps QuoteTabs(variant: filled, isScrollable: false) */ }"
+      },
+      "safety": [
+        "Wrapper classes keep the existing constructor signatures, so call sites need no change in the first PR."
+      ],
+      "regression_checks": [
+        "Asset tabs and section tabs: tap, swipe, count changes.",
+        "Chart and option-chain buttons in both places.",
+        "Realised P&L bar on Transactions.",
+        "About company sticky header in light/dark."
+      ],
+      "after_improvement": "About 250 duplicated lines removed; one place to fix tab-controller bugs.",
+      "depends_on": [
+        "I1"
+      ],
+      "verify": false
+    },
+    {
+      "id": "J11",
+      "title": "Delete dead files and methods",
+      "summary": "Several files and cubit methods have no references anywhere in the repo. Delete them after an analyzer check. Two files the review listed (show_more_button.dart, common/label_value_tab.dart) are in use and must stay.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Code with zero references outside its own file (checked repo-wide in packages/ and apps/); removal cannot change behaviour.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/pe_comparision_widget.dart",
+          "lines": "1-619",
+          "change": "Delete: file is imported nowhere (KeyStatisticsWidget, KeyStatisticsPainter, MarkerLabel unused)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_card.dart",
+          "lines": "1-573",
+          "change": "Delete: NewsCard has 0 references; file imported nowhere."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/exchange_controls.dart",
+          "lines": "1-205",
+          "change": "Delete (ExchangeControls 0 references)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar_wrapper.dart",
+          "lines": "1-33",
+          "change": "Delete."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/news/news_tabs_only.dart",
+          "lines": "1-60",
+          "change": "Delete."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion_shimmer_widget.dart",
+          "lines": "1-135",
+          "change": "Delete."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/cas/cas_section.dart",
+          "lines": "1-21",
+          "change": "Delete (CasSection 0 references)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/ltp_graph_widget.dart",
+          "lines": "1-54",
+          "change": "Candidate: not imported anywhere; confirm with analyzer."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/ltp_graph_utils.dart",
+          "lines": "1-35",
+          "change": "Candidate: not imported anywhere."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_indicator.dart",
+          "lines": "1-33",
+          "change": "Candidate."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/last_visited_stocks/last_visited_stock_model.dart",
+          "lines": "1-78",
+          "change": "Candidate."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/utils/time_utils.dart",
+          "lines": "1-10",
+          "change": "Candidate."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/advance_decline_ratio/advance_decline_ratio.dart",
+          "lines": "1-3",
+          "change": "Candidate."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "839-844, 1017-1029, 1850-1862, 2226-2238, 2474-2515, 2814-2817",
+          "change": "Delete _executeWithLoadingStates, _shouldCallScripDetailsAPI, _getOptionType, legacy fetchTransactions, _handleSlowTechnicalBatches + _loadTechnicalBatchSafely, retryFinancialOverview (tests only)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "365-396",
+          "change": "Delete unused _formatTimeAgo copy."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/news/news_content_widget.dart",
+          "lines": "281-400",
+          "change": "Delete buildReadMoreWidgetSpan, _buildActionItems, _buildVoteButtons (referenced only from commented code at 155 and 275; their onTap handlers are empty)."
+        }
+      ],
+      "current": "A repo-wide reference scan (packages/ and apps/) found 15 lib files that no other file imports. Of these, quote_section_info/quote_info_model.dart is a false positive to recheck (its class names also exist in other packages), and lib/mo_get_quote.dart is the barrel. pe_comparision_widget.dart (619 lines) and news_card.dart (573 lines) are the largest dead files. In the cubit, the private methods listed above have no callers; fetchTransactions and retryFinancialOverview are called only by tests (mo_report has its own fetchTransactions). The analyzer does not report them because unused_element is ignored.",
+      "steps": [
+        "Enable unused_element/unused_field as warnings (J7) and confirm the analyzer lists the same items.",
+        "Delete files in one PR, methods in another; remove or rewrite the tests that only exercise deleted methods (fetchTransactions, retryFinancialOverview, '_getOptionType via navigateToNewsEvents').",
+        "Keep show_more_button.dart (used by fifteen_min_build_up_section.dart:217, top_mutual_fund_accordion.dart:170, quant_score_detail_card.dart) and common/label_value_tab.dart (used by price_target_widget.dart:76, 82).",
+        "Run 'flutter build apk --debug' for super_app to catch any dynamic import."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "2474-2489",
+        "code": "  /// Handle slow technical batches separately and emit second state update\n  Future<void> _handleSlowTechnicalBatches(final String symbol,\n      final List<List<String>> slowBatches, final QuoteTechnicalResponse response) async {\n    try {\n      // Process slow batches sequentially\n      for (final List<String> batchSections in slowBatches) {\n        await _loadTechnicalBatchSafely(symbol, batchSections, response);\n      }\n\n      // Second state emission with complete data\n      _emitTechnicalState(response);\n    } on Exception catch (e) {\n      // Silent error handling for slow batches\n      debugPrint('Error loading slow technical batches: $e');\n    }\n  }"
+      },
+      "after_code": {
+        "code": "// deleted - no callers in packages/ or apps/\n// (_handleSlowTechnicalBatches, _loadTechnicalBatchSafely, _executeWithLoadingStates,\n//  _shouldCallScripDetailsAPI, _getOptionType, fetchTransactions (legacy),\n//  retryFinancialOverview)"
+      },
+      "safety": [
+        "Each item was checked for references across packages/ and apps/; the barrel (lib/mo_get_quote.dart) exports only the screen and the cubit, so private files are not part of the public API.",
+        "Analyzer and a full app build confirm before merge."
+      ],
+      "regression_checks": [
+        "flutter analyze, package tests, super_app debug build.",
+        "Quick pass over Overview sections (key statistics, news, market updates, research ideas)."
+      ],
+      "after_improvement": "About 1,900 lines of dead code removed (the 7 confirmed files are about 1,650 lines plus cubit/screen/news methods).",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "J12",
+      "title": "Split files over 500 lines",
+      "summary": "17 files exceed 500 lines. Apart from the cubit (J1), the largest are overview_main.dart (912), custom_financial_overview_chart.dart (841), market_depth_content.dart (834) and stock_info_card.dart (763). Split them along existing private-widget boundaries.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Moving private widgets into their own files without changing them; same widget tree.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "399-584",
+          "change": "Move _SentimentCardWithUpdates and _SwipeableContainer to ui/widgets/flash_news/."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+          "lines": "343-703",
+          "change": "Move exchange toggle and options selectors (expiry/strike/CE-PE) to their own widgets."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+          "lines": "1-912",
+          "change": "One file per section builder."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+          "lines": "233, 486",
+          "change": "Extract the shared layout maths used by _updateSelection (233) and paint (486) into one ChartLayout class (verify the duplication when splitting)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+          "lines": "1-834",
+          "change": "Split header, rows and totals."
+        }
+      ],
+      "current": "Files over 500 lines: mo_get_quote_cubit.dart 3,304; overview_main.dart 912; custom_financial_overview_chart.dart 841; market_depth_content.dart 834; stock_info_card.dart 763; mo_get_quote_moengage_logging.dart 665; peer_comparison_table.dart 653; market_depth_widget.dart 649; market_depth_quick_order_widget.dart 635; pe_comparision_widget.dart 619 (dead, J11); enhanced_ltp_tracker.dart 588; mo_get_quote_screen.dart 584; news_card.dart 573 (dead, J11); mo_get_quote_navigator.dart 558; moving_average.dart 547; research_idea_card.dart 522; mo_get_quote_app_bar.dart 512. mo_get_quote_screen.dart contains two unrelated widgets (flash-news sentiment card and swipeable container).",
+      "steps": [
+        "Do one file per PR, pure moves (cut/paste, make private classes library-private in the new file, add imports).",
+        "Start with mo_get_quote_screen.dart and stock_info_card.dart since J9/J13/J14 touch them.",
+        "For custom_financial_overview_chart.dart, confirm whether _updateSelection repeats the paint layout maths before extracting."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+        "lines": "399-412",
+        "code": "class _SentimentCardWithUpdates extends StatefulWidget {\n  final dynamic newsData;\n  final int scripCode;\n  final int exchangeCode;\n\n  const _SentimentCardWithUpdates({\n    required this.newsData,\n    required this.scripCode,\n    required this.exchangeCode,\n  });\n\n  @override\n  State<_SentimentCardWithUpdates> createState() => _SentimentCardWithUpdatesState();\n}"
+      },
+      "after_code": {
+        "code": "// lib/ui/widgets/flash_news/flash_news_banner.dart\nclass FlashNewsBanner extends StatefulWidget { // was _SwipeableContainer\n  const FlashNewsBanner({super.key, required this.news, required this.onClose});\n  final flash.FlashNewsListResponse news; // typed (J9)\n  final VoidCallback onClose;\n  // body moved verbatim\n}\n\nclass _SentimentCardWithUpdates extends StatefulWidget { /* moved verbatim */ }"
+      },
+      "safety": [
+        "Pure moves; no logic edits in the same PR."
+      ],
+      "regression_checks": [
+        "Affected screen area for each moved file (flash-news banner, header selectors, Overview sections, depth)."
+      ],
+      "after_improvement": "No file over 500 lines except the cubit until J1 completes; smaller review diffs.",
+      "depends_on": [
+        "J11"
+      ],
+      "verify": false
+    },
+    {
+      "id": "J13",
+      "title": "Add accessibility labels and text-scale safety",
+      "summary": "Semantics, semanticLabel, tooltip and TextScaler are used 0 times in lib/. Icon-only buttons (back, alert, watchlist, chart, option chain, More) have no labels, and several fixed heights clip at large text sizes.",
+      "categories": [
+        "FE",
+        "Product"
+      ],
+      "risk": "Low",
+      "risk_reason": "Semantics wrappers do not change visuals; height changes only apply at large text scales.",
+      "effort": "M",
+      "user_visible": true,
+      "product_decision": "Please provide approved screen-reader labels (English and Hindi if localised) for: Back, Set alert, Add to watchlist, Open chart, Open option chain, More options, NSE/BSE toggle, each section tab. Should layouts grow at text scale above 1.3, or cap scaling at 1.3 for the header?",
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+          "lines": "112-126, 334-352, 407-425",
+          "change": "Wrap icon buttons in Semantics(button: true, label: ...)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+          "lines": "733-754",
+          "change": "Same for chart/option-chain buttons."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_chips_section.dart",
+          "lines": "175-180",
+          "change": "Replace fixed height spacing30*2 with a minHeight constraint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+          "lines": "36",
+          "change": "preferredSize derived from text scale."
+        }
+      ],
+      "current": "The back button is an InkWell around an MOIcon (app bar 112-126) with no label, so TalkBack/VoiceOver reads nothing useful. The sticky chips row is a fixed 60 px Container (sticky_chips_section.dart:177) and the app bar has a fixed preferred size (36), so at large font sizes text is clipped.",
+      "steps": [
+        "Add Semantics(button: true, label: MoGetQuoteStrings.backA11y, child: ...) to each icon-only button, using strings from Product.",
+        "Replace fixed heights with ConstrainedBox(minHeight: ...) where the content is text.",
+        "Scale app bar preferredSize with MediaQuery.textScalerOf(context).scale(56).",
+        "Add a widget test that pumps the header at textScaler 2.0 and expects no overflow (K6)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+        "lines": "112-126",
+        "code": "  Widget _buildBackButton(final BuildContext context) {\n    return InkWell(\n      onTap: () => Navigator.of(context).pop(),\n      child: Container(\n        width: MOSpacing.spacing30,\n        height: MOSpacing.spacing30,\n        padding: EdgeInsets.symmetric(vertical: MOSpacing.spacing6, horizontal: MOSpacing.spacing4),\n        child: MOIcon(\n          iconLayerName: MOIcons.hugeiconArrowsSolidArrowLeft,\n          size: MOSpacing.spacing16,\n          color: context.surfaceIconNeutralNormal,\n        ),\n      ),\n    );\n  }"
+      },
+      "after_code": {
+        "code": "  Widget _buildBackButton(final BuildContext context) {\n    return Semantics(\n      button: true,\n      label: MoGetQuoteStrings.backA11y, // copy from Product\n      child: InkWell(\n        onTap: () => Navigator.of(context).pop(),\n        child: Container(\n          constraints: BoxConstraints(minWidth: MOSpacing.spacing30, minHeight: MOSpacing.spacing30),\n          padding: EdgeInsets.symmetric(vertical: MOSpacing.spacing6, horizontal: MOSpacing.spacing4),\n          child: MOIcon(\n            iconLayerName: MOIcons.hugeiconArrowsSolidArrowLeft,\n            size: MOSpacing.spacing16,\n            color: context.surfaceIconNeutralNormal,\n          ),\n        ),\n      ),\n    );\n  }"
+      },
+      "safety": [
+        "At default text scale, sizes are the same (min constraints equal the old fixed sizes)."
+      ],
+      "regression_checks": [
+        "TalkBack and VoiceOver walk-through of the header and tabs.",
+        "System font size largest: header, chips, bottom bar not clipped."
+      ],
+      "after_improvement": "All icon-only controls on the quote page announced by screen readers; no clipping at 1.3x and 2.0x text scale.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "J14",
+      "title": "Move flash-news banner logic into the cubit",
+      "summary": "The screen widget decides whether to show the flash-news banner, reads and writes Preferences, and calls setState on the whole screen from a BlocConsumer listener. Move the decision and persistence into the cubit and expose a ValueListenable for the banner.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes when the banner decision is computed (cubit vs post-frame/listener); the 24-hour and 'already seen' rules must stay identical.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "78-100, 178-179, 210-229, 333-363",
+          "change": "Replace _checkNewsTimestamp/_isBottomContainerVisible/_cachedNewsData with ValueListenableBuilder on cubit.flashNewsBanner."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "1191-1197",
+          "change": "After parsing flash news, compute visibility with the same rules and set flashNewsBanner; add dismissFlashNews()."
+        }
+      ],
+      "current": "_checkNewsTimestamp (78-100) runs in a post-frame callback and on every MoGetQuoteOverviewLoaded (239-241), reads Preferences.getFlashNewsId, applies a 24-hour window, and calls setState on the whole screen, which rebuilds the Scaffold and the CustomScrollView. The listener at 210-229 writes Preferences and calls setState again when the asset type is not cash. DateTime.now() is read directly, so the rule cannot be unit-tested.",
+      "steps": [
+        "Add final ValueNotifier<flash.FlashNews?> flashNewsBanner to the cubit.",
+        "In _parseFlashNewsResponse compute isVisible with the same rules (asset type cash, within 24 h using the injected clock from J3, id != stored id) and set the notifier.",
+        "dismissFlashNews() writes Preferences.setFlashNewsId/Time exactly as onClose does today and sets the notifier to null; call it also from changeAssetType when leaving cash (same as 214-228).",
+        "In the screen, replace the setState branch with ValueListenableBuilder around the Positioned banner only.",
+        "Unit-test the rule with a fake clock (K4)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+        "lines": "78-100",
+        "code": "  void _checkNewsTimestamp() {\n    if (_cubit.selectedAssetType != MoGetQuoteAssetType.cash) {\n      return;\n    }\n\n    final dynamic newsData = _cubit.overviewDataManager.marketUpdatesData;\n    if (newsData != null && newsData.items.isNotEmpty) {\n      _cachedNewsData = newsData;\n      final int newsTime = newsData.items[0].timestamp ?? 0;\n      final int now = DateTime.now().millisecondsSinceEpoch;\n      final String newsId = newsData.items[0].id.toString();\n      final String scripId = newsData.items[0].company.id.scripCode.toString();\n      final String? storedNewsId = Preferences.getFlashNewsId(scripId);\n      final int timeDifference = (now - (newsTime * 1000));\n      // CHANGED: Check if news is within the current day instead of 30 minutes\n      final bool isWithinDay = timeDifference < (24 * 60 * 60 * 1000); // 24 hours in milliseconds\n      final bool isVisible = isWithinDay && (newsId != storedNewsId);\n\n      setState(() {\n        _isBottomContainerVisible = isVisible;\n      });\n    }\n  }"
+      },
+      "after_code": {
+        "code": "// cubit\nfinal ValueNotifier<flash.FlashNews?> flashNewsBanner = ValueNotifier<flash.FlashNews?>(null);\n\nvoid _updateFlashNewsBanner(final flash.FlashNewsListResponse r) {\n  if (selectedAssetType != MoGetQuoteAssetType.cash || r.items.isEmpty) return;\n  final flash.FlashNews first = r.items.first;\n  final String scripKey = first.company.id.scripCode.toString();\n  final bool withinDay =\n      _now().millisecondsSinceEpoch - first.timestamp * 1000 < const Duration(hours: 24).inMilliseconds;\n  final bool unseen = first.id.toString() != Preferences.getFlashNewsId(scripKey);\n  flashNewsBanner.value = (withinDay && unseen) ? first : null;\n}\n\n// screen\nValueListenableBuilder<flash.FlashNews?>(\n  valueListenable: _cubit.flashNewsBanner,\n  builder: (_, news, __) => news == null ? const SizedBox.shrink() : FlashNewsBanner(/* ... */),\n)"
+      },
+      "safety": [
+        "Same visibility rule, same Preferences keys and values.",
+        "Only the banner subtree rebuilds instead of the whole screen."
+      ],
+      "regression_checks": [
+        "Stock with flash news < 24 h old: banner shows; close it; re-open quote: not shown.",
+        "Switch Cash -> Futures with banner visible: banner hides and is marked seen (as today).",
+        "News older than 24 h: not shown."
+      ],
+      "after_improvement": "No full-screen setState for the banner; rule covered by unit tests.",
+      "depends_on": [
+        "J3",
+        "J9"
+      ],
+      "verify": false
+    }
+  ]
+}

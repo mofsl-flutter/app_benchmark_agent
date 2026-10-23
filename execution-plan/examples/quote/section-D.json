@@ -1,0 +1,471 @@
+{
+ "section": "D",
+ "title": "Tab switching and data reuse",
+ "intro": "This covers moving between Overview, Fundamentals, Technicals, News, Transactions and the asset-type tabs. Today every switch throws away all tab data, shows a full skeleton, waits 200 ms and refetches, and the old tab's widgets are destroyed, so a revisit is as slow as the first visit. The changes keep each tab's data and widgets for the page visit, show a shimmer only when a tab has nothing to show, load sections in parallel, reuse data already fetched by Overview, and make the latest request win.",
+ "measured": [
+  {
+   "metric": "Tab switch (median)",
+   "current": "900 ms",
+   "expected": "250 ms or less"
+  },
+  {
+   "metric": "Overview revisit",
+   "current": "1.37-1.51 s behind a skeleton every time",
+   "expected": "no skeleton, content on the next frame"
+  },
+  {
+   "metric": "Fundamentals switch",
+   "current": "0.40-0.43 s",
+   "expected": "about 150 ms cold, instant on revisit"
+  },
+  {
+   "metric": "Requests on a revisit within TTL",
+   "current": "full reload (Overview about 10)",
+   "expected": "0"
+  }
+ ],
+ "changes": [
+  {
+   "id": "D1",
+   "title": "Keep each tab's data between visits",
+   "summary": "Every tab switch replaces the Overview, Fundamentals and Technicals data managers with empty ones, so every revisit refetches everything behind a skeleton. Keep each tab's data with a fetch time and refetch only when it is older than a TTL (stale-while-revalidate).",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "High",
+   "risk_reason": "Changes the cubit's core section flow; data that used to be refreshed on every visit can now be up to one TTL old. Background responses from an earlier visit now land in a kept manager instead of a discarded one.",
+   "effort": "M",
+   "user_visible": true,
+   "product_decision": "When a user goes back to a quote tab already loaded in this page visit, should we show the previous data at once and refresh silently in the background? Proposed: yes; refresh in background if older than 60 s for Overview, 10 min for Fundamentals and Technicals; live prices and depth are streamed and unaffected.",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1908-1922",
+     "change": "When QuotePerfFlags.keepTabData() is on, do not recreate the data managers; keep them with a DateTime per section."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1956-1999",
+     "change": "_loadSectionData: skip the fetch when the section's data is fresh; when stale, fetch without clearing and replace on arrival."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "121-133",
+     "change": "Add final Map<MoGetQuoteSections, DateTime> _sectionFetchedAt."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "287-304",
+     "change": "changeAssetType still clears overview data (data belongs to another instrument) and resets _sectionFetchedAt."
+    }
+   ],
+   "current": "changeSection (lines 1914-1922) sets overviewDataManager = OverviewDataManager() and recreates the Fundamental and Technical managers (keeping only failed sections), then emits MoGetQuoteSectionChangeLoading and refetches through _loadSectionData. Going Overview to Fundamentals and back costs the full Overview load again: about 10 serial requests and the 1.37-1.51 s skeleton measured on every revisit.",
+   "steps": [
+    "Add _sectionFetchedAt and a TTL table (Remote Config numbers, defaults as in the product question).",
+    "In changeSection, when the flag is on, skip lines 1914-1922 and keep the managers.",
+    "In _loadSectionData, if the section has data and now - fetchedAt < ttl: return without a request. If data exists but is stale: start the fetch, keep showing old data, and swap on arrival (the managers' copyWith already merges).",
+    "Record fetchedAt when a load completes successfully; failed sections do not set it, so they are retried on the next visit as today.",
+    "Clear everything on changeAssetType, exchange toggle and futures expiry change, where the instrument changes.",
+    "Note: copyWith(x: null) cannot clear a field in the data managers (they use ??), so a refresh that returns empty for a section keeps the old value; add explicit clear methods for that case."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "1908-1925",
+    "code": "    // Clear data managers but preserve failed sections\n    final Set<String> fundamentalFailedSections = fundamentalDataManager.failedSections;\n    final ErrorException? fundamentalFirstError = fundamentalDataManager.firstError;\n    final Set<String> technicalFailedSections = technicalDataManager.failedSections;\n    final ErrorException? technicalFirstError = technicalDataManager.firstError;\n\n    overviewDataManager = OverviewDataManager();\n    fundamentalDataManager = FundamentalDataManager().copyWith(\n      failedSections: fundamentalFailedSections,\n      firstError: fundamentalFirstError,\n    );\n    technicalDataManager = TechnicalDataManager().copyWith(\n      failedSections: technicalFailedSections,\n      firstError: technicalFirstError,\n    );\n\n    selectedSection = section;\n    emit(MoGetQuoteSectionChangeLoading(section));"
+   },
+   "after_code": {
+    "code": "final bool keep = QuotePerfFlags.keepTabData();\nif (!keep) {\n  // today's reset, unchanged\n  overviewDataManager = OverviewDataManager();\n  fundamentalDataManager = FundamentalDataManager().copyWith(\n      failedSections: fundamentalFailedSections, firstError: fundamentalFirstError);\n  technicalDataManager = TechnicalDataManager().copyWith(\n      failedSections: technicalFailedSections, firstError: technicalFirstError);\n  _sectionFetchedAt.clear();\n}\nselectedSection = section;\nfinal bool hasData = keep && _sectionFetchedAt.containsKey(section);\nif (!hasData) emit(MoGetQuoteSectionChangeLoading(section)); // see D2\n\nbool _isFresh(final MoGetQuoteSections s) {\n  final DateTime? t = _sectionFetchedAt[s];\n  return t != null && DateTime.now().difference(t) < _ttlFor(s);\n}"
+   },
+   "safety": [
+    "Behind QuotePerfFlags.keepTabData(), default off = today's reset.",
+    "Instrument changes (asset type, exchange, expiry) still clear all data.",
+    "Failed sections never count as fresh, so error retry works as today."
+   ],
+   "regression_checks": [
+    "Overview -> Fundamentals -> Overview: second Overview shows instantly with the same sections.",
+    "Wait past TTL and revisit: data refreshes without a skeleton.",
+    "Switch Cash -> Futures -> Cash: no cash Overview data shown under Futures.",
+    "NSE/BSE toggle: research report and Overview reload for the new exchange.",
+    "Fundamentals error then retry (fundamentals.dart _retryFundamentalData)."
+   ],
+   "after_improvement": "Revisiting a loaded tab makes no requests within TTL; Overview revisit goes from 1.37-1.51 s of skeleton to the next frame.",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "D2",
+   "title": "Show the tab shimmer only when there is no data",
+   "summary": "Every tab switch emits MoGetQuoteSectionChangeLoading, which swaps the whole content for QuoteContentAreaShimmer, and first awaits a connectivity check. With D1, emit MoGetQuoteSectionChanged at once for a tab that has data, and check connectivity only for a tab that must load.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes the state sequence a tab switch emits; listeners of SectionChangeLoading (content area, Fundamentals and Technicals screens) will not see it on warm tabs. Scroll-to-sticky logic in the screen listens to SectionChanged.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1896-1906",
+     "change": "Move the connectivity check after the cache check; skip it for warm tabs. Reset isOverviewLoading before the offline return."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1924-1953",
+     "change": "Warm tab: emit MoGetQuoteSectionChanged(section) immediately, then refresh in background if stale."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+     "lines": "53-58",
+     "change": "No logic change needed; it shows the shimmer only for the states it receives."
+    }
+   ],
+   "current": "QuoteContentArea returns QuoteContentAreaShimmer for MoGetQuoteSectionChangeLoading (lines 54-58), and FundamentalsScreen and TechnicalsScreen also switch to a shimmer or spinner on that state (fundamentals.dart:67-72, technicals.dart:64-69). changeSection awaits checkInternetConnectivity() (1897) first; that call is cached for 2 s in ConnectivityManager, so its cost is small, but when it reports offline it replaces the tab with an error and leaves isOverviewLoading = true (set at 1894), so the section chips stay in shimmer.",
+   "steps": [
+    "In changeSection compute hasFreshOrStaleData (D1). If true: selectedSection = section; emit(MoGetQuoteSectionChanged(section)); then, if stale, call _loadSectionData in the background (generation-guarded, C4) and emit the section's Loaded state when done.",
+    "Only when there is no data: run the connectivity check, emit SectionChangeLoading and load as today.",
+    "On the offline branch set isOverviewLoading = false before returning.",
+    "Overview-specific: set isOverviewLoading = false for warm tabs so sticky chips do not shimmer."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+    "lines": "45-58",
+    "code": "    return BlocBuilder<MoGetQuoteCubit, MoGetQuoteState>(\n      buildWhen: (final MoGetQuoteState prev, final MoGetQuoteState curr) =>\n          curr is MoGetQuoteLoading ||\n          curr is MoGetQuoteAssetTypeDataLoading ||\n          curr is MoGetQuoteSectionChangeLoading ||\n          curr is MoGetQuoteSectionChanged ||\n          curr is MoGetQuoteAssetTypeDataLoaded ||\n          curr is MoGetQuoteSectionError,\n      builder: (final BuildContext context, final MoGetQuoteState state) {\n        if (state is MoGetQuoteLoading ||\n            state is MoGetQuoteAssetTypeDataLoading ||\n            state is MoGetQuoteSectionChangeLoading) {\n          return const QuoteContentAreaShimmer();\n        }"
+   },
+   "after_code": {
+    "code": "// mo_get_quote_cubit.dart, changeSection\nfinal int gen = ++_sectionGen;\nselectedSection = section;\nif (QuotePerfFlags.keepTabData() && _sectionFetchedAt.containsKey(section)) {\n  isOverviewLoading = false;\n  emit(MoGetQuoteSectionChanged(section)); // no shimmer, no connectivity wait\n  if (!_isFresh(section)) {\n    unawaited(_loadSectionData(section).then((_) {\n      if (gen == _sectionGen && !isClosed) _emitSectionData(section); // Overview/Fundamental/Technical Loaded\n    }));\n  }\n  return;\n}\nfinal bool hasInternet = await checkInternetConnectivity();\nif (!hasInternet) {\n  isOverviewLoading = false; // chips no longer stuck in shimmer\n  emit(MoGetQuoteSectionError(section, error, error.message));\n  return;\n}\nemit(MoGetQuoteSectionChangeLoading(section));\n// ... cold load as today"
+   },
+   "safety": [
+    "Cold tabs follow today's path exactly.",
+    "Only active when D1's flag is on.",
+    "Each screen's builder already renders from the cubit's manager when the state is not its Loaded state (e.g. fundamentals.dart line 75 fallback)."
+   ],
+   "regression_checks": [
+    "Warm tab switches: no shimmer, correct tab highlighted, sticky header scroll position as today.",
+    "Offline: warm tab opens with cached data; cold tab shows the no-internet error and chips stop shimmering.",
+    "Screen-time tracking (switchToTab) still fires per tab."
+   ],
+   "after_improvement": "Warm tab switch is one frame plus build time, within the 250 ms target; no skeleton on revisit.",
+   "depends_on": [
+    "C1",
+    "D1",
+    "C4"
+   ],
+   "verify": false
+  },
+  {
+   "id": "D3",
+   "title": "Keep visited tabs alive offstage",
+   "summary": "The content is wrapped in KeyedSubtree(ValueKey(section)), so leaving a tab destroys its widget tree and returning rebuilds it from scratch (and loses accordion and scroll state). Keep visited tabs mounted but hidden, and pause their live streams while hidden.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "High",
+   "risk_reason": "Changes widget lifetime for every tab: initState/dispose no longer run on each switch, which several widgets rely on (WidgetVisibilityTracker viewport, TransactionScreen load, news load triggers). Hidden tabs that keep streaming would cost CPU and memory.",
+   "effort": "L",
+   "user_visible": true,
+   "product_decision": "When a user returns to a tab, should it keep its expanded accordions and inner tab selection (for example Fundamentals > Financial Overview > Yearly) instead of resetting? Proposed: keep state for the page visit; reset when the asset type changes.",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+     "lines": "92-108, 135-152",
+     "change": "Build a Column of Visibility(visible: s == selected, maintainState: true) children for visited sections only (lazy); drop visited set on asset-type change."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_tab_visibility.dart",
+     "lines": "new",
+     "change": "InheritedNotifier<ValueNotifier<bool>> so descendants know whether their tab is visible."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+     "lines": "113-131",
+     "change": "Re-register WidgetVisibilityTracker.setViewport when the tab becomes visible; pause the session subscription and market-depth stream when hidden."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+     "lines": "47-60",
+     "change": "Same viewport re-registration on becoming visible."
+    }
+   ],
+   "current": "_buildContent wraps the tab in KeyedSubtree(key: ValueKey(selectedSection.label)) (lines 92-100), and _getContentWidget creates a fresh screen per section (135-152). Overview and Fundamentals call WidgetVisibilityTracker.setViewport in initState and WidgetVisibilityTracker.dispose in dispose (a static tracker). The content sits in a SliverToBoxAdapter, so AutomaticKeepAliveClientMixin has no keep-alive parent and will not work; IndexedStack would size to the tallest tab and break the outer scroll extent.",
+   "steps": [
+    "Keep a Set<MoGetQuoteSections> _visited in QuoteContentArea state; add the selected section on each build; clear it on MoGetQuoteAssetTypeDataLoaded.",
+    "Render Column(children: [for s in _visited: Visibility(visible: s == selected, maintainState: true, child: QuoteTabVisibility(visible: s == selected, child: KeyedSubtree(key: ValueKey(s.label), child: _getContentWidget(s))))]). Hidden children take no height and their tickers are muted.",
+    "Streaming widgets inside tabs (market depth, OHLC, holdings P&L) read QuoteTabVisibility and skip subscribing or ignore ticks while hidden.",
+    "Move one-shot loads that rely on initState (TransactionScreen, NewsContentWidget fallback load, EventsContentWidget) to the cubit or to a 'became visible' callback; see D6.",
+    "Re-call WidgetVisibilityTracker.setViewport when a tab becomes visible; call dispose only when the tab is really disposed.",
+    "Ship behind QuotePerfFlags.keepTabsAlive(); keep the current KeyedSubtree path as the default."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+    "lines": "92-108",
+    "code": "        return _buildContent(context, selectedSection,\n            key: ValueKey(selectedSection.label));\n      },\n    );\n  }\n\n  Widget _buildContent(final BuildContext context, final MoGetQuoteSections selectedSection, {final Key? key}) {\n    return KeyedSubtree(\n      key: key ?? ValueKey(selectedSection.label),\n      child: GestureDetector(\n        onHorizontalDragStart: _onHorizontalDragStart,\n        onHorizontalDragUpdate: _onHorizontalDragUpdate,\n        onHorizontalDragEnd: _onHorizontalDragEnd,\n        child: _getContentWidget(selectedSection),\n      ),\n    );\n  }"
+   },
+   "after_code": {
+    "code": "final Set<MoGetQuoteSections> _visited = <MoGetQuoteSections>{};\n\nWidget _buildContent(final BuildContext context, final MoGetQuoteSections selected) {\n  if (!QuotePerfFlags.keepTabsAlive()) return _buildSingle(context, selected); // today\n  _visited.add(selected);\n  return GestureDetector(\n    onHorizontalDragStart: _onHorizontalDragStart,\n    onHorizontalDragUpdate: _onHorizontalDragUpdate,\n    onHorizontalDragEnd: _onHorizontalDragEnd,\n    child: Column(\n      children: <Widget>[\n        for (final MoGetQuoteSections s in _visited)\n          Visibility(\n            visible: s == selected,\n            maintainState: true, // Offstage: 0 height, no paint, tickers muted\n            child: QuoteTabVisibility(\n              visible: s == selected,\n              child: KeyedSubtree(key: ValueKey<String>(s.label), child: _getContentWidget(s)),\n            ),\n          ),\n      ],\n    ),\n  );\n}"
+   },
+   "safety": [
+    "Behind QuotePerfFlags.keepTabsAlive(), default off.",
+    "Visited set is cleared on asset-type change, so at most 5-6 tabs of one instrument stay mounted.",
+    "Hidden tabs pause their streams, so idle cost does not grow with visited tabs."
+   ],
+   "regression_checks": [
+    "Visit all tabs, then idle 1 min: CPU and frame count no higher than with one tab (DevTools).",
+    "Memory after visiting all tabs: compare PSS with flag off.",
+    "MoEngage/visibility analytics events for Overview and Fundamentals sections still fire on revisit.",
+    "Swipe between tabs still works.",
+    "Transactions, News, Events, Deals load correctly on first visit and keep data on revisit."
+   ],
+   "after_improvement": "Revisit costs no widget rebuild of the tab tree; switch time is limited to one frame. Accordion state is kept.",
+   "depends_on": [
+    "C1",
+    "D1",
+    "D2"
+   ],
+   "verify": true
+  },
+  {
+   "id": "D4",
+   "title": "Load Fundamentals sections in parallel",
+   "summary": "Fundamentals loads Swot, CompanyInfo and ShareHoldings one by one, then Ratios and Financials one by one in the background with an emit after each. Load each group in parallel and emit once per group.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes timing and number of MoGetQuoteFundamentalLoaded emits; per-section failure tracking must stay the same.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2283-2309",
+     "change": "Future.wait over foreground sections, one emit; Future.wait over background sections, one emit."
+    },
+    {
+     "path": "packages/mo_get_quote/test/mo_get_quote_cubit_test.dart",
+     "lines": "1060-1064",
+     "change": "Update the expectation of three identical FundamentalLoaded emits."
+    }
+   ],
+   "current": "MoGetQuoteFundamentalSubsections marks Ratios and Financials as isBackgroundProcess (enums 266-268). The foreground loop (2284-2292) awaits Swot, CompanyInfo and ShareHoldings in series with no emit in between, then emits once (2309). The background loop (2296-2306) awaits Ratios then Financials and emits after each. A failure inside _loadFundamentalBatchSafely emits an extra state (2349). So a normal load is 5 serial requests and 3 emits, not 5 emits. Measured 0.40-0.43 s includes the 200 ms debounce removed in C4.",
+   "steps": [
+    "Replace the foreground for-loop with await Future.wait(foregroundSections.map((s) => _loadFundamentalBatchSafely(symbol, [s], response))); then _updateFundamentalDataManager(response) and one _emitFundamentalState.",
+    "Do the same for the background group inside the unawaited microtask.",
+    "In _loadFundamentalBatchSafely, drop the emit on failure (2349) and let the group emit include the failure; keep addFailedSections.",
+    "Keep one request per section so a failing section does not fail the others."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "2283-2307",
+    "code": "      // Process foreground sections sequentially\n      for (final String section in foregroundSections) {\n        try {\n          await _loadFundamentalBatchSafely(symbol, <String>[section], response);\n          _updateFundamentalDataManager(response);\n        } on Exception catch (e) {\n          debugPrint('Error loading fundamental section $section: $e');\n          // Continue with next section even if current fails\n        }\n      }\n\n      // Load background sections without blocking\n      if (backgroundSections.isNotEmpty) {\n        unawaited(Future.microtask(() async {\n          for (final String section in backgroundSections) {\n            try {\n              await _loadFundamentalBatchSafely(symbol, <String>[section], response);\n              _updateFundamentalDataManager(response);\n              _emitFundamentalState(response);\n            } on Exception catch (e) {\n              debugPrint('Error loading background fundamental section $section: $e');\n            }\n          }\n        }));\n      }"
+   },
+   "after_code": {
+    "code": "Future<void> loadGroup(final List<String> sections) => Future.wait(\n      sections.map((final String s) =>\n          _loadFundamentalBatchSafely(symbol, <String>[s], response)), // never throws\n    );\n\nawait loadGroup(foregroundSections);\n_updateFundamentalDataManager(response);\n\nif (backgroundSections.isNotEmpty) {\n  final int gen = _sectionGen; // C4\n  unawaited(loadGroup(backgroundSections).then((_) {\n    if (gen != _sectionGen || isClosed) return;\n    _updateFundamentalDataManager(response);\n    _emitFundamentalState(response);\n  }));\n}\n_emitFundamentalState(response);\nreturn response;"
+   },
+   "safety": [
+    "Same requests, same merge, same failure tracking; only concurrency and emit count change.",
+    "_loadFundamentalBatchSafely already catches Exception per section, so Future.wait does not fail early."
+   ],
+   "regression_checks": [
+    "Fundamentals: all five cards show with the same data.",
+    "One section failing: others show; all failing: full error state as today.",
+    "Financial Overview chart and Ratios appear after the first group (as today)."
+   ],
+   "after_improvement": "Cold Fundamentals load from about 5 serial requests to 2 parallel rounds; with C4 and D1 cold switch about 150 ms, warm switch instant.",
+   "depends_on": [
+    "C4"
+   ],
+   "verify": false
+  },
+  {
+   "id": "D5",
+   "title": "Reuse Overview News and Corporate Actions",
+   "summary": "Opening News refetches the 'News' overview section and Events refetches 'CorpActions', although Overview loaded both from the same endpoint moments earlier. Reuse the Overview data when it exists.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "The News tab would no longer trigger its own request on entry; if Overview's news is stale the tab shows the same items as Overview until a refresh. Index news uses a different endpoint and is excluded.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1983-1985, 2001-2003",
+     "change": "_loadNewsSectionData: for non-index assets, skip loadNewsData when overviewDataManager.newsData is non-empty and fresh."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/news/events_content_widget.dart",
+     "lines": "23-33",
+     "change": "No change; it already skips the request when overviewDataManager.corporateActionsData is set. It refetches today only because changeSection wiped the manager."
+    }
+   ],
+   "current": "changeSection wipes overviewDataManager (1914), then _loadSectionData(news) calls loadNewsData (1984, 2034-2082), which requests QuoteOverview?sections=News again. Overview built its news with the same processing (processedNewsItems uses NewsProcessor.processNews(showAll: true), the same as the News tab's NewsConstants.showAllNews = true). EventsContentWidget (23-33) requests CorpActions only when cachedCorporateActions and overviewDataManager.corporateActionsData are both null, which after the wipe is always.",
+   "steps": [
+    "In _loadNewsSectionData: if !selectedAssetType.isIndex && (overviewDataManager.newsData?.isNotEmpty ?? false) && _isFresh(MoGetQuoteSections.overview), return without a request. NewsContentWidget then renders from overviewDataManager.newsData through its existing fallback (news_content_widget.dart fallback branch).",
+    "With D1 on, corporate actions survive the switch, so EventsContentWidget reuses them with no code change.",
+    "Keep today's request when the flag is off or data is missing."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/news/events_content_widget.dart",
+    "lines": "23-33",
+    "code": "  void initState() {\n    super.initState();\n    WidgetsBinding.instance.addPostFrameCallback((final Duration _) {\n      final cubit = context.read<MoGetQuoteCubit>();\n      // Only reload if no cached data AND no existing data\n      if (cubit.cachedCorporateActions == null &&\n          cubit.overviewDataManager.corporateActionsData == null) {\n        unawaited(_loadCorporateActionsData(cubit));\n      }\n    });\n  }"
+   },
+   "after_code": {
+    "code": "// mo_get_quote_cubit.dart\nFuture<void> _loadNewsSectionData(final String symbol) async {\n  final bool canReuse = QuotePerfFlags.keepTabData() &&\n      !selectedAssetType.isIndex &&\n      (overviewDataManager.newsData?.isNotEmpty ?? false) &&\n      _isFresh(MoGetQuoteSections.overview);\n  if (canReuse) return; // NewsContentWidget falls back to overviewDataManager.newsData\n  await loadNewsData(symbol);\n}"
+   },
+   "safety": [
+    "Same endpoint and same processing as the News tab's own call, so the list is identical.",
+    "Index assets keep their dedicated fetchIndexNewsData call.",
+    "Only with D1's flag on."
+   ],
+   "regression_checks": [
+    "Cash: Overview news card -> News tab: same items, no spinner.",
+    "Events tab: corporate actions shown without a request; chip selection from Overview 'Show more' still works.",
+    "Index News tab still loads index news.",
+    "Deals tab unchanged."
+   ],
+   "after_improvement": "2 fewer requests and spinners when going from Overview to News and Events.",
+   "depends_on": [
+    "C1",
+    "D1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "D6",
+   "title": "Keep Transactions between tab visits",
+   "summary": "TransactionScreen calls fetchTransactionsData(pageNo: 1) in every initState, which resets the list and sends the POST again on each visit. Keep the loaded list in the cubit (it already lives there) and refresh page 1 in the background only when it is older than a TTL.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "The user may briefly see the previous list after placing an order elsewhere; pagination state must stay consistent when a background refresh replaces page 1.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "Should the Transactions tab show the last loaded list immediately on revisit and refresh it in the background (for example if older than 60 s), instead of a loader and a fresh request every time? Should we also add pull-to-refresh there (none exists today)?",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/transaction/transaction_screen.dart",
+     "lines": "28-43",
+     "change": "Call a new cubit.ensureTransactionsLoaded() instead of fetchTransactionsData(pageNo: 1)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2093-2134",
+     "change": "Add ensureTransactionsLoaded(): emit the current _transactionState if it has data and is fresh; otherwise load page 1 as today. Add _transactionsFetchedAt."
+    }
+   ],
+   "current": "TransactionScreen.initState calls _loadInitialData (31), which calls fetchTransactionsData(pageNo: 1) (40-43). For page 1 the cubit sets _transactionState = TransactionState.initial().copyWith(isLoading: true) (2107-2108), so the list loaded on the previous visit is thrown away and the POST to the transactions endpoint runs again. _loadSectionData does nothing for transactions (1986-1988).",
+   "steps": [
+    "Add DateTime? _transactionsFetchedAt, set after a successful page-1 load.",
+    "ensureTransactionsLoaded(): if flag on && _transactionState.transactions.isNotEmpty && fresh: emit(MoGetQuoteTransactionsUpdated(_transactionState)) and return; if stale: emit current state, then fetch page 1 without resetting to initial and replace the list on arrival (reset pagination to page 1).",
+    "Clear _transactionState and the timestamp when the instrument changes.",
+    "Add pull-to-refresh only if Product agrees."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/transaction/transaction_screen.dart",
+    "lines": "28-43",
+    "code": "  void initState() {\n    super.initState();\n    _scrollController = ScrollController();\n    _loadInitialData();\n  }\n\n  @override\n  void dispose() {\n    _scrollController.dispose();\n    super.dispose();\n  }\n\n  void _loadInitialData() {\n    // Don't set _isFetchingMore for initial load\n    unawaited(context.read<MoGetQuoteCubit>().fetchTransactionsData(pageNo: 1));\n  }"
+   },
+   "after_code": {
+    "code": "// transaction_screen.dart\nvoid _loadInitialData() {\n  unawaited(context.read<MoGetQuoteCubit>().ensureTransactionsLoaded());\n}\n\n// mo_get_quote_cubit.dart\nDateTime? _transactionsFetchedAt;\n\nFuture<void> ensureTransactionsLoaded() async {\n  final bool hasData = _transactionState.transactions.isNotEmpty;\n  if (!QuotePerfFlags.keepTransactions() || !hasData) {\n    return fetchTransactionsData(pageNo: 1); // today\n  }\n  emit(MoGetQuoteTransactionsUpdated(_transactionState)); // show kept list\n  final bool fresh = _transactionsFetchedAt != null &&\n      DateTime.now().difference(_transactionsFetchedAt!) < const Duration(seconds: 60);\n  if (!fresh) await _refreshTransactionsPageOne(); // replaces list, no reset to loader\n}"
+   },
+   "safety": [
+    "Behind QuotePerfFlags.keepTransactions(), default off.",
+    "First visit and empty list behave as today.",
+    "Pagination (page > 1) code path unchanged."
+   ],
+   "regression_checks": [
+    "Transactions tab first visit, scroll to load more pages, leave and return: list and position consistent.",
+    "Place an order, return after TTL: new transaction appears after the background refresh.",
+    "No-data and error states as today."
+   ],
+   "after_improvement": "No POST and no loader on a revisit within TTL; one background request after TTL.",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "D7",
+   "title": "Drop stale responses after an asset-type switch",
+   "summary": "changeAssetType checks the selected type only before starting the load; after the awaits inside _loadAndEmitAssetData and its background microtasks nothing checks again, so a slow response for the old asset type can overwrite the new one. Carry a request generation number through the chain and drop results from older generations.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "High",
+   "risk_reason": "Touches the cubit's core asset-type load flow and the background microtasks for every asset type; a missed check leaves a stale path, an over-eager check drops valid data.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "287-316",
+     "change": "final int gen = ++_assetGen; pass gen to _loadAndEmitAssetData."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "319-358",
+     "change": "Return before each emit when gen != _assetGen or isClosed."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "381-400, 428-555, 662-711, 1034-1084",
+     "change": "Check the generation after each await in _loadCashData, _loadFuturesData, _loadOptionsData, _loadIndexData and in their unawaited microtasks."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1704",
+     "change": "Await updateSelectedScripId (today it is not awaited in _handleRegularExchangeChange)."
+    }
+   ],
+   "current": "changeAssetType sets selectedAssetType, emits AssetTypeDataLoading and starts a 300 ms Timer that checks selectedAssetType == assetType once (306-307). Inside _loadAndEmitAssetData there are several awaits (scrip details, getQuote, futures/options data), and the background microtasks (396-399, 550-553) write overviewDataManager and emit MoGetQuoteOverviewLoaded with no check. Cash -> Futures -> Cash tapped quickly can show futures Overview data under the Cash tab. No state uses Equatable, so a stale emit always rebuilds.",
+   "steps": [
+    "Add int _assetGen. Increment in changeAssetType, loadAssetTypeData, toggleExchange and selectFuturesExpiry (every instrument change).",
+    "Pass gen down (parameter or captured local) and add if (gen != _assetGen || isClosed) return; after each await and before each emit and each overviewDataManager write in the background tasks.",
+    "Remove the 300 ms Timer (C4) once the checks are in.",
+    "Add cubit tests: fast switching where the latest request wins; no emit after close."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "294-316",
+    "code": "    _debounceTimer?.cancel();\n    _currentSectionLabel = null;\n\n    // Update state immediately for instant UI feedback\n    selectedAssetType = assetType;\n    logTabSwitchedEvent();\n    emit(MoGetQuoteAssetTypeDataLoading(assetType));\n\n    // Clear previous data\n    overviewDataManager = overviewDataManager.clearData();\n\n    // Debounced API call to prevent rapid switching issues\n    _debounceTimer = Timer(const Duration(milliseconds: 300), () async {\n      if (selectedAssetType == assetType) {\n        // Update streaming symbols after asset type change\n        if (quoteInfo != null) {\n          _createBroadcastSymbols();\n        }\n\n        await _loadAndEmitAssetData(assetType);\n      }\n    });\n  }"
+   },
+   "after_code": {
+    "code": "final int gen = ++_assetGen;\n_currentSectionLabel = null;\nselectedAssetType = assetType;\nlogTabSwitchedEvent();\nemit(MoGetQuoteAssetTypeDataLoading(assetType));\noverviewDataManager = overviewDataManager.clearData();\nif (quoteInfo != null) _createBroadcastSymbols();\nawait _loadAndEmitAssetData(assetType, gen);\n\nbool _isStale(final int gen) => gen != _assetGen || isClosed;\n\n// inside _loadCashData(gen)\nquoteScripDetails = await _loadScripDetails(/* ... */);\nif (_isStale(gen)) return;\nawait updateSelectedScripId(cashScripId);\nif (_isStale(gen)) return;\nunawaited(Future.microtask(() async {\n  await _loadMtfData(/* ... */);\n  if (_isStale(gen)) return;\n  await _loadOverviewAndHoldings(quoteInfo!.tradeSymbol, MoGetQuoteAssetType.cash);\n}));"
+   },
+   "safety": [
+    "Only drops work whose result would belong to an instrument the user has already left.",
+    "Single-tap flows run exactly as today.",
+    "Can ship together with C4 behind the same flag."
+   ],
+   "regression_checks": [
+    "Tap Cash/Futures/Options quickly 10 times, stop on each type: header, exchanges and Overview match the final type.",
+    "Exchange toggle during a slow load.",
+    "Leave the page during load: no 'emit after close' errors in logs."
+   ],
+   "after_improvement": "No wrong-tab data after fast switching; removes the need for the 300 ms debounce, so an asset switch starts loading at once.",
+   "depends_on": [
+    "C4"
+   ],
+   "verify": false
+  }
+ ]
+}

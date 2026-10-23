@@ -172,6 +172,7 @@ scroll:
   y_to: 600
   per_app: {}       # overrides when an app's list sits elsewhere
 skip: []            # metric IDs that do not apply to this module
+coldstart: true     # optional; false leaves cold start (L1, X4) out of this module (runner asks each session)
 offline_items:      # the O1 checklist for this module, each answered Yes/Partial/No per app
   - "Last known prices shown"
   - "Stale-data label"

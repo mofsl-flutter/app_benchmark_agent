@@ -170,6 +170,7 @@ BENCH_GROUPS = {  # which bench.py group produces which metric IDs
     "gesture": ["S7"], "idle": ["U4", "U5"], "leak": ["R9"], "live": ["C1", "C2", "C3", "C4"],
 }
 AUTOMATED = sorted({mid for ids in BENCH_GROUPS.values() for mid in ids} | {"R3"})
+COLDSTART_METRICS = BENCH_GROUPS["coldstart"]  # optional per module: "coldstart": false leaves them out
 
 GENERIC_WORDS = {"screen": "the screen", "list": "the list", "detail": "the detail screen"}
 
@@ -197,6 +198,11 @@ def metric_applies(metric, module):
     if flag and not module.get("rise", {}).get(flag, False):
         return False, f"{flag} is false for this module"
     return True, ""
+
+
+def coldstart_on(module):
+    """Whether a module's report counts cold start (L1, X4). Unset means yes; the runner asks per module."""
+    return module.get("coldstart", True) is not False
 
 
 def module_metrics(module):

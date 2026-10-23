@@ -1,0 +1,463 @@
+{
+ "section": "H",
+ "title": "Offline and reconnect",
+ "intro": "Offline, the quote page gives no sign that anything is wrong: there is no banner, and frozen prices look live. Overview can sit on its skeleton for minutes because about ten section calls run one after another and each waits for the 20 s DIO timeout, a tab switch offline replaces the content with a full error and leaves the chips in shimmer, and failed sections are swallowed and never retried. Nothing in the cubit listens for the network coming back, so recovery waits about 9 s for the socket. These changes add a banner and a stale marker (Product), bound each section call, keep cached content on screen, track failures and refresh them the moment the network returns.",
+ "measured": [
+  {
+   "metric": "Offline banner",
+   "current": "none",
+   "expected": "shown within about 1 s of losing the network or the price socket"
+  },
+  {
+   "metric": "Stale-price marker",
+   "current": "none; frozen prices look live",
+   "expected": "'As of hh:mm' (or 'Closed') next to the price while offline"
+  },
+  {
+   "metric": "Overview opened offline",
+   "current": "endless skeleton",
+   "expected": "cached content stays; sections never loaded show an error within <= 12 s"
+  },
+  {
+   "metric": "Auto-recovery after reconnect",
+   "current": "about 9 s",
+   "expected": "<= 2 s"
+  }
+ ],
+ "changes": [
+  {
+   "id": "H1",
+   "title": "Add an offline banner to the quote page",
+   "summary": "Show a banner between the app bar and the content while the device is offline or the price socket is down. Behind a flag, design from Product.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Visible new element in the screen's main Column; it sits outside the CustomScrollView, so scroll offsets and sticky thresholds are not affected. Flag default off.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "Approve an offline banner on the quote page between the app bar and the content: wording (proposed 'You are offline. Prices may not be current.'), style (MOSystemBanner warning), whether it also shows on Wi-Fi without internet (proposed: yes, when the price socket has not been logged in for > 5 s), and whether it replaces the app's global 'No internet' snackbar on this screen (see H7). Behind Remote Config quote_offline_banner_enabled (default false).",
+   "be_request": "Remote Config: add boolean quote_offline_banner_enabled (default false).",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+     "lines": "165-176",
+     "change": "Insert a ValueListenableBuilder on cubit.connectivity between _buildAppBar() and the body."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_offline_banner.dart",
+     "lines": "new",
+     "change": "Stateless banner using MOSystemBanner and design tokens."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new (F1)",
+     "change": "Add offlineBannerEnabled hook."
+    }
+   ],
+   "current": "The screen body is a Column of _buildAppBar() and Expanded(_buildBody()) (mo_get_quote_screen.dart:165-176) with no connectivity state. The quote BasePageState widgets do not override toggleIsInterNetAvailable, so their network listener has no visible effect.",
+   "steps": [
+    "Build QuoteOfflineBanner with MOSystemBanner (warning), copy from Product.",
+    "Insert it in the Column behind the flag, driven by cubit.connectivity from H6 (interface state from ConnectivityManager plus socket state from BroadCastHelper).",
+    "Debounce: show after the state has been offline for 1 s, hide on the first online event, to avoid flicker on network handover."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+    "lines": "165-176",
+    "code": "      child: Stack(\n        children: <Widget>[\n          Scaffold(\n            key: _mainScreenKey,\n            body: Column(\n              children: <Widget>[\n                _buildAppBar(),\n                Expanded(child: _buildBody()),\n              ],\n            ),\n            backgroundColor: context.surfaceBackgroundNeutralSubtle,\n            bottomNavigationBar: _buildBottomActionBar(),"
+   },
+   "after_code": {
+    "code": "          Scaffold(\n            key: _mainScreenKey,\n            body: Column(\n              children: <Widget>[\n                _buildAppBar(),\n                if (QuotePerfFlags.offlineBannerEnabled())\n                  ValueListenableBuilder<QuoteConnectivity>(\n                    valueListenable: _cubit.connectivity, // H6\n                    builder: (_, final QuoteConnectivity c, __) => c.isOnline\n                        ? const SizedBox.shrink()\n                        : const QuoteOfflineBanner(),\n                  ),\n                Expanded(child: _buildBody()),\n              ],\n            ),\n            backgroundColor: context.surfaceBackgroundNeutralSubtle,\n            bottomNavigationBar: _buildBottomActionBar(),\n          ),"
+   },
+   "safety": [
+    "Flag default false: the Column is exactly today's.",
+    "Outside the scroll view, so the hard-coded scroll thresholds (195/135/115/53) are unaffected.",
+    "Reads one ValueNotifier; no new cubit states, so no BlocBuilder in the page rebuilds for it."
+   ],
+   "regression_checks": [
+    "Airplane mode on/off on Overview, Fundamentals, Technicals; banner shows and hides.",
+    "Wi-Fi without internet (router WAN unplugged): banner shows once the socket is down for > 5 s.",
+    "Network handover Wi-Fi <-> mobile: no flicker longer than 1 s.",
+    "Flag off: no banner, layout unchanged."
+   ],
+   "after_improvement": "Users see that they are offline within about 1 s instead of looking at frozen data with no hint.",
+   "depends_on": [
+    "C1",
+    "H6"
+   ],
+   "verify": false
+  },
+  {
+   "id": "H2",
+   "title": "Mark frozen prices with 'As of' time",
+   "summary": "When offline or the price socket is down, show an 'As of hh:mm' chip next to the price using the tick's lastTradedTime, so a frozen price does not look live. Behind a flag.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Visible change in the price row of the stock info card and the scrolled app bar; the row also holds the fund badge, so width on small screens must be checked. Flag default off.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "Show a small chip next to the price when prices are not live: 'As of hh:mm' (last traded time) while offline or the price socket is down, and optionally 'Closed' when the exchange session is closed. Confirm wording, token colour, whether it also appears in the scrolled app bar price, and whether the closed-session chip is wanted. Behind Remote Config quote_stale_marker_enabled (default false).",
+   "be_request": "Remote Config: add boolean quote_stale_marker_enabled (default false).",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+     "lines": "273-299",
+     "change": "Add the chip after the percent text when the flag is on and cubit.connectivity is not live."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+     "lines": "238-256",
+     "change": "Same chip in the scrolled header price row (if Product approves)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new (F1)",
+     "change": "Add staleMarkerEnabled hook."
+    }
+   ],
+   "current": "_buildPriceText (stock_info_card.dart:273-299) renders LTP, arrow, change and percent from the latest tick with no notion of freshness. BroadcastResponse2 already carries lastTradedTime (mosl_broadcaster response_models.dart:191) and BroadCastHelper.connectivityForExchange gives the exchange SessionType (broadcast_helper.dart:214).",
+   "steps": [
+    "Read cubit.connectivity (H6) inside a ValueListenableBuilder placed in the row, so the chip updates on connectivity change, not only on ticks (offline means no ticks).",
+    "Format lastTradedTime with DateFormat.Hm(); hide the chip when lastTradedTime is null.",
+    "Optional per Product: 'Closed' when connectivityForExchange reports a closed session.",
+    "Check the row with the MTF badge on a 360 dp wide screen; wrap or drop the badge per design."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+    "lines": "278-299",
+    "code": "    final Color color =\n        data.change < 0 ? context.feedbackTextNegativeNormal : context.feedbackTextPositiveNormal;\n    final bool isPositive = data.change > 0;\n    return Row(\n      children: <Widget>[\n        _buildLtpText(context, data),\n        MOSpacing.horizontalSpace8,\n        _buildChangeIcon(data.change, color),\n        SizedBox(width: MOSpacing.spacing2),\n        _buildChangeText(data.change, isPositive, color, data.symbol.exchange.isCurrency ? 4 : 2),\n        SizedBox(width: MOSpacing.spacing2),\n        _buildPercentText(\n          data.perChange == -0.0 ? 0 : data.perChange,\n          isPositive,\n          color,\n        ),\n        if (instrumentData.showBadge &&\n            instrumentData.badgeText != null &&\n            instrumentData.badgeText!.isNotEmpty)\n          _buildBadgeSection(instrumentData.badgeText!),\n      ],\n    );"
+   },
+   "after_code": {
+    "code": "    return Row(\n      children: <Widget>[\n        // ... LTP, arrow, change, percent unchanged ...\n        if (QuotePerfFlags.staleMarkerEnabled())\n          ValueListenableBuilder<QuoteConnectivity>(\n            valueListenable: widget.cubit.connectivity, // H6\n            builder: (_, final QuoteConnectivity c, __) {\n              final DateTime? ltt = data.lastTradedTime;\n              if (c.isLive || ltt == null) return const SizedBox.shrink();\n              return Padding(\n                padding: EdgeInsets.only(left: MOSpacing.spacing8),\n                child: Text(\n                  'As of ${DateFormat.Hm().format(ltt)}', // wording per Product\n                  style: MOTypography.labelSmallSemiboldAbc\n                      .copyWith(color: context.feedbackTextWarningStrong),\n                ),\n              );\n            },\n          ),\n        // ... badge unchanged ...\n      ],\n    );"
+   },
+   "safety": [
+    "Flag default false: the row is unchanged.",
+    "Chip hidden whenever the connection is live, so normal market-hours display is identical.",
+    "Uses existing tick fields; no new subscriptions."
+   ],
+   "regression_checks": [
+    "Live market, online: no chip.",
+    "Airplane mode: chip appears with the last traded time; disappears on reconnect.",
+    "Index, futures, options and currency (4-decimal) prices; MTF badge present; small screen width; large text.",
+    "Dark theme colours."
+   ],
+   "after_improvement": "A frozen price is labelled with its time, so users do not trade on prices they think are live.",
+   "depends_on": [
+    "C1",
+    "H6"
+   ],
+   "verify": false
+  },
+  {
+   "id": "H3",
+   "title": "Bound each Overview section call to 6 s",
+   "summary": "Overview sections load one after another and each call waits for the 20 s DIO timeout when the network is dead, so the skeleton never ends. Add a 6 s per-call timeout and stop the loop after two consecutive timeouts.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes loading timing: a slow but working network (> 6 s per section) would now show that section as failed until the H5 retry. Timeout value is a constant and can be raised.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "3066-3079",
+     "change": "_loadBatchSafely applies .timeout(6 s) and returns bool success."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2844-2857",
+     "change": "Loop stops after two consecutive failures and marks the remaining sections failed (H5), then emits as today."
+    }
+   ],
+   "current": "loadEssentialOverviewData runs foreground sections in a for/await loop (mo_get_quote_cubit.dart:2844-2857) and emits only after the loop (2875). Each call goes through callApiWithDio, whose BaseOptions use connectTimeout and receiveTimeout of Constants.networkTimeOut = 20 s (trader_network DIOApiService2.dart:96-100, models/constants.dart:2). ConnectivityManager only checks the interface (connectivity_manager.dart:128-133), so on Wi-Fi without internet changeSection's check passes and every call waits the full timeout: about 10 x 20 s before anything is shown.",
+   "steps": [
+    "Add const Duration _sectionCallTimeout = Duration(seconds: 6) and apply it in _loadBatchSafely with Future.timeout.",
+    "Return true/false from _loadBatchSafely; in the loop, count consecutive failures and break after 2, adding the rest to the failed set (H5).",
+    "Optional: pass a CancelToken through fetchQuoteOverviewData so the abandoned request is cancelled; callApiWithDio already accepts cancelToken.",
+    "Parallel section loading (section C) removes the serial chain entirely; this change bounds it until then."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "3066-3079",
+    "code": "  Future<void> _loadBatchSafely(final String symbol, final List<String> sections,\n      final QuoteOverviewResponse response) async {\n    try {\n      final QuoteOverviewResponse batchData =\n          await _repository.fetchQuoteOverviewData(symbol: symbol, sections: sections);\n\n      for (final String section in sections) {\n        _mergeSectionData(response, batchData, section);\n      }\n    } on Exception catch (e) {\n      // Handle error silently\n      debugPrint('Batch loading failed for sections $sections: $e');\n    }\n  }"
+   },
+   "after_code": {
+    "code": "  /// The DIO default is 20 s per call (trader_network Constants.networkTimeOut).\n  static const Duration _sectionCallTimeout = Duration(seconds: 6);\n\n  Future<bool> _loadBatchSafely(final String symbol, final List<String> sections,\n      final QuoteOverviewResponse response) async {\n    try {\n      final QuoteOverviewResponse batchData = await _repository\n          .fetchQuoteOverviewData(symbol: symbol, sections: sections)\n          .timeout(_sectionCallTimeout);\n      for (final String section in sections) {\n        _mergeSectionData(response, batchData, section);\n      }\n      _failedOverviewSections.removeAll(sections); // H5\n      return true;\n    } on Exception catch (e) { // includes TimeoutException\n      debugPrint('Batch loading failed for sections $sections: $e');\n      _failedOverviewSections.addAll(sections); // H5\n      return false;\n    }\n  }\n\n// loop in loadEssentialOverviewData\nint misses = 0;\nfor (final String section in foregroundSections) {\n  if (misses >= 2) { _failedOverviewSections.add(section); continue; } // network is dead\n  final bool ok = await _loadBatchSafely(symbol, <String>[section], response);\n  misses = ok ? 0 : misses + 1;\n  isOverviewLoading = false;\n  if (ok) _updateOverviewDataManager(response);\n}"
+   },
+   "safety": [
+    "On a healthy network every call finishes well under 6 s, so results and emission order are the same as today.",
+    "Errors were already swallowed per section; the only new outcome is an earlier give-up, retried by H5/H6.",
+    "No change to the repository, DIO options or other modules' timeouts."
+   ],
+   "regression_checks": [
+    "Online, normal and throttled (3G profile) network: all Overview sections still load.",
+    "Wi-Fi without internet: Overview leaves the skeleton within about 12 s (2 x 6 s) and shows what is cached.",
+    "Background sections (isBackgroundProcess) still load after foreground ones."
+   ],
+   "after_improvement": "Offline Overview ends its skeleton in about 12 s worst case instead of about 200 s, and with cached data (section C/D) shows content immediately.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "H4",
+   "title": "Keep current tab content on an offline tab switch",
+   "summary": "Tapping a tab while offline replaces the content with a full error and leaves isOverviewLoading true, so the chips stay in shimmer and the old tab stays highlighted. Reset the flag always, and behind a flag keep the current tab and show a short offline nudge instead.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes what the user sees on an offline tab tap (flagged); the isOverviewLoading reset is a state-flow fix inside the cubit.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "When the user taps a tab while offline, should the page keep the current tab and its content and show a short 'You are offline' nudge (proposed), instead of replacing the content with the full-screen no-internet error (today)? Behind Remote Config quote_offline_keep_content (default false). The chip-shimmer fix ships without a flag.",
+   "be_request": "Remote Config: add boolean quote_offline_keep_content (default false).",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1892-1906",
+     "change": "Set isOverviewLoading only after the connectivity check; offline path resets _currentSectionLabel and, with the flag, emits MoGetQuoteOfflineNotice instead of MoGetQuoteSectionError."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_state.dart",
+     "lines": "62-66",
+     "change": "Add MoGetQuoteOfflineNotice(section) next to MoGetQuoteSectionError."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+     "lines": "205-242",
+     "change": "listenWhen/listener also handle MoGetQuoteOfflineNotice by showing showToastOnTop(NudgeData.error(...))."
+    }
+   ],
+   "current": "changeSection sets isOverviewLoading = true (mo_get_quote_cubit.dart:1894) before the connectivity check; when offline it emits MoGetQuoteSectionError and returns (1897-1905) without resetting the flag. StickyChipsSection shows StickyTabsShimmer while isOverviewLoading is true (sticky_chips_section.dart:189, 268), and selectedSection is not updated, so the old tab stays highlighted while QuoteContentArea shows the new tab's error (quote_content_area.dart:60-72).",
+   "steps": [
+    "Move isOverviewLoading = true below the connectivity check and reset it to false in the offline branch (no flag: bug fix).",
+    "Restore _currentSectionLabel to selectedSection.label in the offline branch so a pending debounce cannot act on the abandoned tab.",
+    "Behind the flag, emit MoGetQuoteOfflineNotice; QuoteContentArea's buildWhen does not list it, so the content stays; the screen listener shows a nudge.",
+    "Flag off: keep emitting MoGetQuoteSectionError exactly as today."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "1892-1906",
+    "code": "    _sectionDebounceTimer?.cancel();\n    _currentSectionLabel = section.label;\n    isOverviewLoading = true;\n\n    // Check internet connectivity for fundamentals section\n    final bool hasInternet = await checkInternetConnectivity();\n    if (!hasInternet) {\n      final ErrorException error = ErrorException(\n        key: 'nointernetconnection',\n        message: 'Please check your internet connection and try again.',\n      );\n      emit(MoGetQuoteSectionError(\n          section, error, \"Please check your internet connection and try again.\"));\n      return;\n    }"
+   },
+   "after_code": {
+    "code": "    _sectionDebounceTimer?.cancel();\n    _currentSectionLabel = section.label;\n\n    final bool hasInternet = await checkInternetConnectivity();\n    if (!hasInternet) {\n      isOverviewLoading = false;                   // chips leave shimmer\n      _currentSectionLabel = selectedSection.label; // nothing pending for the abandoned tab\n      if (QuotePerfFlags.offlineKeepContent()) {\n        emit(MoGetQuoteOfflineNotice(section));    // content and highlighted tab stay\n        return;\n      }\n      final ErrorException error = ErrorException(\n        key: 'nointernetconnection',\n        message: 'Please check your internet connection and try again.',\n      );\n      emit(MoGetQuoteSectionError(\n          section, error, \"Please check your internet connection and try again.\"));\n      return;\n    }\n    isOverviewLoading = true; // moved below the check"
+   },
+   "safety": [
+    "Flag default false keeps today's error screen; only the stuck chip shimmer is fixed unconditionally.",
+    "The new state is ignored by every existing BlocBuilder (their buildWhen lists explicit states).",
+    "Retry from the error widget still calls changeSection with the same arguments."
+   ],
+   "regression_checks": [
+    "Offline tab tap, flag off: same error screen as today, chips no longer shimmer.",
+    "Offline tab tap, flag on: content and highlighted tab unchanged, nudge shown.",
+    "Online again, tap the tab: loads normally.",
+    "Rapid tab taps online (debounce still latest-wins)."
+   ],
+   "after_improvement": "No stuck chip shimmer offline; with the flag, cached content stays on screen instead of an error.",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "H5",
+   "title": "Track failed Overview sections and retry them",
+   "summary": "_loadBatchSafely swallows every error, so a section that failed is just missing and is never fetched again. Record failed sections and add retryFailedOverviewSections() for the reconnect path.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Adds a retry that emits Overview state again; consumers already handle repeated Overview emissions. No retry runs until H6 or a pull calls it.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2821-2884",
+     "change": "Keep the response object of the last Overview load and a Set<String> _failedOverviewSections; add retryFailedOverviewSections()."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "3066-3079",
+     "change": "Record success/failure per section (shared with H3)."
+    }
+   ],
+   "current": "The loop catches per-section exceptions (mo_get_quote_cubit.dart:2851-2854) and _loadBatchSafely also catches and only debugPrints (3075-3078). OverviewDataManager has no failed-section tracking (unlike FundamentalDataManager.failedSections), so nothing knows which sections to refetch.",
+   "steps": [
+    "Add final Set<String> _failedOverviewSections and QuoteOverviewResponse? _lastOverviewResponse (set at the start of loadEssentialOverviewData).",
+    "Clear the set when a new symbol or asset type loads.",
+    "Add retryFailedOverviewSections(): only when Overview is the selected tab; fetch failed sections in parallel with the H3 timeout, merge into _lastOverviewResponse, update the data manager and emit once.",
+    "Called by H6 on reconnect; can also back a pull-to-refresh later."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "2844-2857",
+    "code": "      // Process foreground sections sequentially\n      for (final String section in foregroundSections) {\n        try {\n          await _loadBatchSafely(symbol, [section], response);\n          isOverviewLoading = false;\n          _updateOverviewDataManager(response);\n          // _emitCurrentState(overviewDataManager);\n        } on Exception catch (e) {\n          debugPrint('Error loading section $section: $e');\n          // Continue with next section even if current fails\n        }\n      }\n\n      isOverviewLoading = false;"
+   },
+   "after_code": {
+    "code": "final Set<String> _failedOverviewSections = <String>{};\nQuoteOverviewResponse? _lastOverviewResponse;\n\n// start of loadEssentialOverviewData:\n//   final response = QuoteOverviewResponse();\n//   _lastOverviewResponse = response;\n//   _failedOverviewSections.clear();\n// loop: see H3 (records failures through _loadBatchSafely)\n\n/// Refetches only what failed. Called on reconnect (H6).\nFuture<void> retryFailedOverviewSections() async {\n  final QuoteOverviewResponse? response = _lastOverviewResponse;\n  final String? symbol = quoteInfo?.tradeSymbol;\n  if (isClosed || response == null || symbol == null) return;\n  if (_failedOverviewSections.isEmpty || selectedSection != MoGetQuoteSections.overview) return;\n  final List<String> retry = _failedOverviewSections.toList();\n  final List<bool> ok = await Future.wait(retry.map(\n      (final String s) => _loadBatchSafely(symbol, <String>[s], response)));\n  if (isClosed || !ok.contains(true)) return;\n  _updateOverviewDataManager(response);\n  _emitCurrentState(overviewDataManager);\n}"
+   },
+   "safety": [
+    "The first load's output is unchanged; failures are only recorded.",
+    "Retry only touches sections that failed and only while Overview is visible.",
+    "One emit per retry, same state type as the normal Overview load."
+   ],
+   "regression_checks": [
+    "Online: no retry happens (set empty).",
+    "Go offline during Overview load, come back: missing sections appear without leaving the page.",
+    "Switch stock or asset type after failures: no retry for the old symbol."
+   ],
+   "after_improvement": "Sections that failed offline fill in on reconnect instead of staying empty until the user reopens the page.",
+   "depends_on": [
+    "H3"
+   ],
+   "verify": false
+  },
+  {
+   "id": "H6",
+   "title": "Refresh failed sections the moment the network returns",
+   "summary": "No REST path listens for reconnect; recovery comes from the socket after about 9 s. Let the cubit listen to ConnectivityManager and the price socket state, expose a connectivity notifier for H1/H2, and refetch failed sections and an errored tab on reconnect.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Adds network calls at reconnect time and two listeners owned by the cubit; behind a flag and cancelled in close().",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Remote Config: add boolean quote_reconnect_refresh_enabled (default false).",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "179-183, 3290-3295",
+     "change": "Add connectivity ValueNotifier, two subscriptions, startConnectivityWatch(), _refreshAfterReconnect(); cancel and dispose in close()."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/domain/quote_connectivity.dart",
+     "lines": "new",
+     "change": "Small immutable value: interfaceUp, socketLoggedIn, isOnline, isLive."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new (F1)",
+     "change": "Add reconnectRefreshEnabled hook."
+    }
+   ],
+   "current": "The cubit's only timers are the two debounces cancelled in close() (mo_get_quote_cubit.dart:3290-3295); it has no connectivity listener. ConnectivityManager.onConnectivityChanged (trader_core connectivity_manager.dart:37-38) is an app-wide broadcast stream of interface changes, and BroadCastHelper.socketStateStream reports when the price socket is logged in (used by full_view_chart.dart:158). The BasePageState listeners in quote widgets do not override toggleIsInterNetAvailable, so they do nothing visible.",
+   "steps": [
+    "Add QuoteConnectivity and a ValueNotifier in the cubit; start the watch from loadAssetTypeData (once) when the flag is on.",
+    "On interface up after being down: call retryFailedOverviewSections() (H5) and, if the current tab ended in MoGetQuoteSectionError, reload that tab; do not wait for the socket.",
+    "On socket loggedIn: also call retryFailedOverviewSections() (covers Wi-Fi without internet, where the interface never went down).",
+    "Guard every handler with isClosed; cancel subscriptions and dispose the notifier in close().",
+    "Measure time from airplane-mode off to Overview complete; target <= 2 s."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "3290-3295",
+    "code": "  @override\n  Future<void> close() {\n    _debounceTimer?.cancel();\n    _sectionDebounceTimer?.cancel();\n    return super.close();\n  }"
+   },
+   "after_code": {
+    "code": "  final ValueNotifier<QuoteConnectivity> connectivity =\n      ValueNotifier<QuoteConnectivity>(QuoteConnectivity.online);\n  StreamSubscription<bool>? _netSub;\n  StreamSubscription<Object?>? _socketSub;\n  bool _wasOffline = false;\n\n  void startConnectivityWatch() {\n    if (!QuotePerfFlags.reconnectRefreshEnabled() || _netSub != null) return;\n    _netSub = ConnectivityManager.instance.onConnectivityChanged.listen((final bool up) {\n      if (isClosed) return;\n      connectivity.value = connectivity.value.copyWith(interfaceUp: up);\n      if (!up) { _wasOffline = true; return; }\n      if (_wasOffline) { _wasOffline = false; unawaited(_refreshAfterReconnect()); }\n    });\n    _socketSub = BroadCastHelper.instance.socketStateStream.listen((final Object? s) {\n      if (isClosed) return;\n      final bool loggedIn = s == SocketState.loggedIn;\n      connectivity.value = connectivity.value.copyWith(socketLoggedIn: loggedIn);\n      if (loggedIn) unawaited(retryFailedOverviewSections()); // Wi-Fi without internet\n    });\n  }\n\n  Future<void> _refreshAfterReconnect() async {\n    await retryFailedOverviewSections(); // H5\n    if (!isClosed && state is MoGetQuoteSectionError) await _loadSectionData(selectedSection);\n  }\n\n  @override\n  Future<void> close() {\n    _debounceTimer?.cancel();\n    _sectionDebounceTimer?.cancel();\n    _netSub?.cancel();\n    _socketSub?.cancel();\n    connectivity.dispose();\n    return super.close();\n  }"
+   },
+   "safety": [
+    "Flag default false: no listener is created and close() only cancels null subscriptions.",
+    "Retries only failed sections and an errored tab; healthy content is not refetched.",
+    "Subscriptions are owned by the cubit and cancelled in close(), so a closed page cannot refetch.",
+    "Socket and interface streams are existing app-wide broadcast streams; nothing in the broadcaster changes."
+   ],
+   "regression_checks": [
+    "Airplane mode on during Overview load, off after 10 s: Overview completes within about 2 s of reconnect.",
+    "Wi-Fi without internet, then restore WAN: sections fill when the socket logs in.",
+    "Offline error on Fundamentals tab, reconnect: tab reloads by itself.",
+    "Rapid network flapping: no duplicate parallel retries (one in flight at a time).",
+    "Close the page while offline, reconnect: no requests from the closed page."
+   ],
+   "after_improvement": "REST content recovers on the interface-up event (about 1 s) instead of waiting about 9 s for the socket path; target <= 2 s.",
+   "depends_on": [
+    "C1",
+    "H5"
+   ],
+   "verify": true
+  },
+  {
+   "id": "H7",
+   "title": "Stop ErrorCaseWidget hiding the no-internet toast",
+   "summary": "ErrorCaseWidget calls Snackbar.hidePersistentToast in build(), so whenever any error widget is built the app's persistent 'No internet' toast disappears. Add an opt-out parameter (default true = today) and let the quote page opt out once its banner owns the offline state.",
+   "categories": [
+    "FE-Shared",
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "trader_widget_ui is used across the app, but the parameter is additive with a default that keeps today's behaviour for every existing caller.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_widget_ui/lib/errorWidget/common_error_widget.dart",
+     "lines": "38-55",
+     "change": "Add final bool hidesPersistentToast (default true); call hidePersistentToast only when true."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+     "lines": "67-71",
+     "change": "Pass hidesPersistentToast: !QuotePerfFlags.offlineBannerEnabled()."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+     "lines": "322-327",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+     "lines": "104-107, 138-141",
+     "change": "Same."
+    }
+   ],
+   "current": "ErrorCaseWidget.build starts with Snackbar.hidePersistentToast(context) (common_error_widget.dart:55), a side effect on every build. On the quote page the section error widget is rebuilt with the content area, so the persistent no-internet toast shown by trader_core connectivity.dart:7-17 is removed as soon as an error appears, leaving no offline signal at all.",
+   "steps": [
+    "Add the parameter with default true and guard the call.",
+    "Pass false from the quote module's ErrorCaseWidget uses only when the offline banner flag is on (then the banner shows the state).",
+    "Leave every other caller untouched.",
+    "Whether the global toast stays next to the banner is the H1 Product question; this parameter supports either answer."
+   ],
+   "before_code": {
+    "path": "packages/trader_widget_ui/lib/errorWidget/common_error_widget.dart",
+    "lines": "53-55",
+    "code": "  @override\n  Widget build(final BuildContext context) {\n    Snackbar.hidePersistentToast(context);"
+   },
+   "after_code": {
+    "code": "  /// Whether building this widget hides the app's persistent toast (e.g. 'No internet').\n  /// Defaults to true, today's behaviour for every caller. A screen with its own offline\n  /// banner passes false so the offline state is not silently removed.\n  final bool hidesPersistentToast;\n  // constructor: this.hidesPersistentToast = true,\n\n  @override\n  Widget build(final BuildContext context) {\n    if (hidesPersistentToast) {\n      Snackbar.hidePersistentToast(context);\n    }\n    // ... unchanged\n  }\n\n// quote_content_area.dart\nErrorCaseWidget(\n  errorException: state.error,\n  errorMessageDes: state.message,\n  hidesPersistentToast: !QuotePerfFlags.offlineBannerEnabled(),\n  onRetryCall: () => cubit.changeSection(state.section, cubit.selectedAssetType),\n)"
+   },
+   "safety": [
+    "Default true: all existing ErrorCaseWidget callers behave exactly as today.",
+    "Quote module opts out only when its own banner flag is on.",
+    "No change to Snackbar or connectivity code in trader_core."
+   ],
+   "regression_checks": [
+    "Other modules' error screens (orders, watchlist, portfolio) still clear the persistent toast as today.",
+    "Quote page with banner flag on: offline error and banner/toast behave per Product decision.",
+    "Retry button on the error widget still works."
+   ],
+   "after_improvement": "The quote page no longer erases the only offline signal when an error widget is built; with H1 the offline state is always visible.",
+   "depends_on": [
+    "C1",
+    "H1"
+   ],
+   "verify": false
+  }
+ ]
+}

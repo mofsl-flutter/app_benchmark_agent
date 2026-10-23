@@ -1,0 +1,876 @@
+{
+ "section": "C",
+ "title": "Opening the quote page",
+ "intro": "This covers everything from tapping a stock to a fully drawn quote page. Today the page makes about 18 requests, about 16 of them one after another, waits on fixed timers, keeps the whole header in a shimmer although the arguments already name the stock, and throws away or repeats several calls. The changes run the calls in parallel, remove the waits and duplicates, paint the header at once and cache data that rarely changes, each behind a Remote Config switch.",
+ "measured": [
+  {
+   "metric": "Repeat open (same session)",
+   "current": "1,313 ms (header and market depth at about 0.3 s)",
+   "expected": "400 ms or less"
+  },
+  {
+   "metric": "First open in session",
+   "current": "2,459 ms (one case still skeleton at 6.4 s)",
+   "expected": "500 ms or less, no endless skeleton"
+  },
+  {
+   "metric": "Data per open",
+   "current": "about 103 KB",
+   "expected": "about 30 KB"
+  },
+  {
+   "metric": "Requests per open (cash)",
+   "current": "about 18, about 16 in series",
+   "expected": "about 14 (repeat: about 4), at most 4 in series"
+  },
+  {
+   "metric": "Header name and price",
+   "current": "after 4 serial calls",
+   "expected": "first frame"
+  }
+ ],
+ "changes": [
+  {
+   "id": "C1",
+   "title": "Add Remote Config switches for quote loading",
+   "summary": "Several changes below alter loading order or show data sooner. Add one small flag holder in mo_get_quote, set from Remote Config by the app shell, so each change can ship dark and be rolled back without a release.",
+   "categories": [
+    "FE",
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Adds new code only. Every flag reads false when the Remote Config key is unset or unreadable, which keeps today's code path.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new",
+     "change": "New static holder of bool Function() hooks, one per change (parallelOpen, progressiveOverview, sectionCache, keepTabData, keepTabsAlive, ...), all defaulting to () => false."
+    },
+    {
+     "path": "apps/super_app/lib/Common/quote_perf_flags_install.dart",
+     "lines": "new",
+     "change": "Reads FirebaseRemoteConfig.getBool for each key inside try/catch and wires the hooks, same pattern as ChartLibraryPrefetch."
+    },
+    {
+     "path": "apps/super_app/lib/core/app_initializer.dart",
+     "lines": "945",
+     "change": "Call QuotePerfFlagsInstall.install() next to ChartLibraryPrefetch.install()."
+    }
+   ],
+   "current": "mo_get_quote does not depend on firebase_remote_config and has no feature flags. The app shell already uses a hook pattern for this: ChartLibraryPrefetch.install() (apps/super_app/lib/Common/chart_library_prefetch.dart) sets static callbacks in a package from Remote Config at startup.",
+   "steps": [
+    "Create QuotePerfFlags in mo_get_quote with static bool Function() fields, each defaulting to () => false.",
+    "Create QuotePerfFlagsInstall in apps/super_app/lib/Common/ that maps Remote Config keys (quote_parallel_open, quote_progressive_overview, quote_section_cache, quote_keep_tab_data, quote_keep_tabs_alive, quote_keep_transactions, quote_header_from_args) to those hooks; any read failure returns false.",
+    "Call install() in app_initializer.dart right after ChartLibraryPrefetch.install() (line 945).",
+    "Read the flag at the start of each operation (open, tab switch), never inside build(), so one operation never mixes old and new paths."
+   ],
+   "before_code": {
+    "path": "apps/super_app/lib/Common/chart_library_prefetch.dart",
+    "lines": "40-56",
+    "code": "  static bool get isEnabled {\n    try {\n      return FirebaseRemoteConfig.instance.getBool(remoteConfigKey);\n    } catch (_) {\n      return false;\n    }\n  }\n\n  /// Connects the flag and the login hook. Call once during startup, next to the other\n  /// [RiseAppModule] callbacks.\n  static void install() {\n    ChartLibraryWarmer.isEnabled = () => isEnabled;\n    ChartController.selfHealEnabled = () => !isSelfHealDisabled;\n    // Fires as the login request is sent and runs in parallel with it. Never awaited: the warm-up\n    // reports its own failures and a login must not wait for a download.\n    RiseAppModule.onLoginStart = () => ChartLibraryWarmer.warm(trigger: 'login');\n  }"
+   },
+   "after_code": {
+    "code": "// packages/mo_get_quote/lib/helper/quote_perf_flags.dart\nclass QuotePerfFlags {\n  const QuotePerfFlags._();\n  // Every hook defaults to today's behaviour.\n  static bool Function() parallelOpen = () => false;\n  static bool Function() headerFromArgs = () => false;\n  static bool Function() progressiveOverview = () => false;\n  static bool Function() sectionCache = () => false;\n  static bool Function() keepTabData = () => false;\n  static bool Function() keepTabsAlive = () => false;\n  static bool Function() keepTransactions = () => false;\n}\n\n// apps/super_app/lib/Common/quote_perf_flags_install.dart\nclass QuotePerfFlagsInstall {\n  static bool _get(String key) {\n    try { return FirebaseRemoteConfig.instance.getBool(key); } catch (_) { return false; }\n  }\n  static void install() {\n    QuotePerfFlags.parallelOpen = () => _get('quote_parallel_open');\n    QuotePerfFlags.progressiveOverview = () => _get('quote_progressive_overview');\n    QuotePerfFlags.sectionCache = () => _get('quote_section_cache');\n    // ... one line per flag\n  }\n}"
+   },
+   "safety": [
+    "All keys unset means every change below stays on today's code path.",
+    "Same install pattern as ChartLibraryPrefetch, already in production."
+   ],
+   "regression_checks": [
+    "App start with Remote Config unreachable: quote page behaves exactly as today.",
+    "Toggle one key in pilot and confirm only that behaviour changes."
+   ],
+   "after_improvement": "Each later change can be enabled per environment and per percentage, and rolled back in minutes.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "C2",
+   "title": "Run the opening calls in parallel",
+   "summary": "The open waits for dashboard, then getQuote, then scrip details, one after another. Start all three at once from the scripId in the arguments, and use the speculative scrip details only when the dashboard confirms the same cash scrip.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "High",
+   "risk_reason": "Changes the order of the cubit's core open flow (loadAssetTypeData and _loadCashData). The dashboard decides the asset type and may redirect to dashboardData.cashScrip, so a wrong reuse would show the wrong scrip. Needs the flag and a full regression of cash, ETF, index, futures and options opens.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "231-283",
+     "change": "loadAssetTypeData: start dashboard, getQuote and scrip details together with Future.wait when QuotePerfFlags.parallelOpen() is on."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "381-400",
+     "change": "_loadCashData: take the prefetched scrip details when _getCashScripId() equals the arguments scripId, else fetch as today."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1130-1148",
+     "change": "_loadScripDetails: accept an optional already-started Future."
+    }
+   ],
+   "current": "loadAssetTypeData awaits _loadDashboardData() (line 237), then fetchGetQuote (240). Only after that does _loadAndEmitAssetData run _loadCashData, which awaits _loadScripDetails (387) and then updateSelectedScripId, which calls getQuote again (1269). Four network round trips happen in series before the header leaves the shimmer.",
+   "steps": [
+    "In loadAssetTypeData, when the flag is on, start three futures at once: _loadDashboardData(), fetchGetQuote(args scripId) and _repository.fetchQuoteScripDetails(args scripId). Skip the scrip-details prefetch for index scrips (quoteInfo.isIndexScrip), which do not call it today.",
+    "Await dashboard and getQuote with Future.wait; keep the rest of the method unchanged.",
+    "Pass the scrip-details future to _loadCashData. If _getCashScripId() has the same scripCode and exchange as quoteInfo.scripId, await that future; otherwise ignore it and fetch for cashScripId exactly as today.",
+    "For futures and options keep today's path in this change; they already reload scrip details for the contract they pick.",
+    "Attach .catchError to the speculative future so an unused failure is not reported as unhandled."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "236-252",
+    "code": "      // Step 2: Load dashboard to determine available asset types\n      dashboardData = await _loadDashboardData();\n\n      // Fetch basic quote data first\n      final ScripQuote? scripQuote = await fetchGetQuote(\n        quoteInfo!.scripId!.scripCode.toString(),\n        quoteInfo!.scripId!.exchange.value.toString(),\n        isFromSearch: quoteInfo?.isFromDeepLink ?? false,\n      );\n      bool hasOptions = scripQuote?.hasOptions ?? false;\n      bool hasDerivatives = scripQuote?.hasDerivatives ?? false;\n      bool hasCash = scripQuote?.hasCash ?? false;\n      quoteInfo = quoteInfo?.copyWith(hasDerivatives: hasOptions || hasDerivatives);\n      bool casEnabled = scripQuote?.casEnabled ?? false;\n      _showCasSection = casEnabled && hasCash;\n      fundisin = scripQuote?.isin;\n      getAvailableMoreOptions(scripQuote);"
+   },
+   "after_code": {
+    "code": "final ScripId argsId = quoteInfo!.scripId!;\nFuture<QuoteScripDetails>? scripPrefetch;\nif (QuotePerfFlags.parallelOpen() && !(quoteInfo!.isIndexScrip)) {\n  scripPrefetch = _repository.fetchQuoteScripDetails(\n    scripCode: argsId.scripCode.toString(),\n    exchangeCode: argsId.exchange.value,\n  )..catchError((Object _) => QuoteScripDetails()); // unused failure is not unhandled\n}\nfinal List<Object?> first = await Future.wait<Object?>(<Future<Object?>>[\n  _loadDashboardData(),\n  fetchGetQuote(argsId.scripCode.toString(), argsId.exchange.value.toString(),\n      isFromSearch: quoteInfo?.isFromDeepLink ?? false),\n]);\ndashboardData = first[0] as QuoteDashboardResponse;\nfinal ScripQuote? scripQuote = first[1] as ScripQuote?;\n_firstQuote = (argsId, scripQuote); // reused by C3\n_scripPrefetch = (argsId, scripPrefetch);\n// ... rest unchanged\n\n// in _loadCashData:\nfinal ScripId cashScripId = _getCashScripId();\nfinal bool canReuse = _scripPrefetch?.$2 != null && _sameScrip(_scripPrefetch!.$1, cashScripId);\nquoteScripDetails = canReuse\n    ? await _loadScripDetails(prefetched: _scripPrefetch!.$2!, /* same args */)\n    : await _loadScripDetails(scripCode: ..., exchangeCode: ...);"
+   },
+   "safety": [
+    "Behind QuotePerfFlags.parallelOpen(); off keeps the serial chain.",
+    "The prefetched scrip details are used only when the dashboard resolves to the same scripCode and exchange, so redirected opens (F&O symbol opened as cash, cashScrip differs) fetch exactly as today.",
+    "Same endpoints and same parameters; only the start time changes."
+   ],
+   "regression_checks": [
+    "Open cash stock from search, watchlist, deep link and recent searches.",
+    "Open an F&O contract whose dashboard.cashScrip differs from the argument scripId: header must show the cash scrip as today.",
+    "Open an ETF (no subtabs), an index, a futures contract, a spread and an option.",
+    "Open with network off and on a slow network: same error screen as today."
+   ],
+   "after_improvement": "Three round trips start together, so time to header drops from about 4 serial calls to about 1 (roughly 600-900 ms saved on a first open with typical 150-250 ms calls).",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "C3",
+   "title": "Reuse the first getQuote result",
+   "summary": "updateSelectedScripId calls getQuote again for the scrip that loadAssetTypeData has just fetched. Reuse that response when the scripId matches.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "updateSelectedScripId is called on every exchange, expiry and strike change; the reuse must apply only on the open and only for the same scripId, or flags like hasDerivatives and CAS could come from the wrong scrip.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1259-1289",
+     "change": "Use the cached first ScripQuote when scripId matches, then clear it so later changes fetch as today."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "240-244",
+     "change": "Store the first response with its scripId."
+    }
+   ],
+   "current": "On a cash open the same getQuote URL is requested twice: once at line 240 for quoteInfo.scripId and once at line 1269 from updateSelectedScripId(cashScripId), which is usually the same scrip. The second call is on the critical path before MoGetQuoteScripIdChanged and before the content area leaves the shimmer.",
+   "steps": [
+    "Add a private field (ScripId, ScripQuote?)? _firstQuote set in loadAssetTypeData after the first getQuote.",
+    "In updateSelectedScripId, if _firstQuote matches scripCode and exchange, use it and set _firstQuote = null; otherwise call fetchGetQuote as today.",
+    "Keep the rest of the method (CAS flag, hasDerivatives, broadcast symbol, emit) unchanged."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "1269-1278",
+    "code": "    final ScripQuote? scripQuote = await fetchGetQuote(\n      scripId.scripCode.toString(),\n      scripId.exchange.value.toString(),\n      isFromSearch: quoteInfo?.isFromDeepLink ?? false,\n    );\n    bool hasOptions = scripQuote?.hasOptions ?? false;\n    bool hasDerivatives = scripQuote?.hasDerivatives ?? false;\n    bool casEnabled = scripQuote?.casEnabled ?? false;\n    bool hasCash = scripQuote?.hasCash ?? false;\n    _showCasSection = casEnabled && hasCash;"
+   },
+   "after_code": {
+    "code": "(ScripId, ScripQuote?)? _firstQuote; // set once in loadAssetTypeData\n\nfinal (ScripId, ScripQuote?)? first = _firstQuote;\n_firstQuote = null; // one-shot: later scrip changes always fetch\nfinal ScripQuote? scripQuote = (first != null &&\n        first.$1.scripCode == scripId.scripCode &&\n        first.$1.exchange == scripId.exchange)\n    ? first.$2\n    : await fetchGetQuote(\n        scripId.scripCode.toString(),\n        scripId.exchange.value.toString(),\n        isFromSearch: quoteInfo?.isFromDeepLink ?? false,\n      );"
+   },
+   "safety": [
+    "Same response object for the same URL that was fetched a few hundred ms earlier.",
+    "One-shot: exchange toggle, expiry and strike changes still fetch.",
+    "If the first call failed (null), the match still reuses null exactly as a failed second call would; to be safe, only reuse a non-null result."
+   ],
+   "regression_checks": [
+    "Cash open: CAS section, Start SIP and Add to Basket options, option-chain button as today.",
+    "Switch NSE/BSE: getQuote is called for the new exchange.",
+    "Futures and options opens: scripId differs from args, so getQuote is still called."
+   ],
+   "after_improvement": "One request and one round trip (about 100-250 ms) less on every cash and index open.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "C4",
+   "title": "Remove artificial delays and debounces",
+   "summary": "The open waits a fixed 100 ms before choosing the section, asset switches wait 300 ms and tab switches 200 ms. Remove the waits and guard against fast taps with a request generation number, so the latest request wins.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes timing of state emits. The debounce currently doubles as protection against rapid taps; the token must give the same protection or an older load could overwrite a newer tab.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "336",
+     "change": "Remove await Future.delayed(100 ms) in _loadAndEmitAssetData."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1603",
+     "change": "Remove await Future.delayed(100 ms) in toggleExchange."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "305-315",
+     "change": "Replace the 300 ms Timer with an immediate call guarded by _assetGen."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1927-1953",
+     "change": "Replace both 200 ms Timers with immediate calls guarded by _sectionGen."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "179-181, 1291-1295",
+     "change": "Add int _assetGen, _sectionGen; keep _currentSectionLabel; close() no longer needs the timers."
+    }
+   ],
+   "current": "Every open pays a fixed 100 ms (line 336) between MoGetQuoteAssetTypeDataLoaded and MoGetQuoteSectionChanged. Each asset-type tap waits 300 ms (306) and each tab tap waits 200 ms (1929, 1941) before any request starts. The only protection against stale work is the label check inside the timer.",
+   "steps": [
+    "Add int _sectionGen = 0. In changeSection: final int gen = ++_sectionGen; run the body directly; after every await, return if gen != _sectionGen.",
+    "Same in changeAssetType with _assetGen (see D7 for the checks inside the load chain).",
+    "Delete the Future.delayed(100 ms) at 336 and 1603. If the 100 ms was there to let the TabController/sticky header build first (verify with git blame), emit SectionChanged in a post-frame callback instead of sleeping.",
+    "Keep _currentSectionLabel checks as they are; they become a second guard."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "1929-1953",
+    "code": "      _sectionDebounceTimer = Timer(const Duration(milliseconds: 200), () async {\n        if (_currentSectionLabel == section.label) {\n          await selectFuturesExpiry(section.label);\n          if (_currentSectionLabel == section.label) {\n            emit(MoGetQuoteSectionChanged(section));\n          }\n        }\n      });\n      return;\n    }\n\n    // Debounced API call for other sections\n    _sectionDebounceTimer = Timer(const Duration(milliseconds: 200), () async {\n      if (_currentSectionLabel == section.label) {\n        if (section == MoGetQuoteSections.stocks) {\n          emit(MoGetQuoteSectionChanged(section));\n          await _loadSectionData(section);\n        } else {\n          await _loadSectionData(section);\n          if (_currentSectionLabel == section.label) {\n            emit(MoGetQuoteSectionChanged(section));\n          }\n        }\n      }\n    });"
+   },
+   "after_code": {
+    "code": "final int gen = ++_sectionGen;\nbool stale() => gen != _sectionGen || isClosed;\n\nif (assetType == MoGetQuoteAssetType.futures) {\n  await selectFuturesExpiry(section.label);\n  if (!stale()) emit(MoGetQuoteSectionChanged(section));\n  return;\n}\nif (section == MoGetQuoteSections.stocks) {\n  emit(MoGetQuoteSectionChanged(section));\n  await _loadSectionData(section);\n  return;\n}\nawait _loadSectionData(section);\nif (!stale()) emit(MoGetQuoteSectionChanged(section));"
+   },
+   "safety": [
+    "The generation check gives the same result as the debounce for rapid taps: only the last tap emits SectionChanged.",
+    "Can sit behind QuotePerfFlags.parallelOpen() if QA wants it in the same switch.",
+    "No API or state class changes."
+   ],
+   "regression_checks": [
+    "Tap tabs quickly (Overview, Fundamentals, Technicals, News) and stop on each: the final tab shows its own content.",
+    "Futures: switch expiry chips quickly; the chosen expiry loads.",
+    "Asset tabs Cash/Futures/Options tapped quickly.",
+    "Exchange toggle NSE/BSE still updates the price and buttons."
+   ],
+   "after_improvement": "100 ms off every open, 300 ms off every asset switch and 200 ms off every tab switch.",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "C5",
+   "title": "Paint the header from the arguments at once",
+   "summary": "The whole header, including name and price, stays in a shimmer until four serial calls finish, although GetQuoteArguments already carries scripId, tradeSymbol, exchange and description. Show name, exchange and the cached live price immediately and fill the rest when the dashboard arrives.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Visible change to the first frames of the header; the asset-type tab row and logo appear later than the name, so the layout can shift once. Streaming starts earlier, before broadcastSymbol is final.",
+   "effort": "M",
+   "user_visible": true,
+   "product_decision": "Should the quote header show the stock name, exchange and last cached price immediately (before the asset-type tabs and logo load), instead of a full shimmer? Proposed: yes, with the tab row keeping a fixed-height placeholder to avoid a jump.",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_details_section.dart",
+     "lines": "29-38",
+     "change": "On MoGetQuoteLoading, when the flag is on and args have scripId > 0, build StockInfoCard in a 'partial' mode instead of QuoteDetailsShimmer; keep the tab row as a fixed-height placeholder."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+     "lines": "36-52, 106-143",
+     "change": "_createInstrumentDisplayData already falls back to quoteInfo.tradeSymbol; use quoteArguments.displayName/description when scrip details are empty; hide exchange chips until data arrives."
+    }
+   ],
+   "current": "QuoteDetailsSection returns QuoteDetailsShimmer for MoGetQuoteLoading (lines 33-35). That state lasts from the start of loadAssetTypeData until MoGetQuoteAssetTypeDataLoaded, i.e. dashboard, getQuote, scrip details and the second getQuote. StockInfoCard is not even created during that time, so its startQuoteStreaming in initState also waits. The app bar title (mo_get_quote_app_bar.dart:156-200) already falls back to quoteInfo.tradeSymbol and needs no change.",
+   "steps": [
+    "Add a flag check (QuotePerfFlags.headerFromArgs()) in QuoteDetailsSection.build.",
+    "When on and cubit.quoteInfo?.scripId?.scripCode > 0 (or isIndexScrip with indexName), build the tab-row placeholder plus StockInfoCard; StockInfoCard starts streaming in initState from quoteInfo.scripId, as it already supports.",
+    "In StockInfoCard, render the exchange section only when availableExchanges is not empty, and the logo only when logoUrl is known (initials until then).",
+    "Guard _buildLogoWithInitialName against an empty name (name[0] throws RangeError today, stock_info_card.dart:193).",
+    "Keep the shimmer when arguments have no usable scripId (some deep links)."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/quote_details_section.dart",
+    "lines": "28-38",
+    "code": "  Widget build(final BuildContext context) {\n    return BlocBuilder<MoGetQuoteCubit, MoGetQuoteState>(\n      buildWhen: (final MoGetQuoteState prev, final MoGetQuoteState curr) =>\n          curr is MoGetQuoteLoading || curr is MoGetQuoteAssetTypeDataLoaded,\n      builder: (final BuildContext context, final MoGetQuoteState state) {\n        if (state is MoGetQuoteLoading) {\n          return const QuoteDetailsShimmer();\n        }\n        return _buildContent(context, cubit);\n      },\n    );"
+   },
+   "after_code": {
+    "code": "builder: (final BuildContext context, final MoGetQuoteState state) {\n  if (state is MoGetQuoteLoading) {\n    final bool canPaint = QuotePerfFlags.headerFromArgs() &&\n        ((cubit.quoteInfo?.scripId?.scripCode ?? 0) > 0 ||\n            (cubit.quoteInfo?.isIndexScrip ?? false));\n    if (!canPaint) return const QuoteDetailsShimmer();\n    return _buildPartialContent(context, cubit); // tab-row placeholder + StockInfoCard\n  }\n  return _buildContent(context, cubit);\n},"
+   },
+   "safety": [
+    "Behind QuotePerfFlags.headerFromArgs(), default off.",
+    "Falls back to the shimmer when arguments lack a scripId.",
+    "Values shown are the same ones the header shows today once loaded (name from tradeSymbol fallback, price from the broadcaster cache)."
+   ],
+   "regression_checks": [
+    "Open from search, watchlist, holdings, deep link, notification: first frame shows name and price, then logo and tabs; no wrong name flashes.",
+    "Open an F&O symbol redirected to cash: the name may change once when the dashboard arrives; confirm Product accepts this or hide name until dashboard for redirected opens.",
+    "Index open: index name and value.",
+    "Empty-name scrip: no RangeError."
+   ],
+   "after_improvement": "Header name and price visible on the first frame (target), instead of at 0.3 s on repeat and later on a first open.",
+   "depends_on": [
+    "C1",
+    "C6"
+   ],
+   "verify": false
+  },
+  {
+   "id": "C6",
+   "title": "Give price StreamBuilders an initial value",
+   "summary": "The header price StreamBuilders have no initialData, so their first build shows an empty tick until the startWith value of the stream arrives. Pass the broadcaster's cached response as initialData.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Only the first frame of two widgets changes; later frames are identical because onTickReceived already starts with the same cached value.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+     "lines": "260-268",
+     "change": "initialData: helper.getBroadcastResponse(symbol)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+     "lines": "238-241",
+     "change": "Same."
+    }
+   ],
+   "current": "Both StreamBuilders use snapshot.data ?? scripId.emptyTick(). onTickReceived (trader_widgets StreamingBaseWidget.dart:54-58) does startWith(helper.getBroadcastResponse(symbol)), but StreamBuilder's first build runs before that value is delivered, so one frame shows zero values. Verify on device that the first frame indeed shows the empty tick (depends on rxdart delivery timing).",
+   "steps": [
+    "Compute the symbol once in the builder, call helper.getBroadcastResponse(symbol) (helper is BroadCastHelper.instance on BasePageState) and pass it as initialData.",
+    "Keep the emptyTick fallback for the case the cache is empty."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+    "lines": "260-268",
+    "code": "        return StreamBuilder<BroadcastResponse2>(\n          stream: onTickReceived(\n            isIndexScrip ? cubit.broadcastSymbol : scripId.toBroadcastSymbol(),\n          ),\n          builder: (final BuildContext context, final AsyncSnapshot<BroadcastResponse2> snapshot) {\n            final BroadcastResponse2 data = snapshot.data ?? scripId.emptyTick();\n            return _buildPriceText(context, data, instrumentData);\n          },\n        );"
+   },
+   "after_code": {
+    "code": "final BroadcastSymbol symbol =\n    isIndexScrip ? cubit.broadcastSymbol : scripId.toBroadcastSymbol();\nreturn StreamBuilder<BroadcastResponse2>(\n  initialData: helper.getBroadcastResponse(symbol), // cached last tick\n  stream: onTickReceived(symbol),\n  builder: (final BuildContext context, final AsyncSnapshot<BroadcastResponse2> snapshot) {\n    final BroadcastResponse2 data = snapshot.data ?? scripId.emptyTick();\n    return _buildPriceText(context, data, instrumentData);\n  },\n);"
+   },
+   "safety": [
+    "Same value the stream emits a moment later.",
+    "No subscription change."
+   ],
+   "regression_checks": [
+    "Open a stock seen earlier in the watchlist: price visible on first frame.",
+    "Open a stock with no cached tick: shows empty values as today until the first tick.",
+    "Exchange switch: price follows the new exchange."
+   ],
+   "after_improvement": "No zero-price frame on open; the price is there as soon as the header is.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "C7",
+   "title": "Load Overview sections in parallel",
+   "summary": "Overview sections are fetched one by one in a for/await loop (8 requests in series for a cash stock) and the per-section emit is commented out, so nothing below Market Depth shows until all are done. Fetch them in parallel and emit each section as it arrives.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "High",
+   "risk_reason": "Changes the cubit's Overview state flow and emit count; sections appear in arrival order, which the accordion and visibility tracker must tolerate. Needs the flag and a full Overview regression.",
+   "effort": "M",
+   "user_visible": true,
+   "product_decision": "With parallel loading, Overview sections will appear as their data arrives (within a few hundred ms) rather than all at once after about 1 s. Is it acceptable that sections pop in, or should we hold the first paint until the first three sections are ready? Proposed: emit progressively, but at most one emit per frame.",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2822-2884",
+     "change": "loadEssentialOverviewData: Future.wait over foreground sections; on each completion merge and emit (coalesced to one emit per frame) when the flag is on."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "3066-3079",
+     "change": "_loadBatchSafely returns whether the section succeeded, for C8 and offline retry."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1150-1176",
+     "change": "_loadOverviewAndHoldings: start loadResearchReport, overview sections, holdings, peer data and flash news together instead of in series."
+    }
+   ],
+   "current": "For a cash stock MoGetQuoteSubsections gives 9 API sections: 8 foreground (Market Updates, Returns, QuantScore, AnalystRatingV2, ResearchIdeas, CorpActions, SimilarStocks, News) loaded in series at lines 2845-2855, plus MfHoldings in a background loop. The emits at 2850 and 2868 are commented out, so the UI sees one MoGetQuoteOverviewLoaded at 2875. Before that loop _loadOverviewAndHoldings awaits loadResearchReport (1159), and after it loads peer, holdings and flash news in series (1165-1174). The repository already supports several &sections= in one URL (repository_impl.dart:113-116).",
+   "steps": [
+    "Behind QuotePerfFlags.progressiveOverview(): build one future per section with _loadBatchSafely(symbol, [section], response).then((_) => _onOverviewSectionArrived()).",
+    "_onOverviewSectionArrived merges into overviewDataManager (C9) and schedules a single emit with SchedulerBinding.addPostFrameCallback if none is pending (coalesce).",
+    "Await Future.wait(foreground) before setting isOverviewLoading = false, as today; MfHoldings stays background but now also emits when it lands (today its data only shows on a later emit by chance).",
+    "In _loadOverviewAndHoldings start loadResearchReport() and loadHoldings() concurrently with the section futures.",
+    "Keep separate requests per section first (same failure isolation as today). A single multi-section request is a second step once BE confirms partial failure behaviour (C14)."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "2844-2856",
+    "code": "      // Process foreground sections sequentially\n      for (final String section in foregroundSections) {\n        try {\n          await _loadBatchSafely(symbol, [section], response);\n          isOverviewLoading = false;\n          _updateOverviewDataManager(response);\n          // _emitCurrentState(overviewDataManager);\n        } on Exception catch (e) {\n          debugPrint('Error loading section $section: $e');\n          // Continue with next section even if current fails\n        }\n      }\n"
+   },
+   "after_code": {
+    "code": "if (QuotePerfFlags.progressiveOverview()) {\n  final int gen = _sectionGen; // from C4\n  await Future.wait(foregroundSections.map((final String section) async {\n    final bool ok = await _loadBatchSafely(symbol, <String>[section], response);\n    if (gen != _sectionGen || isClosed) return;\n    _applyOverviewSection(section, response); // C9: only this section\n    if (ok) _loadedOverviewSections.add(section);\n    _scheduleOverviewEmit(); // at most one emit per frame\n  }));\n  isOverviewLoading = false;\n} else {\n  // today's sequential loop, unchanged\n}\n\nvoid _scheduleOverviewEmit() {\n  if (_emitScheduled) return;\n  _emitScheduled = true;\n  SchedulerBinding.instance.addPostFrameCallback((_) {\n    _emitScheduled = false;\n    if (!isClosed) _emitCurrentState(overviewDataManager);\n  });\n}"
+   },
+   "safety": [
+    "Flag off keeps the sequential loop byte for byte.",
+    "Same endpoints, same per-section requests, same merge function, so the final data is identical.",
+    "Emits are coalesced, so the number of rebuilds does not grow with the number of sections."
+   ],
+   "regression_checks": [
+    "Cash, ETF, futures and index Overview: every section that shows today still shows, with the same content.",
+    "Accordion expand state and the first-section auto-expand.",
+    "Overview visibility analytics (WidgetVisibilityTracker) events.",
+    "One section failing (block it with a proxy): others still show.",
+    "Leave the page during loading: no emit after close."
+   ],
+   "after_improvement": "Overview complete after about one round trip instead of about 10 in series; the open waterfall falls from about 16 serial requests to about 4.",
+   "depends_on": [
+    "C1",
+    "C4",
+    "C9"
+   ],
+   "verify": false
+  },
+  {
+   "id": "C8",
+   "title": "Remove the wasted and duplicate Overview calls",
+   "summary": "Three requests per cash open are thrown away or repeated: the 'Market Updates' overview section, a second SimilarStocks call and a second FlashNews call. Skip them.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "The removed calls feed no data that is not already set by the first call; the only risk is a hidden reader of the discarded response, and there is none in the module.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2827",
+     "change": "Drop sections that _mergeSectionData does not handle ('Market Updates')."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1164-1174",
+     "change": "Call loadPeerComparison only if SimilarStocks did not succeed in the section loop; await the in-flight FlashNews future instead of starting a new one."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1179-1189, 3264-3272",
+     "change": "Memoise the FlashNews future per ISIN for the page visit."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/mo_get_quote_enums.dart",
+     "lines": "137",
+     "change": "No change; documented why 'Market Updates' is skipped (FlashNews comes from the marketUpdates endpoint)."
+    }
+   ],
+   "current": "'Market Updates' is in getApiSectionsForAssetType for cash and index (enums line 137), so it goes out as &sections=Market Updates, but _mergeSectionData (3081-3124) has no case for it and the response is dropped. SimilarStocks is fetched in the section loop and again by loadPeerComparison (1167) with the same URL and the same parse rule. FlashNews is fetched by getAvailableMoreOptions at line 252 (via _loadMarketUpdateSection, 3271) and again at 1172 with the same ISIN.",
+   "steps": [
+    "Add const Set<String> _mergedOverviewSections = {'Returns','AnalystRatingV2','QuantScore','ResearchIdeas','MfHoldings','News','CorpActions','SimilarStocks'} and filter apiSections with it.",
+    "Record succeeded sections (C7 _loadedOverviewSections, or a bool from _loadBatchSafely in the old loop). Skip loadPeerComparison when 'SimilarStocks' succeeded.",
+    "Add Future<void>? _flashNewsFuture and String? _flashNewsIsin; loadFlashNews returns the existing future when the ISIN matches and data has not been cleared (changeAssetType and changeSection clear overviewDataManager today, so reset the memo there until D1 lands)."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "1164-1174",
+    "code": "      // Non-blocking: batch load peer comparison and holdings in background\n      unawaited(Future.microtask(() async {\n        if (assetType == MoGetQuoteAssetType.cash) {\n          await loadPeerComparison(symbol: symbol);\n        }\n        if (assetType == MoGetQuoteAssetType.cash || assetType == MoGetQuoteAssetType.futures) {\n          await loadHoldings(symbol: symbol);\n        }\n        await loadFlashNews(fundisin ?? '');\n        _emitCurrentState(overviewDataManager);\n      }));"
+   },
+   "after_code": {
+    "code": "unawaited(Future.microtask(() async {\n  if (assetType == MoGetQuoteAssetType.cash &&\n      !_loadedOverviewSections.contains('SimilarStocks')) {\n    await loadPeerComparison(symbol: symbol); // only as a retry\n  }\n  if (assetType == MoGetQuoteAssetType.cash || assetType == MoGetQuoteAssetType.futures) {\n    await loadHoldings(symbol: symbol);\n  }\n  await loadFlashNews(fundisin ?? ''); // returns the in-flight/finished future for this ISIN\n  if (!isClosed) _emitCurrentState(overviewDataManager);\n}));\n\nFuture<void> loadFlashNews(final String isin) {\n  if (isin.isEmpty) return Future<void>.value();\n  if (_flashNewsIsin == isin && _flashNewsFuture != null) return _flashNewsFuture!;\n  _flashNewsIsin = isin;\n  return _flashNewsFuture = _repository\n      .fetchMarketUpdateData(isin: isin, pageNumber: 1, pageSize: 20)\n      .then(_parseFlashNewsResponse)\n      .catchError((final Object _) { _flashNewsFuture = null; }); // allow retry\n}"
+   },
+   "safety": [
+    "The same data reaches overviewDataManager: SimilarStocks from the loop uses the same endpoint and the same entry.isNotEmpty rule; FlashNews is parsed by the same _parseFlashNewsResponse.",
+    "A failed first call still allows the second call as a retry."
+   ],
+   "regression_checks": [
+    "Cash Overview: Flash News card, amber flash-news banner (_checkNewsTimestamp), Peer Comparison card.",
+    "Index Overview: no Market Updates regression.",
+    "Existing cubit tests for loadPeerComparison and loadFlashNews (test/mo_get_quote_cubit_test.dart:571, 2420, 3318) pass; add a test that FlashNews is fetched once per open."
+   ],
+   "after_improvement": "3 fewer requests per cash open (about 18 to 15, 14 with C3) and their payload off the data-per-open figure.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "C9",
+   "title": "Update only the Overview section that changed",
+   "summary": "_updateOverviewDataManager rebuilds key statistics, research ideas, MF models and news items from the whole accumulated response after every section, about 9 times per load. Update only the field of the section that arrived and compute key statistics once.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Pure refactor of a private method; output data is the same. Object identities change less often, which only reduces rebuilds.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2886-2905",
+     "change": "Split into _applyOverviewSection(section, response) with one case per section; key statistics computed when scrip details or dashboard change."
+    }
+   ],
+   "current": "Each call re-runs KeyStatisticsCalculationHelper.fromApiResponse, NewsProcessor over all news, ResearchIdeasDataTransformer and MutualFundModel.fromOverviewResponse, creating new lists each time, even though only one section changed. Key statistics depend only on scrip details and dashboard, not on any Overview section.",
+   "steps": [
+    "Add _applyOverviewSection(String section, QuoteOverviewResponse r) with a switch mirroring _mergeSectionData.",
+    "Compute keyStatisticsData once after scrip details load (and on exchange/contract change).",
+    "Keep _updateOverviewDataManager for the old path and for callers outside the loop (C7 flag off)."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "2887-2905",
+    "code": "  void _updateOverviewDataManager(final QuoteOverviewResponse response) {\n    overviewDataManager = overviewDataManager.copyWith(\n      keyStatisticsData: (dashboardData != null)\n          ? KeyStatisticsCalculationHelper.fromApiResponse(\n              scripDetails: quoteScripDetails,\n              dashboardData: dashboardData,\n              assetType: selectedAssetType,\n            )\n          : null,\n      newsData: response.checkNewsData ? response.processedNewsItems : null,\n      analystRatingData: response.hasRatingData ? response.ratingV2 : null,\n      quantScoreData: response.hasQuantScoreData ? response.quantScore : null,\n      researchIdeasData: response.researchIdeasList.isNotEmpty ? response.researchIdeasList : null,\n      corporateActionsData: response.hasCorpActionsData ? response.corpActions : null,\n      stockReturnsData: response.returns.entry.isNotEmpty ? response.returns : null,\n      topMutualFundData: response.getTopMutualFunds(),\n      similarStocksData: response.hasSimilarStocksData ? response.similarStocks : null,\n    );\n  }"
+   },
+   "after_code": {
+    "code": "void _applyOverviewSection(final String section, final QuoteOverviewResponse r) {\n  overviewDataManager = switch (section) {\n    'News' => overviewDataManager.copyWith(newsData: r.processedNewsItems),\n    'AnalystRatingV2' => overviewDataManager.copyWith(\n        analystRatingData: r.hasRatingData ? r.ratingV2 : null),\n    'QuantScore' => overviewDataManager.copyWith(\n        quantScoreData: r.hasQuantScoreData ? r.quantScore : null),\n    'ResearchIdeas' => overviewDataManager.copyWith(\n        researchIdeasData: r.researchIdeasList.isNotEmpty ? r.researchIdeasList : null),\n    'CorpActions' => overviewDataManager.copyWith(\n        corporateActionsData: r.hasCorpActionsData ? r.corpActions : null),\n    'Returns' => overviewDataManager.copyWith(\n        stockReturnsData: r.returns.entry.isNotEmpty ? r.returns : null),\n    'MfHoldings' => overviewDataManager.copyWith(topMutualFundData: r.getTopMutualFunds()),\n    'SimilarStocks' => overviewDataManager.copyWith(\n        similarStocksData: r.hasSimilarStocksData ? r.similarStocks : null),\n    _ => overviewDataManager,\n  };\n}"
+   },
+   "safety": [
+    "Same expressions per field as today; only the scope of each call shrinks.",
+    "Old method kept for the flag-off path."
+   ],
+   "regression_checks": [
+    "Key Statistics values for cash, futures, index.",
+    "Research Ideas, Top MF, News lists identical to before (compare with a debug dump)."
+   ],
+   "after_improvement": "About 8 fewer full recomputes per Overview load; lower main-isolate work while the page settles.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "C10",
+   "title": "Cache static quote sections between opens",
+   "summary": "Every open starts cold: the cubit is a factory, the repository keeps nothing, and DIO caching only works if the server sends cache headers. Add an in-memory QuoteSectionCache keyed by URL with per-endpoint TTLs, and use the existing forced-cache plus cacheCallBack path for data that changes rarely.",
+   "categories": [
+    "FE",
+    "Product",
+    "BE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Data may be up to one TTL old when shown; wrong TTLs could show stale research or holdings. Repository-only change inside the module, behind a flag.",
+   "effort": "M",
+   "user_visible": true,
+   "product_decision": "May the quote page show cached company data (scrip details, research ideas, fundamentals, peer list, returns) from an earlier visit while it refreshes in the background? Proposed TTLs: scrip details and dashboard 5 min, Overview research/ratings/returns/peers 15 min, Fundamentals 6 h, holdings and getQuote never cached.",
+   "be_request": "Send Cache-Control (max-age) and ETag headers on Quote/Dashboard, QuoteScripDetails, QuoteOverview (static sections), QuoteFundamental and CompanyReport so the existing DIO cache (CachePolicy.request) can revalidate with 304 instead of resending the body.",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/data/quote_section_cache.dart",
+     "lines": "new",
+     "change": "@lazySingleton in-memory LRU (about 60 entries) of (value, fetchedAt) keyed by URL; TTL table per endpoint; clear on logout."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/data/mo_get_quote_repository_impl.dart",
+     "lines": "40-58",
+     "change": "apiCall gets an optional cacheTtl; when the flag is on and an entry is fresh, return it; otherwise call and store."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/data/mo_get_quote_repository_impl.dart",
+     "lines": "71-104, 106-141, 443-452",
+     "change": "Pass TTLs for dashboard, scrip details, overview static sections, fundamentals and company report."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/locator.module.dart",
+     "lines": "18-20",
+     "change": "Regenerate; register the cache. Note: this generated file registers the repository as singleton while the class is annotated @Injectable (factory), so the cache must be its own @lazySingleton to survive a regenerate."
+    },
+    {
+     "path": "packages/trader_network/lib/DIOApiService2.dart",
+     "lines": "283",
+     "change": "Remove print('response is >> $response') on the cacheCallBack path before any caller uses cacheCallBack (prints the whole protobuf)."
+    }
+   ],
+   "current": "MoGetQuoteRepositoryImpl.apiCall (40-58) passes isForcedCacheEnable=false and no cacheCallBack for every quote call, so cached responses are used only when the backend sends cache headers (CachePolicy.request in DIOCacheManager.getCacheOptions). Reopening a stock refetches all ~18 requests. callApiWithDio already supports stale-while-revalidate: with isForcedCacheEnable and cacheCallBack it delivers the Hive-cached response first (DIOApiService2.dart:271-286) and then refreshes.",
+   "steps": [
+    "Create QuoteSectionCache with get(url, ttl) / put(url, value) and a TTL table; never cache getQuote, holdings, transactions, deals, buildup, options/futures chains.",
+    "Step 1 (memory, same session): in apiCall, if cacheTtl != null and QuotePerfFlags.sectionCache() and an entry is fresher than ttl, return a copy (GeneratedMessage.deepCopy()) and do not call the network.",
+    "Step 2 (disk, across sessions, optional): for scrip details and fundamentals, call callApiWithDio(isForcedCacheEnable: true, cacheCallBack: ...) and let the cubit render the cached value then the fresh one; remove the print at DIOApiService2.dart:283 first.",
+    "Clear the cache in the existing logout path (CacheManager.clearCacheOnLogout is already called there; add QuoteSectionCache.clear next to it).",
+    "Add repository tests for hit, miss and expiry."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/data/mo_get_quote_repository_impl.dart",
+    "lines": "40-58",
+    "code": "  Future<T> apiCall<T, T1>({\n    required String url,\n    HttpMethod requestType = HttpMethod.get,\n    required T runtimeType,\n    T1? request,\n    String apiVersion = Constants.API_V1_0,\n    bool isForcedCacheEnable = false,\n    SelectApiKey? apiKey,\n  }) {\n    return callApiWithDio(\n      url: url,\n      requestType: requestType,\n      runtimeType: runtimeType,\n      request: request,\n      apiVersion: apiVersion,\n      isForcedCacheEnable: isForcedCacheEnable,\n      apiKey: apiKey,\n    );\n  }"
+   },
+   "after_code": {
+    "code": "Future<T> apiCall<T, T1>({\n  required String url,\n  required T runtimeType,\n  Duration? cacheTtl, // null = never cached (today)\n  // ... existing params unchanged\n}) async {\n  final bool useCache = cacheTtl != null && QuotePerfFlags.sectionCache();\n  if (useCache) {\n    final T? hit = _cache.get<T>(url, cacheTtl);\n    if (hit != null) return hit; // deepCopy inside get() for GeneratedMessage\n  }\n  final T fresh = await callApiWithDio(url: url, runtimeType: runtimeType, /* ... */);\n  if (useCache) _cache.put(url, fresh);\n  return fresh;\n}\n\n// usage\nreturn apiCall(url: url, apiVersion: Constants.API_V4_0,\n    runtimeType: QuoteScripDetails(), cacheTtl: const Duration(minutes: 5));"
+   },
+   "safety": [
+    "Flag off or cacheTtl null is exactly today's call.",
+    "Real-time data (price, holdings, positions, order data) is never cached; kNoCacheEndpoints is not touched.",
+    "Cache is in memory, per user session, cleared on logout."
+   ],
+   "regression_checks": [
+    "Open the same stock twice within TTL: second open makes no dashboard/scrip/overview static calls (check the debug API list).",
+    "After TTL: data refreshes.",
+    "Logout and login as another user: no data from the first user.",
+    "Holdings card after placing an order still updates (holdings not cached)."
+   ],
+   "after_improvement": "Repeat open within TTL needs only getQuote, holdings and live data: about 4 requests and a few KB instead of 18 requests and about 103 KB; repeat open target 400 ms or less.",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "C11",
+   "title": "Stop serialising every response to log its size",
+   "summary": "After each API call the network layer converts the whole parsed response to a string and UTF-8 encodes it just to log a size. Use the raw byte length of the response instead.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Medium",
+   "risk_reason": "trader_network is used by every module. The log line keeps its format but the reported size becomes the wire size instead of the text-dump size, so anyone reading these logs sees smaller numbers.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_network/lib/DIOApiService2.dart",
+     "lines": "377-384",
+     "change": "Size from baseResponse.data when it is List<int>; compute the string size only in non-release builds for JSON maps."
+    },
+    {
+     "path": "packages/trader_network/lib/DIOApiService2.dart",
+     "lines": "423",
+     "change": "Use the same size variable for the debug API list."
+    }
+   ],
+   "current": "Line 382 runs utf8.encode(finalResponse.toString()) on every successful response in every build type. For protobuf messages toString() builds a full text dump of the message, so the CPU and memory cost grows with payload size; on the quote page this runs about 18 times per open on the main isolate. Measure the gain with the DevTools CPU profiler.",
+   "steps": [
+    "Replace the bytes variable with int sizeBytes = data is List<int> ? data.length : (kReleaseMode ? -1 : utf8.encode(finalResponse.toString()).length).",
+    "Keep the log text 'Data Size: ...' (print 'n/a' for -1).",
+    "Run trader_network tests and spot-check the debug API list screen."
+   ],
+   "before_code": {
+    "path": "packages/trader_network/lib/DIOApiService2.dart",
+    "lines": "377-384",
+    "code": "  try {\n    var finalResponse = (baseResponse)\n        .handleResponse(runtimeType, isFromCache: isCacheAvailable, logResponse: logApiResponse);\n    var lastApiTime = DateTime.now();\n    var diff = lastApiTime.difference(initApiTime);\n    var bytes = utf8.encode(finalResponse.toString());\n    AppWriteLog.writeLog(\"Trader API Service\",\n        \"Response ${baseResponse.statusCode}, ${baseResponse.requestOptions.method},${baseResponse.requestOptions.path}, Response Time: ${diff.inMilliseconds.toString()}ms, Data Size: ${getSizeString(bytes: bytes.length)} ${requestType == HttpMethod.post ? \"Request: ${request.toString()}\" : \"\"}\");"
+   },
+   "after_code": {
+    "code": "final dynamic raw = baseResponse.data;\nfinal int sizeBytes = raw is List<int>\n    ? raw.length // wire size for ResponseType.bytes (protobuf)\n    : (kReleaseMode ? -1 : utf8.encode(finalResponse.toString()).length);\nAppWriteLog.writeLog(\"Trader API Service\",\n    \"Response ${baseResponse.statusCode}, ${baseResponse.requestOptions.method},${baseResponse.requestOptions.path}, Response Time: ${diff.inMilliseconds.toString()}ms, Data Size: ${sizeBytes < 0 ? 'n/a' : getSizeString(bytes: sizeBytes)} ${requestType == HttpMethod.post ? \"Request: ${request.toString()}\" : \"\"}\");\n// ...\n// notifyActivity(... sizeBytes.toString(), ...)"
+   },
+   "safety": [
+    "No change to the returned response or to error handling.",
+    "Log format kept; only the number's meaning changes (wire size).",
+    "Benefits every module; announce in the FE channel because other teams read these logs."
+   ],
+   "regression_checks": [
+    "Login, watchlist, orders, quote page: all API calls succeed.",
+    "Exported log files still contain the Trader API Service lines.",
+    "Debug API list shows sizes."
+   ],
+   "after_improvement": "Removes one full text serialisation of every response from the main isolate (about 18 per quote open, more across the app).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "C12",
+   "title": "Remove print calls on the Overview path",
+   "summary": "callLastVisitedStockApi prints the whole recent-search list and one line per item on every Overview load, in release builds too. Remove them, and the dev.log payload dump on option-chain navigation.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Logging only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2962",
+     "change": "Remove print of the whole list."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2975-2976",
+     "change": "Remove per-item print."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1838",
+     "change": "Remove dev.log of QuoteInfo.toString() (runs on option-chain navigation, not on Overview load)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1180",
+     "change": "Remove debugPrint of the ISIN."
+    }
+   ],
+   "current": "print() is not stripped in release builds and writes to the platform log synchronously. Lines 2962 and 2975 run on every Overview load (callLastVisitedStockApi is called from _loadOverviewAndHoldings and _loadOptionsData). Line 1838 runs only when opening the option chain, so it does not affect open time.",
+   "steps": [
+    "Delete the print/dev.log lines; if a trace is wanted, use debugPrint guarded by kDebugMode.",
+    "Optionally enable the avoid_print lint for this package (it is ignored in analysis_options.yaml)."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "2959-2976",
+    "code": "  Future<void> callLastVisitedStockApi() async {\n    try {\n      final List<rs_tc.RecentSearchData> response = await RecentSearchHelper().getSearches();\n      print(\"Last Visited Stock List: $response\");\n      lastVisitedStockList = _toSearchDataList(response);\n      overviewDataManager = overviewDataManager.copyWith(\n          lastVisitedStocks: lastVisitedStockList.isNotEmpty ? lastVisitedStockList : null);\n    } on Exception catch (_) {\n      // Handle error silently\n    }\n  }\n\n  List<LastVisitedStocksItem> _toSearchDataList(final List<rs_tc.RecentSearchData> response) {\n    final List<LastVisitedStocksItem> recentSearch = <LastVisitedStocksItem>[];\n    for (final rs_tc.RecentSearchData item in response) {\n      final String assetSubType = item.assetSubType.toLowerCase();\n      print(\n          \"Processing Recent Search Item: ${item.tradeSymbol}, Asset SubType: ${item.assetSubType}\");"
+   },
+   "after_code": {
+    "code": "final List<rs_tc.RecentSearchData> response = await RecentSearchHelper().getSearches();\nlastVisitedStockList = _toSearchDataList(response);\n// ...\nfor (final rs_tc.RecentSearchData item in response) {\n  final String assetSubType = item.assetSubType.toLowerCase();\n  if (!assetSubType.contains(\"us stocks\") && !assetSubType.contains(\"mf\")) {\n    // unchanged\n  }\n}"
+   },
+   "safety": [
+    "No logic change."
+   ],
+   "regression_checks": [
+    "Last Visited Stocks card shows the same 3 items."
+   ],
+   "after_improvement": "Less synchronous logging on every Overview load; small but free.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "C13",
+   "title": "Never leave the open stuck on a skeleton",
+   "summary": "The load chain catches only Exception, so a RangeError or StateError leaves the state on Loading forever; every call also waits up to the 20 s DIO timeout in series. Catch everything at the load boundaries, fix the known Error sources, and give the Overview an overall deadline after which it shows what it has.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes error paths: some cases that hang today will show the error screen or partial content instead. The happy path is unchanged.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "275-282, 350-357",
+     "change": "Add a final catch (e, st) that reports to Sentry/Crashlytics and emits MoGetQuoteError, so the state never stays on MoGetQuoteLoading."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "734-740, 807-813",
+     "change": "indexWhere returns -1, never null, so ?? 0 does nothing and expiries[-1] throws RangeError; clamp to 0 or return when -1."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "567-571",
+     "change": "expiries.firstWhere(orElse: .first) throws StateError on an empty list; return early when expiries is empty."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2763-2764",
+     "change": "_formatYear: split(' ')[1] throws RangeError for a period without a space; guard length."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "2822-2884",
+     "change": "Overall Overview deadline (e.g. 3 s, from Remote Config, 0 = off): emit current data and stop isOverviewLoading; late sections still merge."
+    }
+   ],
+   "current": "One measured open (HDFC Bank) stayed on the skeleton for more than 6.4 s. Two possible causes, both need confirming on device: (1) a serial chain where each call can wait the 20 s connect/receive timeout (DIOApiService2.dart:97-98); (2) an Error escaping 'on Exception' clauses. Confirmed Error sources: expiries[selectedExpiryStrikeIndex] with -1 (lines 735-740 and 808-813), .first on an empty futures expiry list (568-571), split(' ')[1] (2764). None of them is on the cash path, so for HDFC Bank cause (1) is more likely.",
+   "steps": [
+    "At the end of loadAssetTypeData and _loadAndEmitAssetData add catch (Object e, StackTrace st) { report(e, st); if (!isClosed) emit(MoGetQuoteError(ErrorException.somethingWentWrong())); }.",
+    "Fix the three Error sources listed above.",
+    "Add the Overview deadline: Future.any([Future.wait(sections), Future.delayed(deadline)]) then emit and clear isOverviewLoading; sections that land later call _scheduleOverviewEmit (C7).",
+    "Log open duration and which call was slowest when it exceeds 3 s (ActivityLogger) to confirm the root cause in the field."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "734-740",
+    "code": "      if (optionsData != null) {\n        final int selectedExpiryStrikeIndex = optionsData!.expiries.indexWhere(\n              (final OptionsExpiry e) => e.expirySeconds == expiry.expirySeconds,\n            ) ??\n            0;\n        final List<OptionsStrike> expiryDataStrikesList =\n            optionsData!.expiries[selectedExpiryStrikeIndex].strikes;"
+   },
+   "after_code": {
+    "code": "final int found = optionsData!.expiries.indexWhere(\n  (final OptionsExpiry e) => e.expirySeconds == expiry.expirySeconds,\n);\nif (found < 0) return; // was RangeError -> stuck SectionChangeLoading\nfinal List<OptionsStrike> expiryDataStrikesList = optionsData!.expiries[found].strikes;\n\n// boundary in loadAssetTypeData / _loadAndEmitAssetData\n} on ErrorException catch (error) {\n  emit(MoGetQuoteError(error));\n} on Exception catch (error) {\n  emit(MoGetQuoteError(ErrorException(key: 'asset_types', message: error.toString())));\n} catch (error, stack) { // Error types (RangeError, StateError, TypeError)\n  reportError(error, stack); // Sentry/Crashlytics, already in the app\n  if (!isClosed) emit(MoGetQuoteError(ErrorException.somethingWentWrong()));\n}"
+   },
+   "safety": [
+    "Happy path unchanged.",
+    "Deadline is a Remote Config number; 0 keeps today's behaviour.",
+    "Errors are reported, not swallowed, so real bugs stay visible."
+   ],
+   "regression_checks": [
+    "Options: switch exchange and call/put with an expiry missing on the new exchange.",
+    "Futures with no expiries returned (mock).",
+    "Throttled network (2G profile): Overview shows partial data after the deadline, the rest arrives later.",
+    "Retry button on the error screen reloads."
+   ],
+   "after_improvement": "No endless skeleton: worst case becomes partial content after the deadline or an error with Retry, instead of 6 s or more of shimmer.",
+   "depends_on": [
+    "C7"
+   ],
+   "verify": true
+  },
+  {
+   "id": "C14",
+   "title": "Ask backend for a quote bootstrap endpoint",
+   "summary": "Even in parallel, the open needs three separate round trips before the header is complete, and Overview needs many sections. Ask the backend for one call that returns dashboard, getQuote flags and scrip details, cache headers on static data, and smaller payloads.",
+   "categories": [
+    "BE"
+   ],
+   "risk": "Low",
+   "risk_reason": "New endpoint alongside the old ones; the app uses it only behind a flag and falls back to the three calls.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "1) New GET Quote/Bootstrap?scripCode=&exchange=&source= returning QuoteDashboardResponse, the ScripQuote flags used by the app (hasOptions, hasDerivatives, hasCash, casEnabled, isin, sipAvailable) and QuoteScripDetails for the resolved cash scrip, in one protobuf. 2) Confirm that QuoteOverview with several &sections= returns the sections that succeeded even if one fails, and how failures are signalled per section. 3) Cache-Control/ETag on static sections (see C10). 4) List the response fields of QuoteOverview, QuoteScripDetails and QuoteDashboard that the app does not read, so they can be dropped or made optional, toward about 30 KB per open.",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/data/mo_get_quote_repository_impl.dart",
+     "lines": "60-104",
+     "change": "Add fetchQuoteBootstrap; keep the three existing methods."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "231-283",
+     "change": "Use the bootstrap response when available and the flag is on; otherwise C2 path."
+    }
+   ],
+   "current": "fetchGetQuote (repository 60-69), fetchQuoteDashboardData (71-90) and fetchQuoteScripDetails (92-104) are three endpoints with overlapping data (trade symbol, exchanges, scrip ids). Payload per open is about 103 KB across about 18 requests.",
+   "steps": [
+    "Share this be_request with the backend team and agree the proto.",
+    "Implement fetchQuoteBootstrap and switch in loadAssetTypeData behind a flag.",
+    "When multi-section partial failure is confirmed, move Overview to 1-2 requests (foreground group, background group)."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/data/mo_get_quote_repository_impl.dart",
+    "lines": "60-69",
+    "code": "  @override\n  Future<ScripQuote?> fetchGetQuote(final String scripCode, final String exchangeID,\n      {required final bool isFromSearch}) async {\n    final String url =\n        \"${MoGetQuoteApi.getQuote}?ScripCode=$scripCode&Exchange=$exchangeID&source=${isFromSearch ? \"search\" : \"quote\"}\";\n    return apiCall(\n      url: url,\n      runtimeType: ScripQuote(),\n    );\n  }"
+   },
+   "after_code": {
+    "code": "@override\nFuture<QuoteBootstrapResponse> fetchQuoteBootstrap({\n  required final ScripId scripId,\n  required final bool isFromSearch,\n}) {\n  // Assumption: endpoint and proto agreed with BE (QuoteBootstrapResponse)\n  final String url = \"${MoGetQuoteApi.quoteBootstrap}?scripCode=${scripId.scripCode}\"\n      \"&exchange=${scripId.exchange.value}&source=${isFromSearch ? \"search\" : \"quote\"}\";\n  return apiCall(url: url, apiVersion: Constants.API_V4_0,\n      runtimeType: QuoteBootstrapResponse());\n}"
+   },
+   "safety": [
+    "Old endpoints stay; flag off uses them.",
+    "If the bootstrap call fails, fall back to the C2 parallel path."
+   ],
+   "regression_checks": [
+    "Same header, tabs, CAS, SIP and option-chain button as the three-call path for 20 sample scrips (cash, ETF, index, F&O)."
+   ],
+   "after_improvement": "Header data in one round trip; with Overview in 1-2 requests and trimmed fields, about 5-6 requests and toward 30 KB per open.",
+   "depends_on": [
+    "C2"
+   ],
+   "verify": false
+  }
+ ]
+}

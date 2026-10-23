@@ -1,0 +1,575 @@
+{
+ "section": "G",
+ "title": "Price chart",
+ "intro": "The quote page has no chart of its own; the only chart is the full-screen TradingView page in a shared native WebView. Its first open is a strict chain: route push, loadPage in a post-frame callback, a fresh HTML fetch (unique &t= on every navigation), WebView/Chromium start, the 1.2-3.1 MB library, then history. The library prefetch that would take the network out of that chain exists but is off in prod. These changes add a Flutter inline chart (it needs a price-history API), warm the full-chart path while the user is on the quote page, and stop the hidden chart page and the quote page under the chart from doing work. The fixes on this branch (plugin 0.0.4 delegate claim, probe/recover, resume rewarm, strictly increasing t=, watchdogs) are kept as they are.",
+ "measured": [
+  {
+   "metric": "Inline chart on the quote page",
+   "current": "none",
+   "expected": "visible <= 0.5 s after the page opens"
+  },
+  {
+   "metric": "Full chart, first open in a process",
+   "current": "> 7 s (chart drawn at about 8-13 s)",
+   "expected": "<= 2 s"
+  },
+  {
+   "metric": "Full chart, warm reopen",
+   "current": "0.38-0.43 s",
+   "expected": "unchanged (<= 0.45 s)"
+  },
+  {
+   "metric": "Interval (range) taps",
+   "current": "41-58 % janky frames",
+   "expected": "<= 5 % on the inline Flutter chart"
+  },
+  {
+   "metric": "Pan",
+   "current": "47-66 % janky frames",
+   "expected": "<= 5 % on the inline Flutter chart"
+  }
+ ],
+ "changes": [
+  {
+   "id": "G1",
+   "title": "Add a price-history source for the quote page",
+   "summary": "Nothing in mo_get_quote fetches a price time series, so an inline chart has no data. Agree an endpoint with the backend (check the unused PriceMovementLineChart message first) and add one repository method.",
+   "categories": [
+    "BE",
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "New endpoint and a new repository method; nothing existing calls it until G3 ships behind its flag.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Provide price history for one scrip and range: 1D (1-5 min points, intraday so far), 1W, 1M, 1Y, 5Y; at most about 300 points per range; protobuf like other quote APIs; Cache-Control max-age about 60 s for 1D and about 1 h for longer ranges. First answer: is PriceMovementLineChartResponse (trader_proto_gen proto/Quote/QuoteModels.proto:244-265, fields updateTime, price, open/high/low...) served by any live endpoint today? If yes, share the URL, auth and which fields are filled; if not, name the existing history API the app may call with the same token (the TradingView datafeed is not callable from Dart today).",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/domain/mo_get_quote_api.dart",
+     "lines": "4-",
+     "change": "Add priceHistory URL constant (name per BE answer)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/domain/mo_get_quote_repository.dart",
+     "lines": "40",
+     "change": "Add fetchPriceHistory to the interface."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/data/mo_get_quote_repository_impl.dart",
+     "lines": "107-123",
+     "change": "Implement fetchPriceHistory with the same apiCall pattern, cache-first."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/domain/price_history.dart",
+     "lines": "new",
+     "change": "Small model (List of time/price points, range) mapped from the proto."
+    }
+   ],
+   "current": "The repository fetches overview, fundamentals, dashboard and getQuote (e.g. fetchQuoteOverviewData, mo_get_quote_repository_impl.dart:107-123) but no time series. PriceMovementLineChart is defined in QuoteModels.proto:244-265 and has no Dart caller outside generated files.",
+   "steps": [
+    "Send the BE request above; until answered, build G2/G3 against a mock repository (rules: @Injectable(as: ..., env: [Environment.dev]), 300-800 ms delay).",
+    "Add the URL constant, interface method and implementation using apiCall(..., isForcedCacheEnable: true) so a reopen shows the last points at once.",
+    "Map the proto to PriceHistory with only (time, price) to keep the painter input small.",
+    "Live point: G3 appends from the page's tick at most once per second; no new socket subscription."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/data/mo_get_quote_repository_impl.dart",
+    "lines": "107-123",
+    "code": "  Future<QuoteOverviewResponse> fetchQuoteOverviewData({\n    required final String symbol,\n    required final List<String> sections,\n  }) async {\n    if (symbol.isEmpty || sections.isEmpty) return QuoteOverviewResponse();\n\n    String url = \"${MoGetQuoteApi.quoteOverview}?symbol=${symbol.mapToSymbol()}\";\n    for (final String section in sections) {\n      url += \"&sections=$section\";\n    }\n\n    return await apiCall(\n      url: url,\n      apiVersion: Constants.API_V4_0,\n      runtimeType: QuoteOverviewResponse(),\n    );\n  }"
+   },
+   "after_code": {
+    "code": "@override\nFuture<PriceHistory> fetchPriceHistory({\n  required final ScripId scrip,\n  required final PriceRange range,\n}) async {\n  // URL and parameter names are placeholders until the BE answer.\n  final String url = '${MoGetQuoteApi.priceHistory}?ScripCode=${scrip.scripCode}'\n      '&Exchange=${scrip.exchange.value}&range=${range.apiValue}';\n  final PriceMovementLineChartResponse res = await apiCall(\n    url: url,\n    runtimeType: PriceMovementLineChartResponse(), // or the message BE confirms\n    isForcedCacheEnable: true, // show cached points first, refresh behind\n  );\n  return PriceHistory.fromProto(res, range); // keeps (updateTime, price) only\n}"
+   },
+   "safety": [
+    "Additive: new constant, new interface method, new model; no existing call changes.",
+    "Not called by any screen until G3's flag is on."
+   ],
+   "regression_checks": [
+    "Unit test: PriceHistory.fromProto with empty, single-point and 300-point responses.",
+    "Mock and real implementations both registered correctly (dev vs default env)."
+   ],
+   "after_improvement": "Gives the inline chart its data in one small cached call; target payload a few KB per range.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "G2",
+   "title": "Move MoCustomLineChart into trader_widgets",
+   "summary": "The in-house line chart with controller and scrub lives in mo_stock_basket, which mo_get_quote does not depend on. Copy it into trader_widgets (already a mo_get_quote dependency) and re-export it from mo_stock_basket later.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Additive copy into a shared package; mo_stock_basket and mo_stratx keep using their current import until a separate re-export PR.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_widgets/lib/charts/line_chart/",
+     "lines": "new",
+     "change": "Copy mo_stock_basket/lib/chart/{data,ui,utils} unchanged (only relative imports inside)."
+    },
+    {
+     "path": "packages/trader_widgets/lib/charts/mo_line_chart.dart",
+     "lines": "new",
+     "change": "Barrel export."
+    },
+    {
+     "path": "packages/mo_stock_basket/lib/chart/ui/line_chart.dart",
+     "lines": "1-8",
+     "change": "Later PR: replace with export of the trader_widgets barrel so mo_stratx and mo_stock_basket callers compile unchanged."
+    }
+   ],
+   "current": "MoCustomLineChart (mo_stock_basket/lib/chart/ui/line_chart.dart) is a CustomPainter chart with MoCustomLineChartController, trackball and tooltip, used by mo_stock_basket and mo_stratx. Its folder only uses relative imports, so it moves cleanly. mo_get_quote's pubspec has trader_widgets but not mo_stock_basket. Flutter painters measured 0-6 % jank versus 33-66 % for WebView charts in the benchmark.",
+   "steps": [
+    "Copy the four source folders into trader_widgets/lib/charts/line_chart/ without edits; add the barrel export.",
+    "Do not change the hard-coded gridColor default (const Color(0xFFDADADC)) in the copy; callers in mo_get_quote pass a mofsl-ui-library token.",
+    "Later PR: turn mo_stock_basket/lib/chart/* into re-exports and delete the duplicate (mo_stock_basket already depends on trader_widgets).",
+    "Alternatives already in the app if the painter lacks something: fl_chart 1.3.0 or syncfusion_flutter_charts (as in mo_us_equities us_stock_detail_graph_widget.dart)."
+   ],
+   "before_code": {
+    "path": "packages/mo_stock_basket/lib/chart/ui/line_chart.dart",
+    "lines": "27-43",
+    "code": "  const MoCustomLineChart({\n    super.key,\n    required this.series,\n    this.onSelectionChanged,\n    this.onPointTap,\n    this.xAxisLabelFormatter,\n    this.yAxisLabelFormatter,\n    this.tooltipFormatter,\n    this.maxXLabels,\n    this.controller,\n    this.minY,\n    this.maxY,\n    this.tooltipStyle,\n    this.trackballStyle,\n    this.showGrid = true,\n    this.gridColor = const Color(0xFFDADADC),\n  });"
+   },
+   "after_code": {
+    "code": "// packages/trader_widgets/lib/charts/mo_line_chart.dart (new barrel)\nexport 'line_chart/data/chart_data_models.dart';\nexport 'line_chart/data/chart_style_models.dart';\nexport 'line_chart/ui/line_chart.dart';\nexport 'line_chart/ui/line_chart_controller.dart';\n\n// Later, separate PR: packages/mo_stock_basket/lib/chart/ui/line_chart.dart\n// export 'package:trader_widgets/charts/mo_line_chart.dart';\n// (mo_stratx imports keep compiling unchanged)"
+   },
+   "safety": [
+    "Copy only; no existing import changes in this change.",
+    "The re-export PR keeps the old import paths valid, so mo_stratx needs no edit."
+   ],
+   "regression_checks": [
+    "trader_widgets analyze and test pass.",
+    "After the re-export PR: stock basket and StratX performance charts render and scrub as before."
+   ],
+   "after_improvement": "The quote module can use a Flutter chart that pans and scrubs without platform-view cost.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "G3",
+   "title": "Add an inline line chart below the price card",
+   "summary": "Show a lightweight Flutter line chart (ranges 1D/1W/1M/1Y/5Y) under the stock info card, with its own cubit so it does not wait for the page load. Behind a flag.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Adds height to the header: the hard-coded scroll thresholds and sticky positions (mo_get_quote_screen.dart:105-127, sticky_chips_section.dart:64) assume today's header height, so the sticky tabs would snap at the wrong place unless the header is measured (section B). Flag off keeps today's layout.",
+   "effort": "M",
+   "user_visible": true,
+   "product_decision": "Approve an inline price chart under the price card: ranges (proposed 1D/1W/1M/1Y/5Y, default 1D), height (proposed 160 dp), line colour (up/down for the selected range), what a tap or long-press does (proposed: long-press scrubs, tap opens the full chart), which asset types get it (proposed cash and index first; F&O, currency, commodity later), and the closed-market/empty state. Ship behind Remote Config quote_inline_chart_enabled (default false).",
+   "be_request": "Remote Config: add boolean quote_inline_chart_enabled (default false). Data per G1.",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_details_section.dart",
+     "lines": "49-58",
+     "change": "Insert the inline chart after _buildStockInfo when the flag is on."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/inline_chart/quote_inline_chart.dart",
+     "lines": "new",
+     "change": "MoCustomLineChart (trader_widgets) + range chips, RepaintBoundary, design tokens."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/inline_chart/quote_inline_chart_cubit.dart",
+     "lines": "new",
+     "change": "Own cubit/state (loading, loaded, empty, error) keyed by scrip and range; caches each range for the page's lifetime."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new (F1)",
+     "change": "Add inlineChartEnabled hook."
+    }
+   ],
+   "current": "QuoteDetailsSection shows the optional asset-type tab bar and the stock info card only (quote_details_section.dart:49-58); the price area has no chart and the only chart entry is the full TradingView screen.",
+   "steps": [
+    "Create QuoteInlineChartCubit (factory via injectable) that loads from quoteArguments.scripId immediately, so the chart does not wait for dashboard/getQuote.",
+    "Build QuoteInlineChart with MoCustomLineChart from trader_widgets, range chips (MOChip), a fixed height and a static placeholder while loading (no shimmer animation).",
+    "Append a live point for 1D at most once per second from the page's price notifier (no new subscription), and stop when the page is hidden (F2).",
+    "Insert it in QuoteDetailsSection behind the flag, keyed by scripId so an asset-type switch reloads it.",
+    "Before enabling: replace the hard-coded thresholds with a measured header height (section B change).",
+    "Measure frame jank for range taps and pan with the Performance overlay on the benchmark device."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/quote_details_section.dart",
+    "lines": "49-58",
+    "code": "      child: Column(\n        children: <Widget>[\n          Padding(\n            padding:EdgeInsets.only(right: MOSpacing.rightScreenPadding16, left: MOSpacing.leftScreenPadding16),\n            child: _buildMainTabBar(cubit),\n          ),\n          _buildStockInfo(cubit),\n          MOSpacing.verticalSpace16,\n        ],\n      ),"
+   },
+   "after_code": {
+    "code": "      child: Column(\n        children: <Widget>[\n          Padding(/* tab bar, unchanged */),\n          _buildStockInfo(cubit),\n          if (QuotePerfFlags.inlineChartEnabled() && cubit.quoteArguments != null)\n            BlocProvider<QuoteInlineChartCubit>(\n              key: ValueKey<Object>(cubit.selectedScripId ?? cubit.quoteArguments!.scripId),\n              // Own cubit: starts from the arguments, never waits for dashboard/getQuote.\n              create: (_) => getIt<QuoteInlineChartCubit>()\n                ..load(cubit.selectedScripId ?? cubit.quoteArguments!.scripId, PriceRange.oneDay),\n              child: RepaintBoundary(\n                child: QuoteInlineChart(\n                  height: 160, // per Product\n                  onOpenFullChart: () => cubit.navigateToCharts(context),\n                ),\n              ),\n            ),\n          MOSpacing.verticalSpace16,\n        ],\n      ),"
+   },
+   "safety": [
+    "Remote Config quote_inline_chart_enabled defaults to false: the header is byte-for-byte today's layout.",
+    "Separate cubit and BlocProvider: no change to MoGetQuoteCubit state flow or its consumers.",
+    "Wrapped in RepaintBoundary and fed at most 1 point/s, so it cannot add per-tick repaint to the header.",
+    "Flag is not turned on until the measured-header change from section B is in."
+   ],
+   "regression_checks": [
+    "Flag off: header height and sticky tab snapping identical to today.",
+    "Flag on: sticky tabs pin at the right offset for 1 and many asset tabs, options, large text size.",
+    "Asset-type switch (cash/futures/options) reloads the chart for the new scrip.",
+    "Offline and empty-history states.",
+    "Tap opens the full chart; back returns with the inline chart intact."
+   ],
+   "after_improvement": "A chart is visible on the quote page within about 0.5 s (cached range at once, network range as soon as G1 answers), with Flutter-level jank (target <= 5 %) for range taps and scrubbing.",
+   "depends_on": [
+    "C1",
+    "G1",
+    "G2"
+   ],
+   "verify": true
+  },
+  {
+   "id": "G4",
+   "title": "Warm the chart path when a quote page opens",
+   "summary": "The WebView is pre-warmed once at app start and the library prefetch runs on app start, login and resume only. When a quote page opens, make sure the WebView still exists and the library warm-up has run, without loading any page.",
+   "categories": [
+    "FE",
+    "FE-Shared"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Adds one idempotent platform call (prewarm) and one warm-up trigger at quote open, in the shared chart package. It loads no page, so it cannot race ChartController; skipped while any chart is mounted.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new (F1)",
+     "change": "Add static void Function()? onQuotePageShown hook (mo_get_quote cannot import trader_native_charts: that package imports mo_get_quote)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+     "lines": "56-58",
+     "change": "Call MoGetQuoteHooks.onQuotePageShown?.call() in the existing post-frame callback."
+    },
+    {
+     "path": "packages/trader_native_charts/lib/new_charts/charts_impl/chart_prewarm_service.dart",
+     "lines": "93-133",
+     "change": "Add ensureWarm(reason): skip if a chart is mounted, at most once a minute, call prewarmCall() (reuses or recreates the WebView and claims the delegate)."
+    },
+    {
+     "path": "apps/super_app/lib/Common/chart_library_prefetch.dart",
+     "lines": "50-56",
+     "change": "In install(), set the hook to ensureWarm + ChartLibraryWarmer.warm(trigger: 'quoteOpen', requireStoredUrl: true)."
+    }
+   ],
+   "current": "main_common.dart:562-571 calls ChartPrewarmService.warmup() (WebView only, deliberately no page, chart_prewarm_service.dart:17-24) and ChartLibraryWarmer.warm(trigger: 'appStart'); main_common.dart:1179 retries on resume. If the OS reclaimed the WebView or its renderer since start, the first chart tap pays WebView creation (about 4 s cold). Opening a quote page is the strongest signal that a chart tap may follow, and nothing uses it.",
+   "steps": [
+    "Add ChartPrewarmService.ensureWarm(reason) with the guards in after_code.",
+    "Add the hook in mo_get_quote and call it once per quote page from the post-frame callback in initState.",
+    "Wire the hook in ChartLibraryPrefetch.install(); ChartLibraryWarmer.warm is already one-at-a-time, bounded to 3 attempts and a no-op once done.",
+    "Log 'ensureWarm quoteOpen created=...' in Hive to see how often the WebView had to be recreated."
+   ],
+   "before_code": {
+    "path": "apps/super_app/lib/Common/chart_library_prefetch.dart",
+    "lines": "50-56",
+    "code": "  static void install() {\n    ChartLibraryWarmer.isEnabled = () => isEnabled;\n    ChartController.selfHealEnabled = () => !isSelfHealDisabled;\n    // Fires as the login request is sent and runs in parallel with it. Never awaited: the warm-up\n    // reports its own failures and a login must not wait for a download.\n    RiseAppModule.onLoginStart = () => ChartLibraryWarmer.warm(trigger: 'login');\n  }"
+   },
+   "after_code": {
+    "code": "  static void install() {\n    ChartLibraryWarmer.isEnabled = () => isEnabled;\n    ChartController.selfHealEnabled = () => !isSelfHealDisabled;\n    RiseAppModule.onLoginStart = () => ChartLibraryWarmer.warm(trigger: 'login');\n    // A quote page is where chart taps come from: make sure the WebView exists and the\n    // library is cached. Loads no page, so it cannot race ChartController.\n    MoGetQuoteHooks.onQuotePageShown = () {\n      unawaited(ChartPrewarmService.ensureWarm(reason: 'quoteOpen'));\n      unawaited(ChartLibraryWarmer.warm(trigger: 'quoteOpen', requireStoredUrl: true));\n    };\n  }\n\n// chart_prewarm_service.dart\nstatic DateTime? _lastEnsure;\nstatic Future<void> ensureWarm({required String reason}) async {\n  final ChartController? c = ChartController.instanceOrNull;\n  if (c != null && c.hasMountedScreen) return; // a chart owns the WebView right now\n  final DateTime t = now();\n  if (_lastEnsure != null && t.difference(_lastEnsure!) < const Duration(minutes: 1)) return;\n  _lastEnsure = t;\n  try {\n    final Map<String, Object?> r = await prewarmCall(); // idempotent; recreates if reclaimed\n    AppHiveLogger.log('INFO', _logTag, 'ensureWarm $reason created=${r['created']}');\n  } catch (e) {\n    AppHiveLogger.log('WARN', _logTag, 'ensureWarm $reason failed: $e');\n  }\n}"
+   },
+   "safety": [
+    "No page load: keeps the reason ChartPrewarmService documents for never loading a page (PageReady to nobody, 0x0 viewport).",
+    "Skipped whenever a full or mini chart is registered, the same rule rewarm uses.",
+    "Throttled to once a minute and never throws; a failure just leaves today's first-open cost.",
+    "Library warm-up keeps its own Remote Config gate (G5) and budget."
+   ],
+   "regression_checks": [
+    "Open 10 quote pages quickly: at most one prewarm call per minute in the Hive log.",
+    "Quote -> chart -> quote (market-depth header from the chart) -> chart: no stuck loader.",
+    "Kill the WebView renderer (adb) on a quote page, then tap chart: opens without the 4 s cold create."
+   ],
+   "after_improvement": "WebView creation (about 4 s cold) moves off the first chart tap whenever the user was on a quote page first; with G5 on, the library download is also off the tap.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "G5",
+   "title": "Turn on chart_lib_prefetch_enabled in prod",
+   "summary": "The chart library prefetch is fully built and wired to Remote Config, but the flag is off, so a new install or a cleared cache downloads 1.2-3.1 MB on the first chart tap. Turn it on with a staged rollout (L4).",
+   "categories": [
+    "BE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Config only; the warmer is bounded (3 attempts, 3 min timeout, yields to a loading chart) and the flag is the rollback.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Set Remote Config chart_lib_prefetch_enabled = true in prod with a staged rollout (10 % -> 50 % -> 100 % over a week). Before that, confirm chart-lib-manifest.json is published next to the prod chart page; a missing manifest only reports 'manifest missing' and does nothing. Watch the Firebase Performance trace chart_lib_warm for ok rate and bytes.",
+   "files": [
+    {
+     "path": "apps/super_app/lib/Common/chart_library_prefetch.dart",
+     "lines": "18-19, 36-46",
+     "change": "No code change: the flag is already read here."
+    }
+   ],
+   "current": "ChartLibraryPrefetch.isEnabled reads chart_lib_prefetch_enabled and any failure reads as off (chart_library_prefetch.dart:36-46); ChartLibraryWarmer.isEnabled defaults to off (chart_library_warmer.dart:60). Triggers exist for appStart, login and resume.",
+   "steps": [
+    "Publish/verify the manifest on the prod chart host.",
+    "Enable for 10 %, compare first-open chart time (Hive 'state ... +Xms' lines) between groups.",
+    "Ramp to 100 % if no rise in chart errors or data complaints."
+   ],
+   "before_code": {
+    "path": "apps/super_app/lib/Common/chart_library_prefetch.dart",
+    "lines": "36-46",
+    "code": "  /// Whether the prefetch is switched on. Any failure to read the flag reads as \"off\".\n  ///\n  /// Remote Config is fetched in the background at startup, so a read very early in launch can\n  /// still see the default; the next trigger (login, or app resume) reads the fetched value.\n  static bool get isEnabled {\n    try {\n      return FirebaseRemoteConfig.instance.getBool(remoteConfigKey);\n    } catch (_) {\n      return false;\n    }\n  }"
+   },
+   "after_code": {
+    "code": "// No code change.\n// Remote Config (prod): chart_lib_prefetch_enabled = true, staged rollout.\n// Rollback: set it back to false; the next trigger reads it."
+   },
+   "safety": [
+    "Flag is the rollback; no release needed.",
+    "Warm-up runs in a separate throwaway WebView inside the plugin and never touches the chart's WebView.",
+    "ChartController._beginPageLoad stops a running warm-up so it never competes with a chart load."
+   ],
+   "regression_checks": [
+    "New install: login, then first chart open; library served from cache (no 1.2-3.1 MB on the tap).",
+    "Mobile data usage at login stays within the expected 1.2-3.1 MB once per install/cache clear."
+   ],
+   "after_improvement": "Removes the library download from the first chart open for new installs and cleared caches; parsing still happens on first run.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "G6",
+   "title": "Split the cold-open time; make the first URL cacheable",
+   "summary": "Every navigation adds a unique &t=, so the chart HTML is never served from the WebView cache. The uniqueness is load-bearing for retries and the iOS same-URL skip, so keep it for every navigation except the first one of a process, and only after measuring that the HTML fetch matters.",
+   "categories": [
+    "FE-Shared",
+    "BE"
+   ],
+   "risk": "High",
+   "risk_reason": "Navigation identity is what the iOS plugin's same-URL skip and retryPageLoad's cancel-by-new-URL depend on (chart_controller.dart:565-569, 651-657). Changing it in the shared controller could bring back a silent no-op load. Behind a flag, first navigation only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Chart web team: send Cache-Control (for example max-age=300, must-revalidate with ETag) on the chart HTML page; WebView cacheMode is LOAD_DEFAULT, so without it a stable URL gains nothing. Remote Config: add boolean chart_versioned_first_url (default false).",
+   "files": [
+    {
+     "path": "packages/trader_native_charts/lib/new_charts/charts_impl/data/chart_controller.dart",
+     "lines": "565-589",
+     "change": "First navigation of the process (loadAttempt == 1, no earlier URL) uses &v=<release>; all others keep the strictly increasing &t=."
+    }
+   ],
+   "current": "getChartCompleteUrl (chart_controller.dart:571-589) always appends &t=<seconds>, forced strictly increasing because the iOS plugin skips webView.load when the URL equals the current one (565-569), and retryPageLoad relies on a new URL to cancel a hung navigation (651-657). Watchdogs: PageReady 20 s and Chart 25 s (full_view_chart.dart:114-118), Chart-reply grace 8 s (291, only subscribes ticks), native ack 3 s (chart_controller.dart:91). None of them adds time to a healthy load; they act only on a stall, so the 8-13 s first chart is cold WebView + HTML + library + history, plus a recovery in runs that stalled (verify).",
+   "steps": [
+    "Measure first: from a benchmark run's Hive log, take 'page load #1', 'loadRequested', 'PageReady +Xms', 'Chart loaded +Xms' and any 'load stalled' lines to split the 8-13 s. If a stall/recovery appears, fix that first; it is not a watchdog timing problem.",
+    "Only if the HTML fetch is > about 300 ms and BE has added Cache-Control: add the versioned first URL behind chart_versioned_first_url.",
+    "Keep &t= for retries, reloads, recover() and every later navigation."
+   ],
+   "before_code": {
+    "path": "packages/trader_native_charts/lib/new_charts/charts_impl/data/chart_controller.dart",
+    "lines": "571-589",
+    "code": "  Future<String> getChartCompleteUrl() async {\n    final int nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;\n    final int timestamp =\n        nowSeconds > _lastUrlTimestamp ? nowSeconds : _lastUrlTimestamp + 1;\n    _lastUrlTimestamp = timestamp;\n    bool isIos12 = false;\n\n    if (Platform.isIOS) {\n      var iOSInfo = await DeviceInfoPlugin().iosInfo;\n      // ...\n    }\n    return '${_urlWithTheme(chartUrl, _theme, isIos12)}&t=$timestamp';\n  }"
+   },
+   "after_code": {
+    "code": "  static bool Function() versionedFirstUrlEnabled = () => false; // RC chart_versioned_first_url\n  static String releaseTag = '';                                   // set by host (app build)\n\n  Future<String> getChartCompleteUrl() async {\n    bool isIos12 = false;\n    // ... iOS 12 check unchanged ...\n    final String base = _urlWithTheme(chartUrl, _theme, isIos12);\n    // First navigation of the process, on a WebView that has no document yet: nothing to\n    // collide with on iOS, and a stable URL lets the HTTP cache answer. Everything else\n    // (retry, reload, recover, later opens) stays unique.\n    if (versionedFirstUrlEnabled() && releaseTag.isNotEmpty &&\n        _lastUrlTimestamp == 0 && loadAttempt == 1) {\n      _lastUrlTimestamp = -1; // consumed\n      return '$base&v=$releaseTag';\n    }\n    final int nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;\n    final int timestamp = nowSeconds > _lastUrlTimestamp ? nowSeconds : _lastUrlTimestamp + 1;\n    _lastUrlTimestamp = timestamp;\n    return '$base&t=$timestamp';\n  }"
+   },
+   "safety": [
+    "Flag default false: URL generation is exactly today's.",
+    "Only the first navigation of a process changes; the strictly increasing t= rule for every later navigation is kept.",
+    "No change to watchdog durations or recovery logic from commit 083141c."
+   ],
+   "regression_checks": [
+    "iOS and Android: first open, then retry from the stall UI, then reload on resume; each navigation actually loads.",
+    "Self-heal tests in trader_native_charts (chart_controller_self_heal_test.dart) pass; add one for the first-URL branch.",
+    "Theme switch before the first open (URL theme parameter still applied)."
+   ],
+   "after_improvement": "If confirmed, the first open in a process reads the HTML from the WebView cache, saving one network round trip plus the HTML download; the measured phase split tells how much of the 8-13 s each step costs.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "G7",
+   "title": "Preload the chart page from the quote page",
+   "summary": "Optional second step after G4: while the user is on a quote page, navigate the warmed WebView to the chart page with a real viewport, and let the chart screen adopt a page that is already loaded. Behind a flag.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "High",
+   "risk_reason": "Changes when the shared chart page loads and adds a path where PageReady arrives before any screen is registered. Today that path would leave the chart blank (loadingCharts ignores pageLoaded), so the screen side must change in the same release.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Remote Config: add boolean chart_page_preload_enabled (default false).",
+   "files": [
+    {
+     "path": "packages/trader_native_charts/lib/new_charts/charts_impl/full_view_chart.dart",
+     "lines": "269-278",
+     "change": "loadingCharts also loads the chart when the state is pageLoaded (page preloaded before this screen existed)."
+    },
+    {
+     "path": "packages/trader_native_charts/lib/new_charts/charts_impl/data/chart_controller.dart",
+     "lines": "632-649",
+     "change": "Add preloadPage(viewport): only when flag on, no screen registered and state initial; navigates through IosWebViewPlugin.prewarm(url:, width:, height:) and arms the ack timer. loadPage skips a second navigation if a preload is in flight for < 20 s."
+    },
+    {
+     "path": "apps/super_app/lib/Common/chart_library_prefetch.dart",
+     "lines": "50-56",
+     "change": "Hook (G4) also calls preloadPage after ensureWarm, when the flag is on."
+    }
+   ],
+   "current": "ChartPrewarmService loads no page on purpose (chart_prewarm_service.dart:17-24): a PageReady with no listener, a 0x0 detached viewport, and loadPage trusting its own state. PageReady with no callback sets state pageLoaded only (chart_controller.dart:394-408); the screen then calls loadPage, which is skipped (632-636), and loadingCharts acts only on chartLoaded/chartError (full_view_chart.dart:269-278), so no loadChart would be sent. The plugin's prewarm already accepts url, width and height and lays the WebView out before loading (WebViewMoFlutterViewFactory.kt:595-640).",
+   "steps": [
+    "Change loadingCharts so pageLoaded also triggers loadChart (guarded by the flag).",
+    "Add ChartController.preloadPage(viewport) using IosWebViewPlugin.prewarm(url, javascriptChannels: ['ChartAppDelegate'], width, height) so the page gets a real viewport.",
+    "In loadPage, if a preload is still pageLoading and started < 20 s ago, skip the new navigation and let the screen's watchdog bound it; otherwise behave as today.",
+    "Call preloadPage from the G4 hook after ensureWarm, only on Wi-Fi or when the user opened a chart in the last N sessions (Product may tune).",
+    "Use probePage() before adopting a preloaded page after a long time on the quote page; recover() already adopts a live page."
+   ],
+   "before_code": {
+    "path": "packages/trader_native_charts/lib/new_charts/charts_impl/full_view_chart.dart",
+    "lines": "269-278",
+    "code": "  Future<void> loadingCharts() async {\n    debugPrintLog(\"loadingCharts called with state ${controller.currentState}\");\n    if (controller.currentState == ChartState.chartLoaded ||\n        controller.currentState == ChartState.chartError) {\n      // Armed before dispatch: the page can answer before the await below returns.\n      _armChartReplyFallback();\n      await controller.loadChart(scrip, theme: theme);\n      _armChartLoadWatchdog();\n    }\n  }"
+   },
+   "after_code": {
+    "code": "  Future<void> loadingCharts() async {\n    final ChartState s = controller.currentState;\n    final bool preloaded = ChartController.pagePreloadEnabled() && s == ChartState.pageLoaded;\n    // A preloaded page posted PageReady before this screen registered, so onPageFinished\n    // will not come; request the chart here instead.\n    if (s == ChartState.chartLoaded || s == ChartState.chartError || preloaded) {\n      _armChartReplyFallback();\n      await controller.loadChart(scrip, theme: theme);\n      _armChartLoadWatchdog();\n    }\n  }\n\n// chart_controller.dart\nFuture<void> preloadPage({required Size viewport}) async {\n  if (!pagePreloadEnabled() || hasMountedScreen || _currentState != ChartState.initial) return;\n  _beginPageLoad('preload');\n  final int attempt = loadAttempt;\n  final String url = await getChartCompleteUrl();\n  await IosWebViewPlugin.prewarm(url: url, javascriptChannels: <String>['ChartAppDelegate'],\n      width: viewport.width.round(), height: viewport.height.round()); // real viewport, not 0x0\n  _armAckTimer(attempt);\n}"
+   },
+   "safety": [
+    "Flag chart_page_preload_enabled defaults to false; with it off loadingCharts and loadPage behave exactly as today.",
+    "Never preloads while any chart is registered or once a page is loading/loaded.",
+    "Ships only after G4 and the G6 measurement show the page load is still the largest cold cost.",
+    "Self-heal (probe/recover) stays the path for a page that went bad between preload and open."
+   ],
+   "regression_checks": [
+    "Flag on: quote page -> wait 3 s -> chart: candles drawn without a second navigation (log shows one 'page load #').",
+    "Flag on: tap chart within 300 ms of opening the quote page (preload in flight).",
+    "Flag on: preload, background 2 h with push, resume, open chart (probe/recover path).",
+    "Mini chart (F&O index view) and full chart both after a preload.",
+    "Theme change between preload and open."
+   ],
+   "after_improvement": "Takes page load and library parse off the tap when the user spends a few seconds on the quote page first; target first open <= 2 s (verify on the benchmark device).",
+   "depends_on": [
+    "G4",
+    "G6"
+   ],
+   "verify": true
+  },
+  {
+   "id": "G8",
+   "title": "Pause the detached chart page after leaving",
+   "summary": "After the chart is closed the WebView is only detached, so the page keeps its rendering work. When no chart is registered for 30 s, call WebView.onPause() on that one WebView; the plugin already resumes it in getOrCreateWebView.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "High",
+   "risk_reason": "Native plugin and shared controller. The plugin comment says not pausing keeps touch responsive; resume must happen before the WebView is re-attached. pauseTimers() must not be used: it is process-global and would stop every WebView in the app.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Remote Config: add boolean chart_pause_on_leave_enabled (default false).",
+   "files": [
+    {
+     "path": "webview_native_plugin: android/src/main/kotlin/com/example/ios_webview_plugin/WebViewMoFlutterViewFactory.kt",
+     "lines": "887-915",
+     "change": "Add pausePage(): only when detached and not already paused; sets isWebViewPaused and calls webView.onPause()."
+    },
+    {
+     "path": "webview_native_plugin: android/src/main/kotlin/com/example/ios_webview_plugin/WebViewMoFlutterPlugin.kt",
+     "lines": "408-414",
+     "change": "Add a 'pausePage' method next to 'destroyWebView'."
+    },
+    {
+     "path": "webview_native_plugin: lib/ios_webview_plugin.dart",
+     "lines": "562-570",
+     "change": "Add IosWebViewPlugin.pausePage() (no-op on iOS and on older native sides via MissingPluginException)."
+    },
+    {
+     "path": "packages/trader_native_charts/lib/new_charts/charts_impl/data/chart_controller.dart",
+     "lines": "491-545",
+     "change": "clearCallback starts a 30 s timer when no screen is registered; setCallback cancels it."
+    }
+   ],
+   "current": "detachWebView deliberately does not pause (WebViewMoFlutterViewFactory.kt:887-891). resumeWebView (909-915) calls onResume/resumeTimers only when isWebViewPaused is true, which today happens only after destroyWebView. So after the chart closes, the page and its JS keep running for the session, and the quote page underneath shares the device's CPU with it.",
+   "steps": [
+    "Measure first: CPU of the WebView renderer process for 2 minutes after closing the chart (Perfetto). A detached Chromium view may already throttle rAF; if the cost is near zero, drop this change.",
+    "Add pausePage() in the plugin (Android) using onPause() only; confirm in code that the platform view's attach path calls getOrCreateWebView/resumeWebView before showing.",
+    "Add the Dart method and the 30 s timer in ChartController, behind the flag.",
+    "Bump the plugin ref and pubspec.lock in the three pubspecs that name it, as commit 4a73f4e did."
+   ],
+   "before_code": {
+    "path": "webview_native_plugin: android/src/main/kotlin/com/example/ios_webview_plugin/WebViewMoFlutterViewFactory.kt",
+    "lines": "887-915",
+    "code": "    fun detachWebView() {\n        (webView?.parent as? ViewGroup)?.removeView(webView)\n        // Deliberately does not pause: keeping timers running preserves touch responsiveness\n        // and lets the loaded page survive navigation away from the chart.\n    }\n    // ... destroyWebView() 893-907 ...\n    fun resumeWebView() {\n        if (isWebViewPaused) {\n            isWebViewPaused = false\n            webView?.onResume()\n            webView?.resumeTimers()\n        }\n    }"
+   },
+   "after_code": {
+    "code": "// WebViewMoFlutterViewFactory.kt (Kotlin)\nfun pausePage() {\n    val view = webView ?: return\n    if (view.parent != null || isWebViewPaused) return // on screen, or already paused\n    isWebViewPaused = true\n    view.onPause() // this WebView only; pauseTimers() would stop every WebView in the process\n}\n// resumeWebView() unchanged: getOrCreateWebView() already calls it before reuse.\n\n// chart_controller.dart (Dart)\nTimer? _pauseTimer;\nstatic bool Function() pauseOnLeaveEnabled = () => false; // RC chart_pause_on_leave_enabled\n\n// end of clearCallback(...):\nif (_registered.isEmpty && pauseOnLeaveEnabled()) {\n  _pauseTimer?.cancel();\n  _pauseTimer = Timer(const Duration(seconds: 30), () {\n    if (_registered.isEmpty) unawaited(IosWebViewPlugin.pausePage());\n  });\n}\n// start of setCallback(...): _pauseTimer?.cancel();"
+   },
+   "safety": [
+    "Flag default false; with it off no pause call is ever made.",
+    "onPause() only, never pauseTimers(), so KYC, payment and other WebViews are unaffected.",
+    "30 s grace keeps quick chart -> quote -> chart reopen on the unpaused page (warm reopen unchanged).",
+    "The detach-only dispose and the delegate-claim fix are not changed; destroy logic untouched."
+   ],
+   "regression_checks": [
+    "Close chart, wait 60 s, reopen: chart responsive on first touch, candles update.",
+    "Close chart, open another WebView screen (KYC, research PDF): it loads and runs normally.",
+    "Pause, background 2 h with push, resume, open chart (self-heal path).",
+    "Flag off: no behaviour change."
+   ],
+   "after_improvement": "The chart page stops rendering work after the user leaves the chart (CPU to about 0, to be confirmed); memory is handled by F5.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "G9",
+   "title": "Restore quote streams when the chart closes",
+   "summary": "Opening the chart replaces the broadcaster's whole subscription set, and the quote page under it keeps rebuilding for the chart's ticks. Pause the quote page when the chart is pushed and re-subscribe its symbols when the chart's route completes.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes when the quote page re-subscribes; a missed restore would leave a frozen price. Uses the F2 flag; with it off the code path is today's.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "1788-1800",
+     "change": "Call onPageHidden() before pushNamed and onPageVisible() when the awaited push completes (the chart was popped or removed)."
+    }
+   ],
+   "current": "subscribeQuote unsubscribes every symbol not in the new set (mosl_broadcaster broadcast_controller.dart:248-258). FullViewChart subscribes the chart's symbols from onChartLoaded (full_view_chart.dart:883-907) and only cancels its own listener in dispose, so after Back the quote page's symbols are no longer subscribed unless one of its widgets happens to re-subscribe from build. navigateToCharts already awaits Navigator.pushNamed (mo_get_quote_cubit.dart:1795-1799), which completes when the chart route is popped.",
+   "steps": [
+    "Before pushNamed: onPageHidden() (F2) stops depth and marks the page hidden, so ticks for the chart's symbol do not rebuild the hidden page's heavy sections.",
+    "After the await (in finally): if the cubit is not closed, onPageVisible() re-subscribes the page's symbol set and depth.",
+    "If F2's RouteAware ships, didPopNext does the same; keep only one of the two paths.",
+    "Verify on device: count 'Subscribe Quote' log lines after Back from the chart, and check the quote price ticks."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+    "lines": "1788-1800",
+    "code": "      if (replace) {\n        await Routes.navigateToReplacement(\n          context,\n          GetQuotePaths.chartsPath,\n          arguments: chartsArguments,\n        );\n      } else {\n        await Navigator.pushNamed(\n          context,\n          GetQuotePaths.chartsPath,\n          arguments: chartsArguments,\n        );\n      }"
+   },
+   "after_code": {
+    "code": "      if (replace) {\n        await Routes.navigateToReplacement(\n          context,\n          GetQuotePaths.chartsPath,\n          arguments: chartsArguments,\n        );\n      } else {\n        final bool pause = QuotePerfFlags.pauseHiddenPages();\n        if (pause) onPageHidden(); // stop depth; hidden sections ignore ticks\n        try {\n          await Navigator.pushNamed(\n            context,\n            GetQuotePaths.chartsPath,\n            arguments: chartsArguments,\n          );\n        } finally {\n          // The chart's subscribeQuote replaced the whole set; put this page's symbols back.\n          if (pause && !isClosed) onPageVisible();\n        }\n      }"
+   },
+   "safety": [
+    "Uses the F2 flag (default false); with it off the method is unchanged.",
+    "Re-subscribing a symbol that is still subscribed is a no-op request (subscription.addAll returns Request.empty).",
+    "finally also runs when MyNavigatorObserver removes a superseded chart route."
+   ],
+   "regression_checks": [
+    "Quote -> chart -> Back: price, change and depth on the quote page tick again within one tick interval (live market).",
+    "Quote -> chart -> switch symbol tab in chart -> Back.",
+    "Chart rotated to landscape, then Back.",
+    "Quote -> chart -> depth header -> quote (replace path)."
+   ],
+   "after_improvement": "No frozen quote price after returning from the chart, and the quote page does no tick work while the chart is on top.",
+   "depends_on": [
+    "C1",
+    "F2"
+   ],
+   "verify": true
+  }
+ ]
+}

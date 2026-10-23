@@ -95,6 +95,13 @@ class ReviewFixTests(unittest.TestCase):
         app_rows = [row("Kite", "L1", 1, 1), row("Dhan", "L1", 1, 1)]
         self.assertEqual(R.module_apps(mod, rows, app_rows), ["RISE", "Groww"])
 
+    def test_coldstart_off_drops_l1_and_x4(self):
+        app_rows = [row("RISE", "L1", 1, 900), row("RISE", "X4", 1, 3), row("RISE", "R1", 1, 400)]
+        self.assertEqual(R.module_app_rows(self.module, app_rows), app_rows)                  # unset = on
+        self.assertEqual(R.module_app_rows(dict(self.module, coldstart=True), app_rows), app_rows)
+        kept = R.module_app_rows(dict(self.module, coldstart=False), app_rows)
+        self.assertEqual([r["metric"] for r in kept], ["R1"])
+
     def test_coverage(self):  # I11
         cs = {"Loading Time": {"RISE": 50, "Groww": 60}, "RAM": {"Groww": 10}}
         cov = R.coverage(cs, B.DEFAULT_WEIGHTS, ["RISE", "Groww"])

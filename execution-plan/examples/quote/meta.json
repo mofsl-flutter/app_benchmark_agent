@@ -1,0 +1,12 @@
+{
+ "title": "Quote Module Change Plan",
+ "app": "RISE",
+ "subject": "Stock quote page",
+ "module_path": "packages/mo_get_quote",
+ "code_stats": "194 Dart files · ~37,000 lines",
+ "date": "23 Oct 2026",
+ "branch": "hotfix/headless_chart_fix",
+ "measured_on": "Samsung Galaxy M14, Android 14, 60 Hz, 22 Oct 2026",
+ "benchmark_source": "benchmark-comparison.md (22 Oct 2026)",
+ "smoke_test": "open, all tabs, segments, depth, chart, buy/sell, alerts, back navigation"
+}

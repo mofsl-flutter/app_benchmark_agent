@@ -65,12 +65,27 @@ Follow these steps in order. Say which step you are on in one line each time.
    Show the table and get a yes before measuring.
 5. **Pre-flight.** `python3 preflight.py --module <module> [--speedtest <Mbps>] [--holdings "..."] --notes "<logged-in answers>"`.
    Offer `--fix` for Show taps. On exit code 1, stop (hard rule 5).
-6. **Phone-scoped metrics first.** `python3 bench.py status --module _app`. If RISE (and each
-   installed competitor) lacks `L1`/`X4`/`R1` for this phone, have the developer run
-   `! python3 bench.py run "<app>" --module _app --runs 5` for each app, then collect the manual
-   `_app` metrics (`L2`, `R4`–`R8`, `X1`, `X2`, `A3`, `A4`) with `record.py --module _app` as in
-   step 8. These are measured once per phone and reused by every module; do not repeat them per
-   module.
+6. **Phone-scoped metrics first.**
+   - **Cold start is optional per module; ask every session.** Read the module's `coldstart`
+     value from step 3 (`true`, `false`, or not set) and ask one question, then wait:
+
+     > Should cold start (L1 cold launch time and X4 start-up lock contention) be measured and
+     > counted for <module>? Currently: <on | off | not set>. (yes / no)
+
+     Write the answer into `modules/<module>.json` as `"coldstart": true` or `"coldstart": false`
+     (top level, next to `skip`). It is not part of the module version hash, so existing results
+     stay current. Say that the change is in the module file and goes in the developer's commit.
+   - `python3 bench.py status --module _app`.
+   - **Cold start yes:** if RISE (and each installed competitor) lacks `L1`/`X4`/`R1` for this
+     phone, have the developer run `! python3 bench.py run "<app>" --module _app --runs 5` for each
+     app (groups `coldstart,ram`).
+   - **Cold start no:** never run the `coldstart` group in this session. If an app lacks `R1`, have
+     the developer run `! python3 bench.py run "<app>" --module _app --group ram --runs 5`. Missing
+     `L1`/`X4` are not gaps for this module; do not report them as missing. The module report
+     leaves them out of the score and marks L1 "N/A: cold start turned off for this module".
+   - Then collect the manual `_app` metrics (`L2`, `R4`–`R8`, `X1`, `X2`, `A3`, `A4`) with
+     `record.py --module _app` as in step 8. These are measured once per phone and reused by every
+     module; do not repeat them per module.
 7. **Automated groups, per app, rotating the order.** `--runs k` means "runs 1..k, skipping the
    ones already recorded", so rotation is done by repeat number: for k = 1 to 5, go through the
    installed apps in an order rotated by k (k=1: A B C, k=2: B C A, k=3: C A B, …) and have the
@@ -106,6 +121,26 @@ Follow these steps in order. Say which step you are on in one line each time.
     (and `results/_app/<name>_<phone>`), `git commit`, `git push -u origin <branch>`. Never commit
     `reports/`, traces or recordings.
 
+12. **Optional: execution plan.** This step is optional; never start it without asking. When the
+    module report is built, ask the developer one question:
+
+    > The benchmark is complete. Do you want an execution plan for this module? It reads the module's
+    > code and writes an issues report, a detailed change plan (section-wise, file-wise, team-wise,
+    > risk-rated), a summary with a 2–4 day package, an optimized FE plan and a most preferred plan.
+    > (yes / no)
+
+    - **No**: finish the session as usual. Mention that it can be run any time later with
+      `/benchmark-execution-plan <report file> <module folder or RISE repo path>`.
+    - **Yes**: ask for the code location. The developer can give either the **module folder** (for
+      example `~/StudioProjects/mosl-riseapp-repo/packages/mo_get_quote`) or the **RISE repository**
+      root, in which case the planner finds the module folder. Then hand off.
+      - The planner is a separate agent (`benchmark-execution-plan`), so do not do the planning
+        yourself.
+      - End your session with the exact command, the real report path filled in, for example
+        `/benchmark-execution-plan reports/<module>/<report file> <path> full`.
+      - Also include the line `EXECUTION_PLAN: yes | <report file> | <path>`, so the session that
+        launched you can start the planner directly.
+
 Resume: when invoked again for a module that already has results, start at step 4, show
 `python3 bench.py status --module <module>`, and continue from the first gap. Never redo runs
 that `state.json` already has.
@@ -121,6 +156,10 @@ that `state.json` already has.
    from the current module file.
 3. Remind the reader: ranks and 0–100 scores compare across modules; raw milliseconds do not,
    because each module was measured on a different phone.
+4. Ask, as in step 12 of mode `run`, whether the developer wants an execution plan for one of the
+   weakest modules in the scorecard. It is optional. If yes, ask which module and its code location
+   (the module folder or the RISE repository), then hand off the same way as step 12. If no, just
+   mention `/benchmark-execution-plan <report or scorecard file> <path>` for later.
 
 ### Mode `module <name>`
 
@@ -138,6 +177,8 @@ Create or edit `modules/<name>.json`. Ask these, one at a time, in plain words:
    `{"label": "chart 1W", "cmd": "input tap 0.42 0.55"}`. Get fractions from a screenshot
    (pixel ÷ width or height). `test_subjects` (symbols) for quote-style modules.
 6. Offline items and data items if the seeded lists do not fit.
+7. Should cold start (L1, X4) be measured and counted for this module? → `"coldstart": true|false`.
+   Mode `run` asks this again at step 6 of every session.
 
 Write the JSON with the schema used by `modules/portfolio.json`. Never overwrite an existing
 module silently: show the diff, and show the version hash before and after
@@ -148,4 +189,5 @@ already exist for the old version, warn that the combined report will flag them.
 
 Keep messages short. After each step, one line with what happened and the next step. At the end
 of a session: the results folder path, counts of metrics recorded and missing per app, and the
-exact command to resume.
+exact command to resume. When the module report (or the combined report) is built, also ask the
+optional execution-plan question described in step 12.
