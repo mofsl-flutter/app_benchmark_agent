@@ -1,0 +1,740 @@
+{
+ "section": "E",
+ "title": "Live price streaming",
+ "intro": "Live prices reach the quote page through one global broadcast stream, but about 18 widgets each subscribe their own symbols and about 25 StreamBuilders each filter the stream again. Because a subscribe call replaces the whole subscription set, widgets that subscribe from build() keep undoing each other and re-sending the same symbols; nothing unsubscribes, depth keeps running after the user leaves, and ticks rebuild whole sections even when no value changed. These changes give the page one owner for its subscriptions, rebuild only the values that changed, and release what the page no longer shows, with safe per-widget first steps before the larger refactor.",
+ "measured": [
+  {
+   "metric": "Idle network after market close",
+   "current": "465 KB/min",
+   "expected": "10 KB/min or less after E1, E2, E5, E6 (depends on the E12 answer)"
+  },
+  {
+   "metric": "Idle CPU after market close",
+   "current": "54.3 % of one core (shared with section A)",
+   "expected": "3 % or less together with section A"
+  },
+  {
+   "metric": "Subscribe calls per minute on an idle Overview",
+   "current": "not measured (one per rebuild of six widgets; A7 adds the counter)",
+   "expected": "0 while idle; 1 per page load or asset switch"
+  },
+  {
+   "metric": "Rebuilds per tick during market hours",
+   "current": "not measured (about 25 StreamBuilders, several rebuilding whole sections)",
+   "expected": "only the leaf values that changed, at most 4 per second per symbol"
+  }
+ ],
+ "changes": [
+  {
+   "id": "E1",
+   "title": "Add one tick hub per quote page",
+   "summary": "Today 18 StreamingBaseWidget states on the page each subscribe their own symbols, and about 25 StreamBuilders filter the one global quote stream. Add a QuoteTickHub owned by MoGetQuoteCubit. It subscribes the union of the page's symbols once, detects real value changes, samples at about 250 ms, and exposes one ValueListenable per symbol that widgets read with ValueListenableBuilder.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "High",
+   "risk_reason": "Changes the subscription model of the whole quote page and how every live value reaches the UI. A wrong union drops prices for a section. Needs a feature flag (hub off = today's per-widget subscriptions) and a full regression pass during market hours.",
+   "effort": "L",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/domain/quote_tick_hub.dart",
+     "lines": "new",
+     "change": "New: QuoteTickHub with register(owner, symbols), unregister(owner), listenable(symbol), dispose(); one subscription to BroadCastHelper.onStreamReceived()."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/domain/quote_tick_snapshot.dart",
+     "lines": "new",
+     "change": "New immutable value class (ltp, change, perChange, volume, open, high, low, prevClose, lastTradedTime) with == and hashCode."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "constructor and close()",
+     "change": "Create the hub, register the page symbol(s) on load and asset switch, dispose it in close()."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new (from A1)",
+     "change": "Add quote_tick_hub_enabled (default false)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+     "lines": "250-271",
+     "change": "First migrated widget (header price): ValueListenableBuilder on hub.listenable(symbol) when the flag is on."
+    }
+   ],
+   "current": "onTickReceived (trader_widgets StreamingBaseWidget.dart:54-59 and mosl_broadcaster streaming_base_widget.dart:85-88) is where(symbol).startWith(cache) on the single global PublishSubject. BroadcastChannelImpl.onBroadcast (broadcast_channel.dart:243-251) mutates the cached BroadcastResponse2 in place and publishes the same object again, and BroadcastResponse2 has no == override. So there is no change detection, .distinct() would block every later tick, and a ValueNotifier<BroadcastResponse2> never fires after the first value (see E4). TBT depth packets (QuoteEightyFour) are also published on the quote stream (packet_publisher.dart:60-65), so with 50-depth open every depth packet rebuilds every price widget of that symbol.",
+   "steps": [
+    "Safe first step: build the hub and migrate only StockInfoCard behind quote_tick_hub_enabled. Compare the header price with the app bar (still on the old path) during market hours.",
+    "Hub subscribes once to onStreamReceived(); for each event whose symbol is registered, build a QuoteTickSnapshot and update that symbol's ValueNotifier only if the snapshot differs (value equality).",
+    "Sample: keep the latest snapshot per symbol and flush every 250 ms (one Timer while there are pending changes, none when idle), so a burst of ticks causes at most 4 rebuilds per second per symbol.",
+    "Subscription: on every register/unregister, compute the union and call helper.startQuoteStreaming(union) once (debounced to the next microtask). Nothing else on the page calls startQuoteStreaming or subscribeQuote while the flag is on.",
+    "Include the symbols subscribed outside BasePageState: _SentimentCardWithUpdates (mo_get_quote_screen.dart:436 calls BroadCastHelper.instance.subscribeQuote directly) and the Market Updates news company (overview_main.dart:673-678).",
+    "Migrate widgets one at a time: app bar, stock_info_card, key_statistics, cas, analyst_rating, research_ideas, research_report, holdings, peer table, last visited, market_depth header/OHLC, fundamental_ratios, technicals (moving_average x3, resistance_support), stocks_main.",
+    "On cubit close() and on asset switch, unregister the old symbols; once E5 is available, the hub also sends an unsubscribe for symbols it removed.",
+    "Replay on app resume and reconnect from the hub only (see E10)."
+   ],
+   "before_code": {
+    "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+    "lines": "54-59, 115-118",
+    "code": "  Stream<BroadcastResponse2> onTickReceived(BroadcastSymbol symbol) {\n    return helper\n        .onStreamReceived()\n        .where((event) => event.symbol == symbol)\n        .startWith(helper.getBroadcastResponse(symbol));\n  }\n// ...\n  void startQuoteStreaming(List<BroadcastSymbol> requestedList) {\n    quoteSymbolList.addAll(requestedList);\n    helper.startQuoteStreaming(requestedList.toSet());\n  }"
+   },
+   "after_code": {
+    "code": "class QuoteTickHub {\n  QuoteTickHub(this._helper) {\n    _sub = _helper.onStreamReceived().listen(_onTick);\n  }\n  final BroadCastHelper _helper;\n  late final StreamSubscription<BroadcastResponse2> _sub;\n  final Map<BroadcastSymbol, ValueNotifier<QuoteTickSnapshot>> _values = {};\n  final Map<Object, Set<BroadcastSymbol>> _owners = {};\n  final Map<BroadcastSymbol, QuoteTickSnapshot> _pending = {};\n  Timer? _flush;\n  ValueListenable<QuoteTickSnapshot> listenable(BroadcastSymbol s) => _values.putIfAbsent(\n      s, () => ValueNotifier(QuoteTickSnapshot.from(_helper.getBroadcastResponse(s))));\n  void register(Object owner, Set<BroadcastSymbol> symbols) {\n    _owners[owner] = symbols;\n    scheduleMicrotask(_resubscribe); // one subscribe for the whole page\n  }\n  void _resubscribe() => _helper.startQuoteStreaming(_owners.values.expand((s) => s).toSet());\n  void _onTick(BroadcastResponse2 r) {\n    final ValueNotifier<QuoteTickSnapshot>? n = _values[r.symbol];\n    if (n == null) return;\n    final QuoteTickSnapshot next = QuoteTickSnapshot.from(r); // copies primitives\n    if (next == n.value) return;                             // no real change\n    _pending[r.symbol] = next;\n    _flush ??= Timer(const Duration(milliseconds: 250), () {\n      _pending.forEach((s, v) => _values[s]?.value = v);\n      _pending.clear();\n      _flush = null;\n    });\n  }\n}"
+   },
+   "safety": [
+    "quote_tick_hub_enabled defaults to false; with it off every widget keeps its current StreamBuilder path.",
+    "Migrate one widget per PR; each widget keeps a fallback to its current path when the flag is off.",
+    "The snapshot copies only primitives, so a mutated cache object can never be shown half-updated.",
+    "250 ms sampling is applied only to display; order placement keeps reading BroadCastHelper.getBroadcastResponse directly."
+   ],
+   "regression_checks": [
+    "During market hours: header, app bar, OHLC, Key Statistics, CAS, Analyst Rating, Research Ideas, Research Report, Holdings, Peer table, Last Visited, Technicals and Index Stocks all update and match the watchlist price.",
+    "Switch asset type (cash / futures / options) and NSE/BSE: the new symbol streams, the old one stops updating.",
+    "Navigate quote to quote and back; background and resume; toggle Wi-Fi.",
+    "Watchlist and portfolio prices still update after leaving the quote page."
+   ],
+   "after_improvement": "One subscribe call per page load or asset switch instead of one per widget build. During market hours each price leaf rebuilds at most 4 times a second and only when a shown value changed; after market close repeated identical ticks cause no rebuilds.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "E2",
+   "title": "Stop subscribing from build() and didUpdateWidget",
+   "summary": "Six widgets call startQuoteStreaming on every build or parent update. Because subscribeQuote replaces the global subscription set, each call unsubscribes the other widgets' symbols and re-sends the full set. Move each call to initState, and to didUpdateWidget only when the symbol set actually changed. This is the safe first step before E1.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes when subscribe packets are sent; if a symbol change is missed, a section stops updating. Each widget still subscribes its own symbols, so no shared code changes.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/key_statistics_accordion.dart",
+     "lines": "62-64",
+     "change": "Move startQuoteStreaming(symbols) to initState; in didUpdateWidget only if broadcastSymbol or spotBroadcastSymbol changed."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/cas/cas_accordion.dart",
+     "lines": "31",
+     "change": "Move to initState / didUpdateWidget on symbol change."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/analysis_rating/analyst_rating_widget.dart",
+     "lines": "33",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/research_ideas_accordion.dart",
+     "lines": "69-71",
+     "change": "Same, compare the symbol sets with setEquals."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/peer_comparision/peer_comparison_table.dart",
+     "lines": "48-55",
+     "change": "didUpdateWidget: only re-subscribe if setEquals(old symbols, new symbols) is false."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stocks/stocks_main.dart",
+     "lines": "145-150",
+     "change": "Remove the post-frame subscribe from _buildListView; subscribe from a BlocListener on MoGetQuoteIndexStocksLoaded (see E8)."
+    }
+   ],
+   "current": "BroadcastController.subscribeQuote (mosl_broadcaster broadcast_controller.dart:248-258) first unsubscribes every symbol not in the new set (_unSubscribeMissingSymbols), then BroadcastSubscription._addSubscriptions (subscription.dart:67-82) re-sends the whole new set whenever it differs from the current one. So Key Statistics ({stock, spot}), CAS ({stock}), Analyst Rating ({stock}), Research Ideas ({idea stocks}) and Peer table ({peers + last visited}) keep replacing each other's sets on every rebuild, and the server is asked to subscribe the same symbols again and again. quoteSymbolList is a List, so it also grows by one copy per build. These builds happen on every Overview rebuild (each MoGetQuoteOverviewLoaded emission and each accordion toggle, via the section BlocBuilder in overview_main.dart:262-265).",
+   "steps": [
+    "In each widget, move the startQuoteStreaming call to initState.",
+    "Add didUpdateWidget that compares the old and new symbols (setEquals for lists) and only then clears quoteSymbolList and calls startQuoteStreaming.",
+    "For peer_comparison_table.dart, keep restartStreaming() (public) but make it a no-op if the set did not change.",
+    "Keep the visibility-detector resume path unchanged in this step; E10 handles it.",
+    "With the A7 probe on, count subscribe calls per minute before and after."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/key_statistics_accordion.dart",
+    "lines": "51-66",
+    "code": "  @override\n  Widget build(final BuildContext context) {\n    // Handle index-specific broadcast symbol creation\n    BroadcastSymbol activeBroadcastSymbol = widget.broadcastSymbol;\n\n    // For index asset type, ensure we use the correct index broadcast symbol\n    if (widget.assetType == MoGetQuoteAssetType.indexs && widget.indexQuoteDetail != null) {\n      // Create index-specific broadcast symbol if needed\n      activeBroadcastSymbol = widget.broadcastSymbol;\n    }\n\n    final List<BroadcastSymbol> symbols = <BroadcastSymbol>[activeBroadcastSymbol];\n    if (widget.spotBroadcastSymbol != null) symbols.add(widget.spotBroadcastSymbol!);\n    startQuoteStreaming(symbols);\n    return StreamBuilder<BroadcastResponse2>(\n      stream: onTickReceived(activeBroadcastSymbol),"
+   },
+   "after_code": {
+    "code": "late Stream<BroadcastResponse2> _ticks;\nList<BroadcastSymbol> _symbols() => <BroadcastSymbol>[\n      widget.broadcastSymbol,\n      if (widget.spotBroadcastSymbol != null) widget.spotBroadcastSymbol!,\n    ];\n@override\nvoid initState() {\n  super.initState();\n  _baseData = KeyStatisticsCalculationHelper.fromApiResponse(/* unchanged */);\n  startQuoteStreaming(_symbols());\n  _ticks = onTickReceived(widget.broadcastSymbol);\n}\n@override\nvoid didUpdateWidget(covariant KeyStatisticsAccordion old) {\n  super.didUpdateWidget(old);\n  if (old.broadcastSymbol != widget.broadcastSymbol ||\n      old.spotBroadcastSymbol != widget.spotBroadcastSymbol) {\n    quoteSymbolList.clear();\n    startQuoteStreaming(_symbols());\n    _ticks = onTickReceived(widget.broadcastSymbol);\n  }\n}\n@override\nWidget build(BuildContext context) => StreamBuilder<BroadcastResponse2>(\n      stream: _ticks, // created once, not per build\n      builder: (context, snapshot) { /* unchanged */ },\n    );"
+   },
+   "safety": [
+    "Each widget still subscribes the same symbols as today; it just does so once instead of on every build.",
+    "Resume and visibility paths in BasePageState are untouched.",
+    "Each file can be changed and reverted on its own."
+   ],
+   "regression_checks": [
+    "Each of the six sections updates live during market hours after open, after scrolling, after collapse/expand and after an asset switch.",
+    "Peer table updates after the overview receives new similar-stocks data.",
+    "Index Stocks tab: All, Gainers, Losers chips."
+   ],
+   "after_improvement": "Subscribe packets per minute on an idle Overview drop from one per rebuild of each of six widgets to roughly zero. This is the most likely main source of the 465 KB/min idle traffic (to be confirmed with the A7 counter and E12).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "E3",
+   "title": "Create tick streams once, not inside build",
+   "summary": "Several widgets create a new onTickReceived stream inside build(), so every parent rebuild cancels and re-listens, and the startWith replays the cached value as an extra rebuild. Create each stream once (initState, or a field), and give the header card's BlocBuilder a buildWhen.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Same streams and same builders; only the moment the stream object is created changes. No subscription packets are affected.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+     "lines": "254-270",
+     "change": "Add buildWhen (MoGetQuoteScripIdChanged, MoGetQuoteAssetTypeDataLoaded, MoGetQuoteLoading); cache the stream per symbol in a field."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+     "lines": "149-150, 209-210",
+     "change": "The OHLC StreamBuilder sits inside the depth StreamBuilder's builder and gets a new stream on every depth tick; create _quoteTicks once in initState."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/peer_comparision/peer_comparison_table.dart",
+     "lines": "366-388",
+     "change": "Keep a Map<BroadcastSymbol, Stream> field filled in initState/didUpdateWidget; rows use it."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/research_ideas_accordion.dart",
+     "lines": "101",
+     "change": "Same map pattern for broadCastResponse passed to ResearchIdeaCard."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+     "lines": "667-698",
+     "change": "ltpStreamCache is a local variable, so it caches nothing; move it to a State field. Wrap only the sentiment card in the StreamBuilder, not the whole MarketUpdatesAccordion."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+     "lines": "217-220",
+     "change": "Accept a Stream (or ValueListenable after E1) and rebuild only RiseAppModule.sentimentCardWidget on ticks."
+    }
+   ],
+   "current": "stock_info_card.dart:254 has a BlocBuilder without buildWhen, so every cubit state (including accordion and section changes) creates a new tick stream for the header price. market_depth_content.dart:209-210 creates the OHLC tick stream inside the depth stream's builder, so it is recreated on every depth packet. peer_comparison_table.dart:374-376 and research_ideas_accordion.dart:101 create one stream per row on every build. In overview_main.dart:669-683 the cache map is created on every call, and the StreamBuilder rebuilds the whole MarketUpdatesAccordion on every tick of the news company, which also makes CarouselSlider create a new PageController (see A3).",
+   "steps": [
+    "stock_info_card: add buildWhen; hold Stream<BroadcastResponse2>? _priceStream and BroadcastSymbol? _priceSymbol; recreate only when the symbol changes.",
+    "market_depth_content: create _quoteTicks = onTickReceived(widget.symbol) in initState (and in didUpdateWidget if the symbol changes); use it in both layouts.",
+    "peer table and research ideas: Map<BroadcastSymbol, Stream<BroadcastResponse2>> _streams filled from the symbol list; reuse in build.",
+    "overview_main: make _ltpStreamCache a field of _OverviewScreenState; pass the stream into MarketUpdatesAccordion and wrap only the sentiment card in a StreamBuilder there.",
+    "After E1 these streams become hub listenables; this change is still worth doing first because it is small and behaviour-neutral."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+    "lines": "667-694",
+    "code": "  Widget _buildMarketUpdatesSection() {\n    final flash.FlashNewsListResponse newsItems = _cubit.overviewDataManager.marketUpdatesData!;\n    final Map<BroadcastSymbol, Stream<BroadcastResponse2>> ltpStreamCache =\n        <BroadcastSymbol, Stream<BroadcastResponse2>>{};\n    // ...\n    if (newsItems.items.isNotEmpty) {\n      final flash.NewsItem firstNewsItem = newsItems.items.first;\n      final BroadcastSymbol broadcastSymbol = BroadcastSymbol.forScrip(\n        scripCode: firstNewsItem.company.id.scripCode,\n        exchangeCode: firstNewsItem.company.id.exchange.value,\n      );\n      final Stream<BroadcastResponse2> ltpStream =\n          ltpStreamCache.putIfAbsent(broadcastSymbol, () => onTickReceived(broadcastSymbol));\n      return StreamBuilder<BroadcastResponse2>(\n        stream: ltpStream,\n        builder: (final BuildContext context, final AsyncSnapshot<BroadcastResponse2> snapshot) {\n          // ...\n          return MarketUpdatesAccordion(\n            newsItems: newsItems,\n            broadcastResponse: response,\n          );\n        },\n      );\n    }"
+   },
+   "after_code": {
+    "code": "// _OverviewScreenState field: survives rebuilds\nfinal Map<BroadcastSymbol, Stream<BroadcastResponse2>> _ltpStreamCache =\n    <BroadcastSymbol, Stream<BroadcastResponse2>>{};\n\nWidget _buildMarketUpdatesSection() {\n  final flash.FlashNewsListResponse newsItems = _cubit.overviewDataManager.marketUpdatesData!;\n  if (newsItems.items.isEmpty) return MarketUpdatesAccordion(newsItems: newsItems);\n  final flash.NewsItem first = newsItems.items.first;\n  final BroadcastSymbol symbol = BroadcastSymbol.forScrip(\n    scripCode: first.company.id.scripCode,\n    exchangeCode: first.company.id.exchange.value,\n  );\n  // The accordion itself is built once; only the sentiment card listens.\n  return MarketUpdatesAccordion(\n    newsItems: newsItems,\n    ltpStream: _ltpStreamCache.putIfAbsent(symbol, () => onTickReceived(symbol)),\n    initialResponse: BroadCastHelper.instance.getBroadcastResponse(symbol),\n  );\n}\n\n// market_updates_accordion.dart, inside the card\nStreamBuilder<BroadcastResponse2>(\n  stream: widget.ltpStream,\n  initialData: widget.initialResponse,\n  builder: (_, s) => RiseAppModule.sentimentCardWidget(newsData: newsItem, response: s.data),\n)"
+   },
+   "safety": [
+    "Same data reaches the same widgets; only fewer widgets rebuild per tick.",
+    "MarketUpdatesAccordion keeps its broadcastResponse parameter (deprecated) so other callers, if any, still compile."
+   ],
+   "regression_checks": [
+    "Header price, OHLC, Peer LTP, Research Idea cards and the Market Updates sentiment % update live.",
+    "Header price still switches when NSE/BSE is changed (MoGetQuoteScripIdChanged).",
+    "50-depth open: OHLC values still update."
+   ],
+   "after_improvement": "No stream re-subscription on parent rebuilds. A tick on the news company rebuilds one sentiment card instead of the whole carousel. A depth packet no longer recreates the OHLC stream.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "E4",
+   "title": "Fix Research Report live returns not updating",
+   "summary": "ResearchReportSection pushes each tick into a ValueNotifier<BroadcastResponse2>. The tick is the same cached object every time, so ValueNotifier sees an identical value and never notifies; the returns shown from ltp do not update live. Notify on real value change instead.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "One widget. The visible change is that the returns figure starts following the live price, which is what the code intends.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/research_report/research_report_section.dart",
+     "lines": "28-44",
+     "change": "Store the last ltp; when it changes, call a ChangeNotifier's notifyListeners (or, after E1, use hub.listenable)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/research_report/research_report_card.dart",
+     "lines": "15-17, 158-165",
+     "change": "No change needed if a ValueListenable<BroadcastResponse2> is kept; optional: switch to ValueListenable<double> ltp."
+    }
+   ],
+   "current": "_bdDataNotifier is created with BroadCastHelper.getBroadcastResponse(symbol), which returns the cached object. Every later tick is that same object (broadcast_channel.dart:244-245 mutates it in place), so ValueNotifier.value = tick is a no-op and ResearchReportCard's ValueListenableBuilder (research_report_card.dart:158) only shows the value from the last full rebuild.",
+   "steps": [
+    "Replace ValueNotifier<BroadcastResponse2> with a ValueNotifier<double> for ltp (the only field the card uses), set from tick.ltp.",
+    "Or keep the type and use a small _TickNotifier extends ChangeNotifier implements ValueListenable<BroadcastResponse2> that calls notifyListeners when ltp changes.",
+    "Confirm on device during market hours that the returns percentage moves with the LTP."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/research_report/research_report_section.dart",
+    "lines": "28-44",
+    "code": "  late final ValueNotifier<BroadcastResponse2> _bdDataNotifier;\n  StreamSubscription<BroadcastResponse2>? _tickSubscription;\n\n  @override\n  void initState() {\n    super.initState();\n    _bdDataNotifier = ValueNotifier<BroadcastResponse2>(\n        BroadCastHelper.instance.getBroadcastResponse(widget.broadcastSymbol));\n    startQuoteStreaming(<BroadcastSymbol>[widget.broadcastSymbol]);\n    _subscribeToTicks();\n  }\n\n  void _subscribeToTicks() {\n    unawaited(_tickSubscription?.cancel());\n    _tickSubscription = onTickReceived(widget.broadcastSymbol)\n        .listen((final BroadcastResponse2 tick) => _bdDataNotifier.value = tick);\n  }"
+   },
+   "after_code": {
+    "code": "class _TickNotifier extends ChangeNotifier implements ValueListenable<BroadcastResponse2> {\n  _TickNotifier(this._value) : _lastLtp = _value.ltp;\n  BroadcastResponse2 _value;\n  double _lastLtp;\n\n  @override\n  BroadcastResponse2 get value => _value;\n\n  void update(BroadcastResponse2 tick) {\n    _value = tick;\n    if (tick.ltp == _lastLtp) return; // only real changes rebuild\n    _lastLtp = tick.ltp;\n    notifyListeners();\n  }\n}\n\nlate final _TickNotifier _bdDataNotifier;\n// ...\n_tickSubscription = onTickReceived(widget.broadcastSymbol)\n    .listen(_bdDataNotifier.update);"
+   },
+   "safety": [
+    "ResearchReportCard keeps its ValueListenable<BroadcastResponse2> parameter type.",
+    "Only rebuilds when ltp changes, so cost is not higher than today's rebuild-on-parent-update."
+   ],
+   "regression_checks": [
+    "Research Report card returns follow the live price during market hours.",
+    "Symbol change (asset switch) resets to the new symbol's value.",
+    "After market close the value is stable."
+   ],
+   "after_improvement": "Research Report returns are live, as intended, with one leaf rebuild per real price change.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "E5",
+   "title": "Add unsubscribe and change stream to mosl_broadcaster",
+   "summary": "Nothing on the quote page ever unsubscribes quotes: BroadCastHelper has no quote-unsubscribe method, BasePageState.dispose does not unsubscribe, and quoteSymbolList only grows. Add BroadCastHelper.unSubscribeQuote, an optional value-change stream (L5), and clear the remembered depth request on unsubscribe. Shared package, so every module benefits, but every module is also exposed.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "High",
+   "risk_reason": "mosl_broadcaster and trader_widgets are used by watchlist, orders, positions, charts and other modules. Because the subscription set is global, unsubscribing a symbol that another live screen still needs stops its prices. All new APIs must be additive and unused by default; only E1's hub calls them at first.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "mosl_broadcaster: lib/core/broadcast_helper.dart",
+     "lines": "150-161, 229-234",
+     "change": "Add unSubscribeQuote(Set<BroadcastSymbol>) delegating to _broadcaster.unSubscribeQuote; add onTickChanged(symbol) that emits only when ltp/change/volume/lastTradedTime differ."
+    },
+    {
+     "path": "mosl_broadcaster: lib/internal/broadcast_channel.dart",
+     "lines": "147-168",
+     "change": "On unsubscribe of the depth symbol, clear currentDepthRequest so a reconnect does not re-subscribe depth for a screen that was closed."
+    },
+    {
+     "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+     "lines": "115-118, 158-164",
+     "change": "Optional, off by default: an opt-in unsubscribeOnDispose flag; startQuoteStreaming de-duplicates quoteSymbolList."
+    }
+   ],
+   "current": "BroadcastController.unSubscribeQuote exists (broadcast_controller.dart:260-266) but BroadCastHelper does not expose it. BroadcastChannelImpl keeps currentQuoteRequest and currentDepthRequest (broadcast_channel.dart:147-161) and replays them on login (onLogin, 213-227); unsubscribe (163-168) writes the packet but leaves currentDepthRequest set, so after a reconnect the last depth symbol is subscribed again even though no screen shows it. currentQuoteRequest is also only the last added set, so after another widget narrows the set, a reconnect replays the wider set.",
+   "steps": [
+    "Add to BroadCastHelper: void unSubscribeQuote(Set<BroadcastSymbol> symbols) => _broadcaster.unSubscribeQuote(symbols);",
+    "Add Stream<BroadcastResponse2> onTickChanged(BroadcastSymbol s): map to a snapshot, distinct() on the snapshot, map back to the cached response.",
+    "In BroadcastChannelImpl.unsubscribe, if the request is a depth unsubscribe for the same symbol as currentDepthRequest, set currentDepthRequest = Request.empty (needs the symbol to be passed in or a separate unsubscribeDepth method).",
+    "In trader_widgets BasePageState.startQuoteStreaming, add only symbols not already in quoteSymbolList (behaviour-neutral: resumeStreaming already calls toSet()).",
+    "Release as a new mosl_broadcaster tag; bump the ref in the workspace; run every module's quote/depth smoke test.",
+    "Only E1's hub calls unSubscribeQuote at first, and only for symbols it subscribed itself and that no other open route registered (the hub keeps the owner map)."
+   ],
+   "before_code": {
+    "path": "mosl_broadcaster: lib/internal/broadcast_controller.dart",
+    "lines": "247-266",
+    "code": "  @override\n  void subscribeQuote(Set<BroadcastSymbol> symbols) {\n    logger.debug(() => \"Subscribe Quote: $symbols\");\n    AppWriteLog.writeLog(\"Trader Broadcast\", \"Subscribe Quote: $symbols\");\n    _unSubscribeMissingSymbols(symbols);\n    cache.addSymbols(symbols);\n    final Request request = subscription.addAll(symbols);\n    if (request == Request.empty) {\n      return;\n    }\n    _channel.subscribeQuote(request);\n  }\n\n  @override\n  void unSubscribeQuote(Set<BroadcastSymbol> symbols) {\n    logger.debug(() => \"Un-Subscribe Quote: $symbols\");\n    AppWriteLog.writeLog(\"Trader Broadcast\", \"Un-Subscribe Quote: $symbols\");\n    final Request request = subscription.removeAll(symbols);\n    _channel.unsubscribe(request);\n  }"
+   },
+   "after_code": {
+    "code": "// mosl_broadcaster: lib/core/broadcast_helper.dart (additive)\n/// Unsubscribes quote streaming for [symbols]. Callers must only pass\n/// symbols they subscribed and no other visible screen still needs.\nvoid unSubscribeQuote(Set<BroadcastSymbol> symbols) {\n  if (symbols.isEmpty) return;\n  _broadcaster.unSubscribeQuote(symbols.toSet()); // copy: removeAll mutates\n}\n\n/// Like [onTickReceived] but emits only when a shown value changed.\nStream<BroadcastResponse2> onTickChanged(BroadcastSymbol symbol) =>\n    onTickReceived(symbol)\n        .map((r) => (r, r.ltp, r.change, r.volume, r.lastTradedTime))\n        .distinct((a, b) => a.$2 == b.$2 && a.$3 == b.$3 && a.$4 == b.$4 && a.$5 == b.$5)\n        .map((t) => t.$1);\n\n// mosl_broadcaster: lib/internal/broadcast_channel.dart\n@override\nvoid unsubscribeDepth(Request request, BroadcastSymbol symbol) {\n  if (_currentDepthSymbol == symbol) {\n    currentDepthRequest = Request.empty; // do not replay on reconnect\n    _currentDepthSymbol = null;\n  }\n  unsubscribe(request);\n}"
+   },
+   "safety": [
+    "All additions are new methods; no existing signature or behaviour changes except clearing a stale depth replay.",
+    "Pass a copy to subscription.removeAll, because it mutates its argument (subscription.dart:47-51).",
+    "No module calls the new methods until it opts in; the quote hub is behind quote_tick_hub_enabled."
+   ],
+   "regression_checks": [
+    "Watchlist, positions, order book, option chain, charts and peak terminal: prices and depth after navigating in and out of a quote page.",
+    "Open 5-depth on a quote, leave, toggle airplane mode, come back to watchlist: no depth traffic for the old symbol (socket log).",
+    "TBT 50-depth open/close."
+   ],
+   "after_improvement": "The quote page can release its symbols when it closes, the server stops sending ticks for them, and a reconnect no longer revives a closed screen's depth subscription.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "E6",
+   "title": "Stop 5-level and 50-level depth when leaving",
+   "summary": "MarketDepthContent starts 5-level depth in initState and never stops it. The 50-level TBT socket is started on toggle and never stopped, and depthStreamingHandler.dispose() is not called on dispose. Stop depth on dispose and when the depth section is not visible, through an opt-in parameter so the 17 other callers in other packages are unchanged.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "High",
+   "risk_reason": "MarketDepthContent lives in mo_get_quote but is used by trader_orders, trader_native_charts, mo_peak_scalper_terminal and mo_dealer_order. The depth subscription is per symbol and global, so stopping it from one instance stops it for every other instance of the same symbol (for example the OHLC instance on the same page; see E7).",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+     "lines": "48-68, 79-119",
+     "change": "Add bool releaseDepthOnDispose = false. When true: dispose() calls stopBidStreaming() for 5-level, stops TBT depth if expanded, depthStreamingHandler.dispose(); register a VisibilityDetector that stops/starts depth when the widget is off/on screen."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+     "lines": "822-845",
+     "change": "Pass releaseDepthOnDispose: true for the overview depth instance."
+    }
+   ],
+   "current": "initState calls startBidStreaming(widget.symbol) and startQuoteStreaming. dispose() only stops TBT depth when isDepthExpanded is true; it never stops 5-level depth and never calls depthStreamingHandler.dispose(), so its 20 s toast timer and socket subscription can outlive the widget. BroadCastHelperTBT.instance.startStreaming() opens a second socket on the first 50-depth tap and only trader_orders' market_depth_sheet.dart:160 ever stops it; with BroadcastOptions defaults that socket sends a ping snapshot after 50 s of silence (broadcast_controller.dart:355-387). MarketDepthContent does not use registerVisibilityDetector, so depth keeps flowing while scrolled away or on another tab.",
+   "steps": [
+    "Add the opt-in parameter (default false keeps every other caller unchanged).",
+    "When releaseDepthOnDispose is true: in dispose(), call stopBidStreaming(); if isDepthExpanded, BroadCastHelperTBT.instance.stopBidStreaming(symbol); always depthStreamingHandler.dispose().",
+    "Wrap the widget with registerVisibilityDetector (it already stops depthRequest at visibleFraction 0 and resumes above 0.3); TBT depth needs the same stop/resume added in onPause/onResume.",
+    "Stop the TBT socket (BroadCastHelperTBT.instance.stopStreaming()) only when this widget started it and no other route is using 50-depth: add a static open-count in this file; do not stop it if the count is not 0.",
+    "Do E7 first, so the OHLC instance on the same page does not depend on the depth subscription."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+    "lines": "79-119",
+    "code": "  @override\n  void initState() {\n    super.initState();\n    if (widget.isDefaultExpanded) {\n      _toggleMarketDepth(true);\n    } else {\n      startBidStreaming(widget.symbol);\n      startQuoteStreaming(<BroadcastSymbol>[widget.symbol]);\n    }\n  }\n\n  void _toggleMarketDepth(final bool isExpanded) async {\n    // ...\n      BroadCastHelperTBT.instance.startStreaming();\n    // ...\n  @override\n  void dispose() {\n    if(isDepthExpanded.value){\n      BroadCastHelperTBT.instance.stopBidStreaming(widget.symbol);\n    }\n    super.dispose();\n  }"
+   },
+   "after_code": {
+    "code": "final bool releaseDepthOnDispose; // new, default false\n\nstatic int _tbtUsers = 0; // instances that started the TBT socket\nbool _startedTbt = false;\n\nvoid _startTbt() {\n  BroadCastHelperTBT.instance.startStreaming();\n  if (!_startedTbt) { _startedTbt = true; _tbtUsers++; }\n}\n\n@override\nvoid dispose() {\n  if (isDepthExpanded.value) {\n    BroadCastHelperTBT.instance.stopBidStreaming(widget.symbol);\n  }\n  if (widget.releaseDepthOnDispose) {\n    stopBidStreaming();                 // 5-level, from BasePageState\n    depthStreamingHandler.dispose();    // timers + socket listener\n    if (_startedTbt && --_tbtUsers == 0) {\n      BroadCastHelperTBT.instance.stopStreaming();\n    }\n  }\n  isDepthExpanded.dispose();\n  super.dispose();\n}"
+   },
+   "safety": [
+    "Default false: the 17 call sites outside this module behave exactly as today.",
+    "Only the overview instance opts in, after E7 removes the second depth subscriber on the same page.",
+    "TBT socket is only stopped when the reference count reaches 0."
+   ],
+   "regression_checks": [
+    "Overview 5-depth updates; 50-depth toggle on/off; leave the quote page with 50-depth open, open another quote and open 50-depth again.",
+    "Scroll depth out of view and back: values resume within a second.",
+    "Order book, position details, peak terminal and chart bottom sheets: depth still works (they do not opt in).",
+    "'50 Depth Engine is OFF' toast still appears when the TBT engine is down."
+   ],
+   "after_improvement": "No depth packets after the user leaves the quote page or scrolls the depth away; the TBT socket and its ping close when no screen uses 50-depth.",
+   "depends_on": [
+    "E7"
+   ],
+   "verify": true
+  },
+  {
+   "id": "E7",
+   "title": "Subscribe OHLC-only depth widget to quotes only",
+   "summary": "Overview builds a second MarketDepthContent for the OHLC section with showMarketDepth: false. Its initState still calls startBidStreaming, so it subscribes full 5-level depth and rebuilds on every depth packet just to show open/high/low/close. Skip the depth subscription and depth stream when showMarketDepth is false.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "The widget is shared with other modules, but overview_main.dart:597 is the only caller in the repo that passes showMarketDepth: false (checked). The depth instance on the same page keeps its own depth subscription.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+     "lines": "79-88, 121-140",
+     "change": "Only startBidStreaming when widget.showMarketDepth; when false, build the OHLC StreamBuilder directly without the depth StreamBuilder."
+    }
+   ],
+   "current": "initState runs startBidStreaming(widget.symbol) for every instance. build() always wraps the layout in StreamBuilder<AskBidResponse> on the depth stream, so the OHLC instance rebuilds its whole column on each depth packet, and recreates its inner quote stream each time (E3).",
+   "steps": [
+    "In initState: if (widget.showMarketDepth) startBidStreaming(widget.symbol); always startQuoteStreaming (or hub register after E1).",
+    "In build: if (!widget.showMarketDepth) return the OHLC StreamBuilder alone (default and bottom-sheet layouts).",
+    "Search again for showMarketDepth: false across packages before merging."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+    "lines": "121-140",
+    "code": "  @override\n  Widget build(final BuildContext context) {\n    return ValueListenableBuilder<bool>(\n      valueListenable: isDepthExpanded,\n      builder: (final BuildContext context, final bool isExpanded, final Widget? child) {\n        return StreamBuilder<AskBidResponse>(\n          stream: isExpanded\n              ? onDepthStreamReceivedTBT(widget.symbol)\n              : onDepthStreamReceived(widget.symbol),\n          builder: (final BuildContext context, final AsyncSnapshot<AskBidResponse> snapshot) {\n            AskBidResponse depthData = snapshot.data ??\n                BroadCastHelper.instance.getBroadcastResponse(widget.symbol);\n            return widget.isInBottomSheet\n                ? _buildBottomSheetLayout(context, depthData, isExpanded)\n                : _buildDefaultLayout(context, depthData, isExpanded);\n          },\n        );\n      },\n    );\n  }"
+   },
+   "after_code": {
+    "code": "@override\nvoid initState() {\n  super.initState();\n  _quoteTicks = onTickReceived(widget.symbol); // E3\n  if (widget.isDefaultExpanded) {\n    _toggleMarketDepth(true);\n  } else {\n    if (widget.showMarketDepth) startBidStreaming(widget.symbol); // OHLC-only: no depth\n    startQuoteStreaming(<BroadcastSymbol>[widget.symbol]);\n  }\n}\n\n@override\nWidget build(final BuildContext context) {\n  if (!widget.showMarketDepth) {\n    return widget.showOhlc ? _buildOhlc(context) : const SizedBox.shrink();\n  }\n  return ValueListenableBuilder<bool>(/* unchanged depth path */);\n}"
+   },
+   "safety": [
+    "Instances with showMarketDepth: true (all other callers) are unchanged.",
+    "OHLC values come from the quote stream today as well; only the needless depth wrapper is removed."
+   ],
+   "regression_checks": [
+    "Overview OHLC section shows and updates open/high/low/prev close during market hours.",
+    "Overview Market Depth section still updates (it keeps its own subscription).",
+    "Bottom-sheet layout callers in trader_orders are unaffected."
+   ],
+   "after_improvement": "One depth subscriber per symbol on the Overview instead of two; the OHLC section rebuilds on quote changes only, not on every depth packet.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "E8",
+   "title": "Subscribe index constituents for visible rows only",
+   "summary": "On the Index Stocks tab, _buildListView schedules startQuoteStreaming for every filtered constituent after every rebuild. The list is shrink-wrapped with NeverScrollableScrollPhysics, so all rows and all their StreamBuilders exist at once. Subscribe once per data or filter change first; then subscribe only rows near the viewport and drop rows that scroll away.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes which symbols are streamed on one tab. A row that becomes visible must start updating quickly; a missed row shows a stale price.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stocks/stocks_main.dart",
+     "lines": "114-160, 273-288",
+     "change": "Step 1: subscribe from a BlocListener / ValueNotifier listener when data or chip changes, always including the index symbol. Step 2: per-row VisibilityDetector registers/unregisters the row symbol with a debounced subscribe."
+    }
+   ],
+   "current": "Every rebuild of the list (chip tap, cubit emission) adds a post-frame callback that sends all filtered constituents. Since subscribeQuote replaces the global set, selecting Gainers unsubscribes the losers and every other symbol on the page, possibly including the index symbol used by the header (verify). quoteSymbolList grows by the full list on every rebuild.",
+   "steps": [
+    "Step 1 (safe): remove the addPostFrameCallback from _buildListView. Add a listener on _selectedIndex and a BlocListener for MoGetQuoteIndexStocksLoaded that calls startQuoteStreaming(all constituents + cubit.broadcastSymbol) only when the set changed.",
+    "Step 1: subscribe the full constituent list regardless of chip filter, so switching chips sends nothing.",
+    "Step 2: wrap each row in a VisibilityDetector (key per scrip); keep a Set of visible symbols; debounce 300 ms; subscribe visible + index symbol. Or register rows with the E1 hub, which does the union.",
+    "Step 2: create each row's tick stream once (map field), see E3.",
+    "Verify on device: with Gainers selected, does the header index price keep updating today?"
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/stocks/stocks_main.dart",
+    "lines": "142-160",
+    "code": "  Widget _buildListView(final List<IndexStock> stockData, final int selectedIndex) {\n    final List<IndexStock> filteredData = _filterStockData(stockData, selectedIndex);\n\n    // Start streaming for visible items\n    WidgetsBinding.instance.addPostFrameCallback((final Duration _) {\n      final List<BroadcastSymbol> broadcastSymbols =\n          filteredData.map((final IndexStock stock) => stock.scrip.toBroadcastSymbol()).toList();\n      startQuoteStreaming(broadcastSymbols);\n    });\n\n    return ListView.builder(\n      itemCount: filteredData.length,\n      shrinkWrap: true,\n      padding: EdgeInsets.zero,\n      physics: const NeverScrollableScrollPhysics(),\n      itemBuilder: (final BuildContext context, final int index) =>\n          _buildStockItem(context, filteredData[index]),\n    );\n  }"
+   },
+   "after_code": {
+    "code": "Set<BroadcastSymbol> _subscribed = <BroadcastSymbol>{};\n\nvoid _subscribeConstituents(List<IndexStock> all) {\n  final Set<BroadcastSymbol> next = <BroadcastSymbol>{\n    context.read<MoGetQuoteCubit>().broadcastSymbol, // keep the index itself\n    ...all.map((IndexStock s) => s.scrip.toBroadcastSymbol()),\n  };\n  if (setEquals(next, _subscribed)) return;\n  _subscribed = next;\n  quoteSymbolList\n    ..clear()\n    ..addAll(next);\n  startQuoteStreaming(next.toList());\n}\n\n// in _buildStocksList: BlocListener<MoGetQuoteCubit, MoGetQuoteState>(\n//   listenWhen: (_, s) => s is MoGetQuoteIndexStocksLoaded,\n//   listener: (_, s) => _subscribeConstituents((s as MoGetQuoteIndexStocksLoaded).indexStocks.entry),\n//   child: ...)\n\nWidget _buildListView(List<IndexStock> stockData, int selectedIndex) {\n  final List<IndexStock> filteredData = _filterStockData(stockData, selectedIndex);\n  return ListView.builder(/* unchanged, no subscribe here */);\n}"
+   },
+   "safety": [
+    "Step 1 subscribes the same or a larger set than today, so no row loses prices.",
+    "Step 2 can sit behind quote_tick_hub_enabled with E1."
+   ],
+   "regression_checks": [
+    "Nifty 50 and a large index: all rows update; chips All/Gainers/Losers switch without stale rows.",
+    "Header index price keeps updating on every chip.",
+    "Tap a row opens the stock quote; back restores the list."
+   ],
+   "after_improvement": "Step 1: one subscribe per data load instead of one per rebuild and chip tap. Step 2: only on-screen rows (about 8-10) stream instead of every constituent.",
+   "depends_on": [
+    "E2"
+   ],
+   "verify": true
+  },
+  {
+   "id": "E9",
+   "title": "Pause tick rebuilds in collapsed Overview sections",
+   "summary": "Overview sections use MOAccordion(maintainState: true). A collapsed section stays mounted inside Offstage, and its StreamBuilders keep rebuilding and laying out on every tick, which schedules frames nobody sees. Skip tick rebuilds while the section is collapsed and catch up once on expand, without unmounting the section.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Touches every live section's rebuild path. Local state (50-depth toggle, tabs) is kept because sections stay mounted; the risk is a value not refreshed on expand.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/common/live_tick_builder.dart",
+     "lines": "new",
+     "change": "New: LiveTickBuilder that listens to a tick stream/listenable but ignores updates while TickerMode.of(context) is false, and rebuilds once when it becomes true."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/key_statistics_accordion.dart",
+     "lines": "65-94",
+     "change": "Use LiveTickBuilder instead of StreamBuilder."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/analysis_rating/analyst_rating_widget.dart",
+     "lines": "34-40",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/your_holdings/holdings_accordion.dart",
+     "lines": "45-56",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+     "lines": "284-285",
+     "change": "No change to maintainState; documented as the reason LiveTickBuilder exists."
+    }
+   ],
+   "current": "MOAccordion (mofsl_ui_library accordion.dart:413-420) keeps collapsed children in Offstage(offstage: true) with TickerMode(enabled: false) when maintainState is true. Offstage still builds and lays out its child; only painting is skipped. A StreamBuilder under a collapsed section therefore calls setState on each tick, which schedules a frame, rebuilds and re-lays out the section. Key Statistics, Analyst Rating, CAS, Holdings, Research Ideas, Peer table and Last Visited all do this.",
+   "steps": [
+    "Write LiveTickBuilder<T>(stream or listenable, builder): store the latest value; in the listener, if !TickerMode.of(context) just remember it; otherwise setState.",
+    "In didChangeDependencies, when TickerMode turns true and a value is pending, setState once.",
+    "Replace StreamBuilder in the Overview sections one by one.",
+    "Leave maintainState: true; switching to false would reset local state such as the 50-depth toggle and is not needed for this fix.",
+    "Verify with DevTools 'Track widget rebuilds': a collapsed section shows 0 rebuilds during market hours."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+    "lines": "284-290",
+    "code": "            child: MOAccordion(\n              maintainState: true,\n              iconColor: context.surfaceIconNeutralNormal,\n              collapsedIconColor: context.surfaceIconNeutralNormal,\n              backgroundColor: context.surfaceBackgroundNeutralSubtle,\n              isExpanded: isExpanded,\n              onExpansionChanged: (final bool value) {"
+   },
+   "after_code": {
+    "code": "class LiveTickBuilder extends StatefulWidget {\n  const LiveTickBuilder({super.key, required this.ticks, required this.initial, required this.builder});\n  final Stream<BroadcastResponse2> ticks;\n  final BroadcastResponse2 initial;\n  final Widget Function(BuildContext, BroadcastResponse2) builder;\n  @override\n  State<LiveTickBuilder> createState() => _LiveTickBuilderState();\n}\nclass _LiveTickBuilderState extends State<LiveTickBuilder> {\n  late BroadcastResponse2 _value = widget.initial;\n  bool _pending = false;\n  StreamSubscription<BroadcastResponse2>? _sub;\n  @override\n  void initState() {\n    super.initState();\n    _sub = widget.ticks.listen((BroadcastResponse2 v) {\n      _value = v;\n      if (TickerMode.of(context)) { setState(() {}); } else { _pending = true; }\n    });\n  }\n  @override\n  void didChangeDependencies() {\n    super.didChangeDependencies();\n    if (_pending && TickerMode.of(context)) { _pending = false; setState(() {}); }\n  }\n  @override\n  void dispose() { _sub?.cancel(); super.dispose(); }\n  @override\n  Widget build(BuildContext context) => widget.builder(context, _value);\n}"
+   },
+   "safety": [
+    "Sections stay mounted, so no local state is lost.",
+    "Expanded sections behave exactly as today.",
+    "TickerMode is already false for collapsed MOAccordion children; no ui-library change."
+   ],
+   "regression_checks": [
+    "Collapse Key Statistics during market hours, wait, expand: values are current immediately.",
+    "Same for Analyst Rating, Holdings, CAS, Research Ideas, Peer table, Last Visited.",
+    "Other routes pushed on top (TickerMode false there too): values current on return."
+   ],
+   "after_improvement": "Collapsed sections cause no rebuilds or frames on ticks. During market hours this removes a share of the per-tick build/layout work proportional to the number of collapsed sections.",
+   "depends_on": [
+    "E3"
+   ],
+   "verify": true
+  },
+  {
+   "id": "E10",
+   "title": "Use one lifecycle and resume handler per page",
+   "summary": "Each of the 18 BasePageState widgets in this module adds its own WidgetsBindingObserver and connectivity listener, and on app resume each calls resumeStreaming with its own symbol set. Because subscribeQuote replaces the global set, the last observer to run decides which symbols stay subscribed. Let the page (cubit or hub) handle resume once with the full union.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "High",
+   "risk_reason": "Changes resume and reconnect behaviour for every live section on the page. Needs the E1 flag and a background/resume regression on all tabs.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/domain/quote_tick_hub.dart",
+     "lines": "new (E1)",
+     "change": "Add WidgetsBindingObserver: on resumed, re-send the union once; on paused, nothing (the broadcaster already shuts down after 15 s)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/key_statistics_accordion.dart",
+     "lines": "15, 37",
+     "change": "When migrated to the hub, extend StatefulWidget instead of StreamingBaseWidget (no observer, no connectivity listener)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/cas/cas_accordion.dart",
+     "lines": "16, 28",
+     "change": "Same; repeat for the other migrated widgets."
+    }
+   ],
+   "current": "Both base classes (trader_widgets StreamingBaseWidget.dart:149-206 and mosl_broadcaster streaming_base_widget.dart:240-304) add an observer in initState and on resumed call resumeStreaming(), which sends helper.startQuoteStreaming(quoteSymbolList.toSet()) for that widget only. With 18 such states on the quote page (10 on the trader_widgets base, 8 on the mosl_broadcaster base), a resume sends up to 18 replacing subscribe calls, and the final set is whichever widget's observer ran last. Each also starts its own AppEventStream network listener.",
+   "steps": [
+    "Hub owns one observer; on resumed it calls helper.startQuoteStreaming(union) once.",
+    "Migrated widgets become plain StatefulWidgets reading hub listenables; they no longer extend StreamingBaseWidget.",
+    "Keep toggleIsInterNetAvailable behaviour: only market_depth_content and widgets that override it need a connectivity listener; check each override before removing the base class.",
+    "Until all widgets are migrated, the hub re-sends the union in a post-frame callback after resume so it runs after the remaining per-widget observers."
+   ],
+   "before_code": {
+    "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+    "lines": "166-206",
+    "code": "  @override\n  void didChangeAppLifecycleState(AppLifecycleState state) {\n    debugPrint(\"DidChangeAppLifecycleState called ${state.runtimeType}\");\n    switch (state) {\n      case AppLifecycleState.resumed:\n        debugPrint(\"Resume of called\");\n        if (_isResume) {\n          onResume();\n        }\n        startNetworkStreaming();\n        // ...\n        resumeStreaming();\n        break;\n      // ...\n    }\n  }\n\n  void resumeStreaming() {\n    if (quoteSymbolList.isNotEmpty) {\n      helper.startQuoteStreaming(quoteSymbolList.toSet());\n    }\n    if (depthRequest != null) {\n      helper.startBidStreaming(depthRequest!);\n    }\n  }"
+   },
+   "after_code": {
+    "code": "class QuoteTickHub with WidgetsBindingObserver {\n  // ... (E1)\n  void attach() => WidgetsBinding.instance.addObserver(this);\n\n  @override\n  void didChangeAppLifecycleState(AppLifecycleState state) {\n    if (state != AppLifecycleState.resumed) return;\n    // Runs after any not-yet-migrated per-widget observers.\n    WidgetsBinding.instance.addPostFrameCallback((_) => _resubscribe());\n  }\n\n  void dispose() {\n    WidgetsBinding.instance.removeObserver(this);\n    // ...\n  }\n}\n\n// migrated section\nclass CasAccordion extends StatelessWidget {\n  const CasAccordion({super.key, required this.broadcastSymbol});\n  final BroadcastSymbol broadcastSymbol;\n  @override\n  Widget build(BuildContext context) => ValueListenableBuilder<QuoteTickSnapshot>(\n        valueListenable: context.read<MoGetQuoteCubit>().ticks.listenable(broadcastSymbol),\n        builder: (_, QuoteTickSnapshot t, __) => CasContent(data: CasData.fromTick(t)),\n      );\n}"
+   },
+   "safety": [
+    "Behind quote_tick_hub_enabled with E1; flag off keeps every per-widget observer.",
+    "The post-frame re-send means the final subscription is always the full union, even during partial migration."
+   ],
+   "regression_checks": [
+    "Background 5 s, 20 s (after the 15 s broadcaster shutdown) and 2 min, then resume: every section updates.",
+    "Network off/on while on the quote page.",
+    "No-internet toasts still appear where they do today."
+   ],
+   "after_improvement": "One subscribe on resume instead of up to 18 competing ones, and a correct final subscription set. 17 fewer lifecycle observers and network listeners per quote page.",
+   "depends_on": [
+    "E1"
+   ],
+   "verify": true
+  },
+  {
+   "id": "E11",
+   "title": "Guard multicast switch on every subscribe",
+   "summary": "BroadCastHelper.startQuoteStreaming runs _switchToMulticastIfNeeded on every call. If multicast is enabled and the last connected URL is not a multicast URL, it stops and restarts the socket. That URL is cleared or overwritten on failover and mode change, so with today's frequent subscribe calls this can restart the socket repeatedly. Verify, then only attempt the switch once per connection.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "High",
+   "risk_reason": "Shared socket code used by every module; a wrong guard could keep users on a non-multicast URL or stop the switch entirely.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "mosl_broadcaster: lib/core/broadcast_helper.dart",
+     "lines": "155-194",
+     "change": "Track _multicastSwitchAttemptedForConnection; skip while a switch is in progress or already tried since the last socket state change to loggedIn."
+    }
+   ],
+   "current": "isCurrentUrlMulticast is computed from urlStore.getLastConnectedUrl(). SocketCreator.updateSequence (mosl_socket_core socket_creator.dart:163-168) sets it to whatever URL actually logged in, clearLastConnectedUrl/resetLastUrlIfNeeded (170-190) remove it, and setConnectionMode can remove it (broadcast_helper.dart:123-129). When the multicast URL fails and a regular URL wins, or while the value is empty, every startQuoteStreaming call (E2: many per minute) runs stopStreaming() and startStreaming() again. Whether this happens in production depends on multiStreamBcast and which URL wins.",
+   "steps": [
+    "Verify first: enable the broadcaster file log, open a quote page with multicast on, and count 'Stop Streaming' / 'Start Streaming' lines per minute.",
+    "If confirmed: add a flag that is set when a switch starts and cleared on the next socketStateStream loggedIn event; skip the switch while set.",
+    "Do not switch again after a multicast attempt has ended on a non-multicast URL in the same session (fallback was deliberate).",
+    "E1/E2 reduce the number of calls and therefore the exposure even before this lands."
+   ],
+   "before_code": {
+    "path": "mosl_broadcaster: lib/core/broadcast_helper.dart",
+    "lines": "155-194",
+    "code": "  void startQuoteStreaming(Set<BroadcastSymbol> requestedList) {\n    // TAR-I26178 Check if multicast is supported and switch to multicast URL\n    // if needed\n    _switchToMulticastIfNeeded();\n    _broadcaster.subscribeQuote(requestedList);\n  }\n\n  /// Checks if multicast is supported and switches to multicast URL if needed.\n  void _switchToMulticastIfNeeded() {\n    final BroadCastUrlStore broadcastUrlStore = urlStore as BroadCastUrlStore;\n    final List<String> multiCastUrls = broadcastUrlStore.multiCastUrls;\n    final bool isMulticastSupported = broadcastUrlStore.isMultiCast;\n\n    if (isMulticastSupported) {\n      final String? currentUrl = broadcastUrlStore.getLastConnectedUrl();\n      final bool isCurrentUrlMulticast = currentUrl != null &&\n          multiCastUrls.any(\n            (String url) =>\n                currentUrl.contains(url) || url.contains(currentUrl),\n          );\n      if (!isCurrentUrlMulticast) {\n        _broadcaster.stopStreaming();\n        // ... setConnectedUrl(multiCastUrls.first).then(... startStreaming())"
+   },
+   "after_code": {
+    "code": "bool _multicastSwitchInFlight = false;\nbool _multicastFallbackSeen = false;\n\nvoid _switchToMulticastIfNeeded() {\n  final BroadCastUrlStore store = urlStore as BroadCastUrlStore;\n  if (!store.isMultiCast || store.multiCastUrls.isEmpty) return;\n  if (_multicastSwitchInFlight || _multicastFallbackSeen) return;\n  final String? currentUrl = store.getLastConnectedUrl();\n  if (currentUrl == null) return; // not connected yet: the normal connect order already puts multicast first\n  final bool isMulticast = store.multiCastUrls\n      .any((String u) => currentUrl.contains(u) || u.contains(currentUrl));\n  if (isMulticast) return;\n  _multicastSwitchInFlight = true;\n  _broadcaster.stopStreaming();\n  unawaited(store.setConnectedUrl(store.multiCastUrls.first).then((_) {\n    _broadcaster.startStreaming();\n    socketStateStream\n        .firstWhere((SocketState s) => s == SocketState.loggedIn)\n        .then((_) {\n      _multicastSwitchInFlight = false;\n      final String? now = store.getLastConnectedUrl();\n      _multicastFallbackSeen = now != null &&\n          !store.multiCastUrls.any((String u) => now.contains(u) || u.contains(now));\n    });\n  }));\n}"
+   },
+   "safety": [
+    "Keeps the TAR-I26178 behaviour for the first non-multicast connection.",
+    "Only removes repeated attempts; normal connect order (UrlStore.getConnectionUrls inserts multicast URLs first when isMultiCast) is unchanged."
+   ],
+   "regression_checks": [
+    "Multicast-enabled user: connects to multicast; kill the multicast server: falls back once and stays connected.",
+    "Non-multicast user: no change.",
+    "Socket log shows no repeated Stop/Start Streaming while browsing a quote page."
+   ],
+   "after_improvement": "At most one multicast switch per connection instead of a possible stop/restart on every subscribe call.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "E12",
+   "title": "Ask BE about re-subscribe snapshots and idle ticks",
+   "summary": "The 465 KB/min idle traffic after market close needs a server-side answer: does the socket server send a full snapshot for every symbol in each subscribe packet, even if already subscribed, and does it send heartbeats or repeated unchanged ticks after the close? The answer decides how much E2/E1 alone will save.",
+   "categories": [
+    "BE"
+   ],
+   "risk": "Low",
+   "risk_reason": "A question and a log capture; no code change in the app.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "For the quote broadcast socket (regular and TBT): (1) When a client sends a subscribe packet for symbols it is already subscribed to, does the server send a snapshot for each symbol again? (2) After market close, does the server send any packets per subscribed symbol (heartbeats, repeated last ticks, session packets), and at what rate? (3) Is there a packet size per QuoteOne/QuoteFour/QuoteEightyFour we can use to convert counts to KB? (4) Can the server ignore duplicate subscribes, or send snapshots only for newly added symbols?",
+   "files": [],
+   "current": "The client re-sends the full set whenever it differs from the last one (subscription.dart:67-82) and the page changes the set many times a minute (E2). BroadcastController also sends a NIFTY 50 snapshot as a ping when the socket has been silent for 50 s (broadcast_controller.dart:83-85, 370-377), which is small. Without the server answer we cannot tell whether 465 KB/min is snapshots, heartbeats or ticks.",
+   "steps": [
+    "Capture: with the A7 probe on, log subscribe calls and symbols per call for 5 minutes after market close; capture bytes received on the broadcast socket in the same window (Android Studio network profiler or the broadcaster BroadcastStats log).",
+    "Send the capture with the questions to the socket team.",
+    "Feed the answer back into E1 (sampling) and E2 (expected saving)."
+   ],
+   "before_code": {
+    "path": "mosl_broadcaster: lib/internal/subscription.dart",
+    "lines": "67-82",
+    "code": "  Request _addSubscriptions(\n    Set<BroadcastSymbol> currentSymbols,\n    Set<BroadcastSymbol> newSymbols,\n  ) {\n    /**\n     * Optimization for a case where same set of scrips are subscribed to\n     * consecutively.\n     */\n    if (newSymbols.length == currentSymbols.length &&\n        currentSymbols.difference(newSymbols).isEmpty) {\n      return Request.empty;\n    } else {\n      currentSymbols.addAll(newSymbols);\n      return newSymbols.quoteRequest().toRequestList();\n    }\n  }"
+   },
+   "after_code": {
+    "code": "// No app change in this item. If BE confirms snapshots on every subscribe,\n// a follow-up FE-Shared change could send only the added symbols:\nRequest _addSubscriptions(Set<BroadcastSymbol> current, Set<BroadcastSymbol> next) {\n  final Set<BroadcastSymbol> added = next.difference(current);\n  if (added.isEmpty) return Request.empty;\n  current.addAll(added);\n  return added.quoteRequest().toRequestList();\n  // Note: onLogin replays currentQuoteRequest; it would then need the full set.\n}"
+   },
+   "safety": [
+    "Information only; the follow-up sketch is not part of this item."
+   ],
+   "regression_checks": [
+    "None for this item."
+   ],
+   "after_improvement": "A known split of idle traffic into snapshots, heartbeats and ticks, so the target of 10 KB/min or less can be planned with the right changes.",
+   "depends_on": [],
+   "verify": true
+  }
+ ]
+}

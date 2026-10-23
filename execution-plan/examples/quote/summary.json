@@ -1,0 +1,324 @@
+{
+ "problems": [
+  {
+   "title": "Two carousels keep animating when nobody can see them",
+   "cause": "Market Updates and News auto-play every 4–5 s, even off screen and with the market closed.",
+   "effect": "13.3 fps of identical frames and about half a CPU core used while the page sits idle.",
+   "ids": [
+    "A1",
+    "A2"
+   ]
+  },
+  {
+   "title": "Every scroll event walks the whole widget tree",
+   "cause": "The sticky section chips search the full element tree, up to 16 times per scroll event.",
+   "effect": "Scrolling runs at 37 fps with 12 % janky frames.",
+   "ids": [
+    "B1"
+   ]
+  },
+  {
+   "title": "The whole Overview is built at once",
+   "cause": "All 16 sections are built, expanded and laid out together, and any accordion tap rebuilds all of them.",
+   "effect": "Slow first paint, heavy scrolling and high memory.",
+   "ids": [
+    "B4",
+    "B6",
+    "B9",
+    "B10"
+   ]
+  },
+  {
+   "title": "Opening the page waits on a chain of calls",
+   "cause": "Dashboard, getQuote, scrip details and getQuote again run one after another, with 100–300 ms of added delays. About 18 requests go out, 16 of them in series.",
+   "effect": "1.3 s repeat open and 2.5 s first open.",
+   "ids": [
+    "C2",
+    "C3",
+    "C4",
+    "C7",
+    "C8"
+   ]
+  },
+  {
+   "title": "Tab switches throw the data away",
+   "cause": "Every switch wipes all tab data, shows a skeleton and fetches everything again.",
+   "effect": "900 ms tab switch; Overview takes about 1.4 s behind a skeleton every time.",
+   "ids": [
+    "D1",
+    "D2",
+    "D3"
+   ]
+  },
+  {
+   "title": "Live prices are subscribed from many places",
+   "cause": "Widgets subscribe from build(), override each other's symbol sets, never unsubscribe, and rebuild on unchanged ticks.",
+   "effect": "465 KB/min of network while idle, plus extra CPU during market hours.",
+   "ids": [
+    "E1",
+    "E2",
+    "E3",
+    "E5",
+    "E6"
+   ]
+  },
+  {
+   "title": "Old quote pages stay alive",
+   "cause": "Tapping a peer or last-visited stock stacks a new quote page on top of the old one, and the chart WebView is never paused.",
+   "effect": "1.1 GB of RAM on the quote page, growing to about 2 GB.",
+   "ids": [
+    "F1",
+    "F2",
+    "G8"
+   ]
+  },
+  {
+   "title": "No chart on the quote page; the full chart is slow to open",
+   "cause": "The only chart is a full-screen WebView that loads its page and library on the first tap.",
+   "effect": "More than 7 s to the first chart.",
+   "ids": [
+    "G3",
+    "G4",
+    "G5",
+    "G7"
+   ]
+  },
+  {
+   "title": "Offline is unclear and recovery is slow",
+   "cause": "There is no banner, frozen prices look live, the Overview can stay on a skeleton, and data refreshes about 9 s after reconnecting.",
+   "effect": "Users can't tell whether the data is current.",
+   "ids": [
+    "H1",
+    "H2",
+    "H3",
+    "H6"
+   ]
+  },
+  {
+   "title": "Crash and stuck-state risks",
+   "cause": "A disposed TabController, unguarded list access, force unwraps, emits after close, and error resets that don't clear.",
+   "effect": "Non-fatal errors and screens stuck on a loader.",
+   "ids": [
+    "I1",
+    "I2",
+    "I3",
+    "I4",
+    "I5",
+    "I7"
+   ]
+  }
+ ],
+ "outcome": [
+  {
+   "area": "Quote open, repeat",
+   "today": "1,313 ms",
+   "after": "≤ 400 ms"
+  },
+  {
+   "area": "Quote open, first in session",
+   "today": "2,459 ms",
+   "after": "≤ 500 ms"
+  },
+  {
+   "area": "Tab switch",
+   "today": "900 ms (Overview 1.4 s behind a skeleton)",
+   "after": "≤ 250 ms, no skeleton on revisit"
+  },
+  {
+   "area": "Data per open",
+   "today": "≈ 103 KB, ≈ 18 requests",
+   "after": "≈ 30 KB, ≤ 4 requests in series"
+  },
+  {
+   "area": "Scroll",
+   "today": "37 fps, 11.97 % jank",
+   "after": "≥ 58 fps, ≤ 2 % jank"
+  },
+  {
+   "area": "Idle after market close",
+   "today": "13.3 fps, 54 % CPU, 465 KB/min",
+   "after": "≈ 0 fps, ≤ 3 % CPU, ≤ 10 KB/min"
+  },
+  {
+   "area": "RAM on the quote page",
+   "today": "1,126 MB, up to 1,958 MB",
+   "after": "≤ 450 MB, flat across navigations"
+  },
+  {
+   "area": "Chart",
+   "today": "none on the page; full chart > 7 s first open",
+   "after": "inline chart ≤ 0.5 s; full chart ≤ 2 s"
+  },
+  {
+   "area": "Offline",
+   "today": "no banner, ~9 s recovery",
+   "after": "banner, 'as of' marker, ≤ 2 s recovery"
+  }
+ ],
+ "package": {
+  "title": "Major changes possible in 2–4 days",
+  "plan": [
+   {
+    "owner": "Dev 1 · Idle and scrolling",
+    "rows": [
+     {
+      "when": "Day 1",
+      "ids": [
+       "C1",
+       "A1",
+       "A2",
+       "A3"
+      ],
+      "what": "Add the shared Remote Config switch holder first; the other dev's C4 needs it too. Then run the carousels only while they are visible, and keep the page index in a ValueNotifier."
+     },
+     {
+      "when": "Day 2",
+      "ids": [
+       "B7",
+       "B1"
+      ],
+      "what": "Stable section keys, then cache section offsets instead of walking the element tree on every scroll."
+     },
+     {
+      "when": "Day 3",
+      "ids": [
+       "B1",
+       "B4",
+       "B6"
+      ],
+      "what": "Finish B1. Rebuild only the accordion that changed, and build the section list once."
+     },
+     {
+      "when": "Day 4",
+      "ids": [
+       "B13",
+       "B16",
+       "B17",
+       "E2",
+       "E3"
+      ],
+      "what": "Painters repaint only on real change; no debugPrint in paint and build; MediaQuery.sizeOf; no subscribing or stream creation inside build()."
+     }
+    ]
+   },
+   {
+    "owner": "Dev 2 · Opening, data and stability",
+    "rows": [
+     {
+      "when": "Day 1",
+      "ids": [
+       "C3",
+       "C4",
+       "C6",
+       "C8",
+       "C12"
+      ],
+      "what": "Reuse the first getQuote result, remove the artificial delays, give the price an initial value, drop the wasted and duplicate Overview calls, and remove prints."
+     },
+     {
+      "when": "Day 2",
+      "ids": [
+       "C9",
+       "D4",
+       "H3",
+       "E7"
+      ],
+      "what": "Recompute only the Overview section that changed, load Fundamentals in parallel, cap each section call at 6 s, and subscribe the OHLC-only widget to quotes only."
+     },
+     {
+      "when": "Day 3",
+      "ids": [
+       "I1",
+       "I2",
+       "I3",
+       "I4",
+       "I5",
+       "I6"
+      ],
+      "what": "Crash and stuck-state fixes: TabController reference, empty name, force unwraps, emit after close, unguarded list access, catch Error in loaders."
+     },
+     {
+      "when": "Day 4",
+      "ids": [
+       "F3",
+       "F8"
+      ],
+      "what": "Decode logos at display size and dispose the depth handler. Then a QA regression pass and a re-measure on the same device."
+     }
+    ]
+   },
+   {
+    "owner": "BE / Platform · no code",
+    "rows": [
+     {
+      "when": "Day 1",
+      "ids": [
+       "G5",
+       "E12"
+      ],
+      "what": "Turn on chart_lib_prefetch_enabled in prod Remote Config. Answer the socket questions about snapshots on re-subscribe and ticks after market close."
+     }
+    ]
+   }
+  ],
+  "effect": [
+   {
+    "area": "Idle after market close",
+    "today": "13.3 fps of identical frames, 54 % CPU",
+    "after": "≈ 0 fps with the carousels off screen, and a large CPU drop (A1–A3). Idle network is reduced by E2/E3; the rest of it needs E1/E5 later."
+   },
+   {
+    "area": "Scroll",
+    "today": "37 fps, 11.97 % jank",
+    "after": "Most of the per-scroll UI-thread cost removed (B1), plus fewer rebuilds and repaints (B4, B6, B7, B13, B17). Target ≥ 55 fps; the full ≥ 58 fps needs B10."
+   },
+   {
+    "area": "Quote open",
+    "today": "1,313 ms repeat, ~18 requests",
+    "after": "About 300–500 ms faster (C3 saves one round trip, C4 100 ms, C8 three fewer requests), no zero-price frame (C6). Reaching ≤ 400 ms needs C2/C7/C10."
+   },
+   {
+    "area": "Tab switch",
+    "today": "900 ms",
+    "after": "200 ms less on every switch (C4), Fundamentals loads in parallel (D4). No-skeleton revisits need D1/D2."
+   },
+   {
+    "area": "Offline",
+    "today": "Overview skeleton can last ~200 s",
+    "after": "Worst case about 12 s, then partial content or Retry (H3)."
+   },
+   {
+    "area": "Stability",
+    "today": "Crash and stuck-loader paths",
+    "after": "Five crash paths and the stuck-loader cases closed (I1–I6)."
+   },
+   {
+    "area": "Full chart",
+    "today": "> 7 s first open",
+    "after": "Library download taken off the first open after G5 is switched on."
+   }
+  ],
+  "needs_product": "A1 A2: should the carousels rotate only while the user can see them? The change ships behind a switch that keeps today's behaviour until Product says yes.",
+  "needs_be": "G5: turn on chart_lib_prefetch_enabled in prod Remote Config. E12: answer two socket questions: are snapshots sent on every re-subscribe, and are ticks sent after market close?",
+  "later": [
+   "C2",
+   "C7",
+   "C10",
+   "D1",
+   "D3",
+   "E1",
+   "E5",
+   "E6",
+   "B10",
+   "F1",
+   "F2",
+   "G3",
+   "G7",
+   "H1",
+   "H2",
+   "H6",
+   "I8",
+   "J1"
+  ]
+ }
+}

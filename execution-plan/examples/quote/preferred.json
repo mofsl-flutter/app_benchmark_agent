@@ -1,0 +1,484 @@
+{
+ "problem_intro": "The stock quote page (packages/mo_get_quote) has the richest content in the app, but it is slow and heavy to use. Measured on a Samsung Galaxy M14 (Android 14, 60 Hz):",
+ "problem_points": [
+  "It takes 1.3–2.5 s to open and about 0.9 s to switch tabs, with a skeleton every time the user returns to Overview.",
+  "Scrolling runs at about 37 fps with 12 % janky frames.",
+  "With nothing changing on screen, it keeps redrawing, uses about half a CPU core and keeps sending data.",
+  "It uses over 1 GB of RAM and grows towards 2 GB as the user moves from stock to stock.",
+  "There is no chart on the page; the full chart takes more than 7 s to open the first time.",
+  "Offline, it gives no message and can stay on a skeleton; a few paths can crash or freeze a tab."
+ ],
+ "problem_outro": "These come from a small number of causes in the code. This plan fixes the biggest cause behind each factor, with front-end changes only, while keeping today's behaviour and features.",
+ "factors": [
+  {
+   "key": "loading",
+   "problem": "Opening a quote takes 1.3 s on a repeat open and about 2.5 s the first time. The page waits for a chain of calls that run one after another, then loads the Overview sections one by one, and shows a shimmer the whole time, although the stock's name and scrip are already known when the page opens.",
+   "title": "Loading time (opening a quote)",
+   "today": "1,313 ms repeat · 2,459 ms first open · ≈ 18 requests, 16 in series",
+   "after": "≈ 400–500 ms repeat · ≤ 700 ms first open · ≤ 4 requests in series",
+   "causes": [
+    {
+     "level": "Largest",
+     "text": "Opening calls run one after another: dashboard → getQuote → scrip details → getQuote again",
+     "ids": [
+      "C2",
+      "C3"
+     ]
+    },
+    {
+     "level": "Largest",
+     "text": "The 8 Overview sections load one by one in a for/await loop, and nothing shows until all are done",
+     "ids": [
+      "C7",
+      "C9"
+     ]
+    },
+    {
+     "level": "Large",
+     "text": "The header shows a shimmer until the whole chain finishes, although the name and scrip are already known",
+     "ids": [
+      "C5",
+      "C6"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "Nothing is cached, so reopening the same stock starts cold",
+     "ids": [
+      "C10"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "Artificial waits (100 ms sleep, 300 / 200 ms debounces) and 3 wasted or duplicate calls",
+     "ids": [
+      "C4",
+      "C8"
+     ]
+    }
+   ],
+   "ids": [
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "C6",
+    "C7",
+    "C8",
+    "C9",
+    "C10"
+   ],
+   "covers": [
+    "The full open waterfall: header on the first frame, then every section as it arrives",
+    "Repeat opens served from a short-lived cache",
+    "About 4 fewer requests per open, and no 0.00 price flash"
+   ],
+   "not": [
+    "Nothing major on the FE side; a combined backend endpoint could cut one more round trip later"
+   ]
+  },
+  {
+   "key": "tabs",
+   "problem": "Switching tabs takes about 0.9 s, and going back to Overview shows a skeleton for about 1.4 s every time. Each switch throws away the data that was already loaded and fetches all of it again.",
+   "title": "Tab switching",
+   "today": "900 ms median · Overview 1.37–1.51 s behind a skeleton every time",
+   "after": "≤ 250 ms · no skeleton when revisiting a tab",
+   "causes": [
+    {
+     "level": "Largest",
+     "text": "Every switch wipes all three data managers and fetches everything again",
+     "ids": [
+      "D1"
+     ]
+    },
+    {
+     "level": "Large",
+     "text": "The whole content is replaced by a shimmer during the switch",
+     "ids": [
+      "D2"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "200 ms debounce on every switch",
+     "ids": [
+      "C4"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "Fundamentals loads its sections one after another",
+     "ids": [
+      "D4"
+     ]
+    }
+   ],
+   "ids": [
+    "D1",
+    "D2",
+    "D4",
+    "C4"
+   ],
+   "covers": [
+    "Revisits show the last data at once and refresh in the background",
+    "Fundamentals' first load in 2 parallel rounds instead of about 5 serial calls"
+   ],
+   "not": [
+    "Keeping the tab widget trees alive offstage (D3): large and high risk; D1 + D2 already remove the skeleton and the refetch"
+   ]
+  },
+  {
+   "key": "scroll",
+   "problem": "Scrolling runs at about 37 fps with 12 % janky frames on a 60 Hz phone. The page does heavy work on every scroll event, builds all 16 Overview sections at once, and rebuilds or repaints far more than what changed.",
+   "title": "Scrolling and janky frames",
+   "today": "37 fps · 11.97 % janky frames · tab-switch frames 40–45 fps",
+   "after": "≥ 58 fps · ≤ 2 % janky frames",
+   "causes": [
+    {
+     "level": "Largest",
+     "text": "On every scroll event the sticky chips walk the whole widget tree, up to 16 times",
+     "ids": [
+      "B7",
+      "B1"
+     ]
+    },
+    {
+     "level": "Largest",
+     "text": "All 16 Overview sections are built and laid out at once (one shrink-wrapped list inside a SliverToBoxAdapter)",
+     "ids": [
+      "B10"
+     ]
+    },
+    {
+     "level": "Large",
+     "text": "Any accordion tap rebuilds every section; the section list is re-created on every build",
+     "ids": [
+      "B4",
+      "B6"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "A 300 ms programmatic scroll fires in the middle of the user's fling",
+     "ids": [
+      "B3",
+      "B2"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "Custom painters repaint every frame and have no repaint boundaries",
+     "ids": [
+      "B13",
+      "B15",
+      "B18"
+     ]
+    }
+   ],
+   "ids": [
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B6",
+    "B7",
+    "B10",
+    "B13",
+    "B15",
+    "B18"
+   ],
+   "covers": [
+    "Per-scroll UI-thread work removed",
+    "Only sections near the viewport are built (lazy slivers)",
+    "Rebuilds and repaints limited to what actually changed",
+    "No forced jump inside a fling"
+   ],
+   "not": [
+    "Lighter shadows and blur (B12) and IntrinsicHeight removal (B11): smaller gains, done later"
+   ]
+  },
+  {
+   "key": "idle",
+   "problem": "With the market closed and nothing changing on screen, the page still redraws about 13 times a second, uses about half a CPU core and keeps sending data. This drains battery and heats the phone while the user just reads the page.",
+   "title": "Idle cost (CPU, battery, background data)",
+   "today": "13.3 fps of identical frames · 54.3 % CPU · 465 KB/min after market close",
+   "after": "≈ 0 fps · ≤ 5 % CPU · much lower background data",
+   "causes": [
+    {
+     "level": "Largest",
+     "text": "Two carousels auto-play forever, even off screen, collapsed or in the background",
+     "ids": [
+      "A1",
+      "A2"
+     ]
+    },
+    {
+     "level": "Large",
+     "text": "Widgets subscribe to live prices from build() and override each other, re-sending subscribe packets",
+     "ids": [
+      "E2",
+      "E3"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "Collapsed sections stay mounted and rebuild on every tick",
+     "ids": [
+      "E9"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "Up to four shimmer animations run at once while loading",
+     "ids": [
+      "A4"
+     ]
+    }
+   ],
+   "ids": [
+    "A1",
+    "A2",
+    "A4",
+    "E2",
+    "E3",
+    "E9"
+   ],
+   "covers": [
+    "No animation or rebuild work while nothing changes on screen",
+    "Subscribe traffic only on page load or symbol change"
+   ],
+   "not": [
+    "The single per-page price hub and the mosl_broadcaster unsubscribe API (E1, E5): shared-package work, needed for ≤ 10 KB/min"
+   ]
+  },
+  {
+   "key": "chart",
+   "title": "Chart",
+   "problem": "The quote page has no chart of its own. The only chart is a full-screen WebView that starts cold on the first tap, so the user waits more than 7 s, and the quote page underneath keeps doing tick work while the chart is open.",
+   "today": "No chart on the quote page · full chart > 7 s on first open · quote page keeps working under the chart",
+   "after": "WebView start moved off the first chart tap · no tick work under the chart · live price restored on return",
+   "causes": [
+    {
+     "level": "Largest",
+     "text": "The WebView and chart path start cold on the first chart tap",
+     "ids": [
+      "G4"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "The quote page under the chart keeps rebuilding on ticks, and its price can stay frozen after the chart closes",
+     "ids": [
+      "F2",
+      "G9"
+     ]
+    }
+   ],
+   "ids": [
+    "G4",
+    "G9"
+   ],
+   "covers": [
+    "The cold WebView start (about 4 s) happens while the user is still on the quote page, not on the chart tap",
+    "The quote page does no work while the chart is on top and resumes its live price on return"
+   ],
+   "not": [
+    "An inline chart on the quote page (G3): needs a price-history API from the backend",
+    "Preloading the chart page and pausing the hidden WebView (G7, G8): high-risk work in the WebView plugin"
+   ]
+  },
+  {
+   "key": "memory",
+   "problem": "The quote page uses about 1.1 GB of RAM, mostly graphics, and grows to about 2 GB as the user moves from stock to stock, because old quote pages stay alive underneath.",
+   "title": "Memory",
+   "today": "1,126 MB on the quote page (775 MB graphics) · up to 1,958 MB after ~20 navigations",
+   "after": "≈ 450–600 MB · flat across quote-to-quote navigation",
+   "causes": [
+    {
+     "level": "Largest",
+     "text": "Tapping a peer or last-visited stock stacks a new quote page on top; old pages stay alive with streams and layers",
+     "ids": [
+      "F1",
+      "F2"
+     ]
+    },
+    {
+     "level": "Large",
+     "text": "Every section is built and kept in memory at once",
+     "ids": [
+      "B10"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "Logos decoded at full size; depth handler not disposed",
+     "ids": [
+      "F3",
+      "F8"
+     ]
+    }
+   ],
+   "ids": [
+    "F1",
+    "F2",
+    "F3",
+    "F8",
+    "B10"
+   ],
+   "covers": [
+    "One live quote page at a time, and covered pages paused",
+    "Only visible sections hold layers",
+    "Smaller images, no leaked depth timers"
+   ],
+   "not": [
+    "Releasing the chart WebView under memory pressure (F5): shared-package, high risk"
+   ]
+  },
+  {
+   "key": "offline",
+   "problem": "When the network drops there is no message, frozen prices look live, the Overview can sit on a skeleton for minutes, and data only comes back about 9 s after the network returns.",
+   "title": "Offline and reconnect",
+   "today": "No banner · Overview can stay on a skeleton · ≈ 9 s to recover",
+   "after": "Banner · no endless skeleton · ≈ 1–2 s to recover",
+   "causes": [
+    {
+     "level": "Largest",
+     "text": "About 10 serial calls each wait up to 20 s before giving up",
+     "ids": [
+      "H3"
+     ]
+    },
+    {
+     "level": "Large",
+     "text": "Nothing listens for the network coming back; recovery waits for the socket",
+     "ids": [
+      "H5",
+      "H6"
+     ]
+    },
+    {
+     "level": "Medium",
+     "text": "No offline banner on the quote page",
+     "ids": [
+      "H1"
+     ]
+    }
+   ],
+   "ids": [
+    "H1",
+    "H3",
+    "H5",
+    "H6"
+   ],
+   "covers": [
+    "Offline shows a banner and cached content instead of a skeleton",
+    "Failed sections refresh as soon as the network returns"
+   ],
+   "not": [
+    "An 'as of' time label on frozen prices (H2), left for a later UI pass"
+   ]
+  },
+  {
+   "key": "stability",
+   "problem": "A few code paths can crash or leave a tab stuck on a loader: unguarded list access, Errors that 'on Exception' does not catch, emits after the page closes, and a disposed TabController kept by the cubit.",
+   "title": "Stability",
+   "today": "5 known crash / stuck-loader paths",
+   "after": "Closed",
+   "causes": [
+    {
+     "level": "Largest",
+     "text": "Unguarded list access (indexWhere −1, .first on empty, split()[1]) and Errors not caught by 'on Exception'",
+     "ids": [
+      "I5",
+      "I6"
+     ]
+    },
+    {
+     "level": "Large",
+     "text": "Emits after the page closes; disposed TabController kept by the cubit",
+     "ids": [
+      "I4",
+      "I1"
+     ]
+    }
+   ],
+   "ids": [
+    "I1",
+    "I4",
+    "I5",
+    "I6"
+   ],
+   "covers": [
+    "Options and futures tabs never freeze on a loader",
+    "No crash on swipe after a segment switch or when leaving during load"
+   ],
+   "not": [
+    "Section-level errors instead of a full-page error (I8), a larger UI change left for later"
+   ]
+  }
+ ],
+ "foundation": "C1",
+ "phases": [
+  {
+   "title": "Phase 1 · Quick wins (low and medium risk, small)",
+   "ids": [
+    "C1",
+    "A1",
+    "A2",
+    "B7",
+    "B1",
+    "B4",
+    "B6",
+    "B13",
+    "B15",
+    "B18",
+    "C3",
+    "C4",
+    "C6",
+    "C8",
+    "C9",
+    "D4",
+    "E2",
+    "E3",
+    "I1",
+    "I4",
+    "I5",
+    "I6",
+    "F3",
+    "F8",
+    "H3"
+   ],
+   "desc": "Switch holder first, then the idle, scroll, open and stability fixes that need no structural change."
+  },
+  {
+   "title": "Phase 2 · Loading and tab structure (flagged)",
+   "ids": [
+    "C2",
+    "C7",
+    "C5",
+    "C10",
+    "D1",
+    "D2",
+    "A4",
+    "E9",
+    "B3",
+    "B2"
+   ],
+   "desc": "Parallel open and Overview, header from arguments, section cache, keeping tab data. Every change ships behind a switch that keeps today's behaviour when off."
+  },
+  {
+   "title": "Phase 3 · Rendering, memory, chart and offline (flagged)",
+   "ids": [
+    "B10",
+    "F1",
+    "F2",
+    "G4",
+    "G9",
+    "H5",
+    "H6",
+    "H1"
+   ],
+   "desc": "Lazy slivers, no stacked quote pages, chart warm-up and quote-page pause under the chart, offline banner and reconnect refresh."
+  }
+ ]
+}

@@ -1,0 +1,488 @@
+{
+  "section": "K",
+  "title": "Tests and performance monitoring",
+  "intro": "This section covers how we know the module works and stays fast. Today the module has cubit and repository tests only, mostly checking state types; two tests expect buggy behaviour, offline paths cannot be tested because connectivity is a global function, and there are no widget, golden or on-device performance tests. Production has Datadog RUM and Crashlytics but no timing for the quote page itself. The changes add data-level, race, lifecycle and widget tests, a nightly on-device timeline test, and custom RUM timings with agreed targets.",
+  "measured": [
+    {
+      "metric": "Tests in packages/mo_get_quote/test",
+      "current": "134 cubit + 83 repository-impl + 32 repository = 249; 0 widget, 0 data-manager/helper",
+      "expected": "+ data-manager/helper, race, widget and golden suites"
+    },
+    {
+      "metric": "Assertion style in cubit tests",
+      "current": "260 isA<> matchers, 1 .having()",
+      "expected": "data checks on every main load path"
+    },
+    {
+      "metric": "Tests that encode known bugs",
+      "current": "2 (test:1121, test:1060-1064)",
+      "expected": "0"
+    },
+    {
+      "metric": "On-device runtime perf tests in CI",
+      "current": "0 (only compile-time workflow)",
+      "expected": "1 nightly quote smoke test"
+    },
+    {
+      "metric": "Production timings for quote open / tab switch / chart open",
+      "current": "none (Datadog RUM views and HTTP only)",
+      "expected": "p50/p75/p95 per release with alerts"
+    }
+  ],
+  "changes": [
+    {
+      "id": "K1",
+      "title": "Assert data, not only state types",
+      "summary": "The cubit suite has 260 isA<...>() matchers and 1 .having(); most tests pass as long as the right state class appears. Add data checks to the tests that cover the main flows.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Test-only change.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/test/mo_get_quote_cubit_test.dart",
+          "lines": "1071-1093 and similar",
+          "change": "Replace bare isA<> with isA<>().having(...) on the fields that matter."
+        }
+      ],
+      "current": "134 cubit tests (4,141 lines), 83 repository-impl tests (1,109 lines) and 32 repository tests (563 lines) exist. There are no widget tests and no tests for the data managers, helpers or extensions. Typical cubit tests build an empty proto response and expect a single isA<MoGetQuoteTechnicalLoaded>(), so a regression that loads the wrong section or drops data still passes.",
+      "steps": [
+        "For each load path (dashboard, cash, futures, options, index, overview, fundamentals, technicals, news, transactions) add one test with a filled response and .having() checks on the data manager fields.",
+        "Use proto builders (e.g. QuoteTechnicalResponse()..movingAverage = MovingAverage(...)) - protobuf messages can be built field by field, which the header note in the test file says is not possible.",
+        "Add a small test-data file test/fixtures/quote_fixtures.dart shared by tests.",
+        "Track coverage with 'flutter test --coverage' and publish lcov for the package in CI."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/test/mo_get_quote_cubit_test.dart",
+        "lines": "1071-1092",
+        "code": "    blocTest<MoGetQuoteCubit, MoGetQuoteState>(\n      'emits TechnicalLoaded on successful load',\n      setUp: () {\n        when(() => mockRepository.fetchQuoteTechnicalData(\n              symbol: any(named: 'symbol'),\n              sections: any(named: 'sections'),\n              isIndex: any(named: 'isIndex'),\n              indexName: any(named: 'indexName'),\n            )).thenAnswer((_) async => QuoteTechnicalResponse());\n      },\n      // ... build\n      act: (cubit) => cubit.loadEssentialTechnicalData('RELIANCE'),\n      expect: () => [isA<MoGetQuoteTechnicalLoaded>()],\n    );"
+      },
+      "after_code": {
+        "code": "    blocTest<MoGetQuoteCubit, MoGetQuoteState>(\n      'TechnicalLoaded carries moving averages and beta from the API',\n      setUp: () {\n        when(() => mockRepository.fetchQuoteTechnicalData(\n              symbol: any(named: 'symbol'),\n              sections: any(named: 'sections'),\n              isIndex: any(named: 'isIndex'),\n              indexName: any(named: 'indexName'),\n            )).thenAnswer((_) async => QuoteFixtures.technicalsWithMaAndBeta());\n      },\n      build: () => QuoteFixtures.cashCubit(mockRepository),\n      act: (cubit) => cubit.loadEssentialTechnicalData('RELIANCE'),\n      expect: () => [\n        isA<MoGetQuoteTechnicalLoaded>()\n            .having((s) => s.data.movingAverageData?.ema.length, 'ema count', 3)\n            .having((s) => s.data.betaData?.entry.isNotEmpty, 'beta present', true)\n            .having((s) => s.data.failedSections, 'no failures', isEmpty),\n      ],\n    );"
+      },
+      "safety": [
+        "Tests only; no production code touched."
+      ],
+      "regression_checks": [
+        "Whole package test run stays green; run time stays under ~1 min."
+      ],
+      "after_improvement": "Main load paths covered by data-level assertions; line coverage reported per PR.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "K2",
+      "title": "Update tests that lock in buggy behaviour",
+      "summary": "Two tests encode bugs as expected behaviour: one technicals failure must produce two MoGetQuoteError states, and one fundamentals load must produce three identical FundamentalLoaded. Change them together with the fixes.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Test-only; changes land in the same PR as the cubit fix they describe.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/test/mo_get_quote_cubit_test.dart",
+          "lines": "1116-1121",
+          "change": "Expect a single TechnicalError (flag on) or a single MoGetQuoteError (flag off)."
+        },
+        {
+          "path": "packages/mo_get_quote/test/mo_get_quote_cubit_test.dart",
+          "lines": "1058-1064",
+          "change": "Expect one FundamentalLoaded when data does not change (after J4)."
+        }
+      ],
+      "current": "test:1121 expects [isA<MoGetQuoteError>(), isA<MoGetQuoteError>()] for one failing technicals call, which is the duplicate emit described in I8. test:1060-1064 expects three FundamentalLoaded for one load with empty data. If the cubit is fixed first these tests fail, and the easy reaction is to revert the fix.",
+      "steps": [
+        "With I8: technicals failure test expects exactly one error state and no full-page MoGetQuoteError when the flag is on; keep a flag-off variant.",
+        "With J4: fundamentals test expects one FundamentalLoaded with .having(data.failedSections, isEmpty).",
+        "Add a comment next to each expectation linking the change id."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/test/mo_get_quote_cubit_test.dart",
+        "lines": "1116-1121",
+        "code": "      act: (cubit) async {\n        try {\n          await cubit.loadEssentialTechnicalData('RELIANCE');\n        } catch (_) {}\n      },\n      expect: () => [isA<MoGetQuoteError>(), isA<MoGetQuoteError>()],"
+      },
+      "after_code": {
+        "code": "      // I8: one failure -> one section error, page stays usable\n      act: (cubit) => cubit.loadEssentialTechnicalData('RELIANCE'),\n      expect: () => [\n        isA<MoGetQuoteTechnicalError>()\n            .having((s) => s.error.message, 'message', 'failed')\n            .having((s) => s.dataManager.failedSections.length, 'failed sections',\n                MoGetQuoteTechnicalSubsections.values.length),\n      ],\n\n      // flag off variant keeps the legacy page error, emitted once\n      // expect: () => [isA<MoGetQuoteError>()],"
+      },
+      "safety": [
+        "Each test change ships with the production change it reflects, reviewed together."
+      ],
+      "regression_checks": [
+        "Package tests green with the flag on and off."
+      ],
+      "after_improvement": "Tests describe intended behaviour; no test blocks the I8/J4 fixes.",
+      "depends_on": [
+        "I8",
+        "J4"
+      ],
+      "verify": false
+    },
+    {
+      "id": "K3",
+      "title": "Make offline paths testable",
+      "summary": "changeSection calls the global checkInternetConnectivity(), so the suite cannot simulate offline; the test file says so and tests only the online path. Use the injected checker from J3 and add offline tests.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Test-only once J3 is in.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/test/mo_get_quote_cubit_test.dart",
+          "lines": "3445-3470",
+          "change": "Build the cubit with connectivity: ({bool force = false}) async => false and assert the section error."
+        }
+      ],
+      "current": "The comment at test:3445-3449 notes the dependency on the global function and that it 'typically returns true' in tests; setUpAll mocks the connectivity plugin channel to 'wifi' (test:58-62). The offline banner, no-internet section error, stuck isOverviewLoading (H4) and recovery after reconnect (H6) have no tests.",
+      "steps": [
+        "After J3, add a helper buildCubit({bool online = true}).",
+        "Tests: offline tab switch emits SectionError and resets isOverviewLoading; going online and retrying loads data; fundamentals offline failure then online success shows data (I7).",
+        "When H6 lands, test that a reconnect event refreshes only the visible and failed sections."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/test/mo_get_quote_cubit_test.dart",
+        "lines": "3445-3452",
+        "code": "  // TEST #21 — changeSection with no internet connectivity\n// NOTE: This test depends on checkInternetConnectivity() which is a global function.\n// If it cannot be mocked, this test may need to be skipped or adapted.\n// The function is from trader_network package and checks actual connectivity.\n// In test environment it typically returns true, so we test the happy path instead.\n  group('changeSection() internet check path', () {\n    blocTest<MoGetQuoteCubit, MoGetQuoteState>(\n      'proceeds with section change when internet is available',"
+      },
+      "after_code": {
+        "code": "  group('changeSection() offline', () {\n    blocTest<MoGetQuoteCubit, MoGetQuoteState>(\n      'emits SectionError and clears loading flag when offline',\n      build: () => MoGetQuoteCubit(\n        mockRepository,\n        connectivity: ({bool force = false}) async => false, // J3\n      )..quoteInfo = QuoteFixtures.relianceInfo(),\n      act: (cubit) => cubit.changeSection(\n          MoGetQuoteSections.fundamentals, MoGetQuoteAssetType.cash),\n      expect: () => [\n        isA<MoGetQuoteSectionError>()\n            .having((s) => s.section, 'section', MoGetQuoteSections.fundamentals),\n      ],\n      verify: (cubit) {\n        expect(cubit.isOverviewLoading, isFalse); // H4\n        verifyNever(() => mockRepository.fetchQuoteFundamentalData(\n            symbol: any(named: 'symbol'), sections: any(named: 'sections')));\n      },\n    );\n  });"
+      },
+      "safety": [
+        "Default constructor keeps the real checker, so app behaviour is unaffected."
+      ],
+      "regression_checks": [
+        "Package tests green."
+      ],
+      "after_improvement": "Offline and reconnect behaviour covered by fast unit tests.",
+      "depends_on": [
+        "J3",
+        "I7"
+      ],
+      "verify": false
+    },
+    {
+      "id": "K4",
+      "title": "Unit-test data managers and pure helpers",
+      "summary": "OverviewDataManager, FundamentalDataManager, TechnicalDataManager, the extensions and the formatting helpers have no tests. Add table-driven tests, including the copyWith(null) and resetErrors cases that are broken today.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Test-only.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/test/domain/data_managers_test.dart",
+          "lines": "new",
+          "change": "copyWith keep/clear, addFailedSections, resetErrors, getVisibleSections, getAvailable*Types."
+        },
+        {
+          "path": "packages/mo_get_quote/test/helper/quote_formatters_test.dart",
+          "lines": "new",
+          "change": "formatExpiry, strike formatting per exchange, formatYear/formatCurrency, comparePeriods, formatTimeAgo."
+        },
+        {
+          "path": "packages/mo_get_quote/test/extensions/quote_overview_extensions_test.dart",
+          "lines": "new",
+          "change": "processedNewsItems, researchIdeasList, getTopMutualFunds."
+        }
+      ],
+      "current": "test/ has only the cubit, repository and repository-impl suites. The no-op in copyWith(firstError: null) (domain managers, e.g. overview_data_manager.dart:85-103) and the broken TechnicalDataManager.resetErrors would have been caught by a three-line test.",
+      "steps": [
+        "Data managers: for each nullable field, copyWith(other: x) keeps it, resetErrors() clears errors and keeps data (fails today for Technical; passes after I7).",
+        "getVisibleSections for cash/ETF/index/futures/options with and without CAS.",
+        "Helpers: formatExpiry(0) == '', known seconds -> '26 Jun 2025'; NSE_CD/BSE_CD strike divisors; formatYear('Jun 24') == 'Jun 2024' and formatYear('FY24') does not throw (I5).",
+        "Flash-news visibility rule with a fake clock (J14)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/domain/overview_data_manager.dart",
+        "lines": "85-91",
+        "code": "    return OverviewDataManager(\n      marketDepthData: marketDepthData ?? this.marketDepthData,\n      keyStatisticsData: keyStatisticsData ?? this.keyStatisticsData,\n      newsData: newsData ?? this.newsData,\n      marketUpdatesData: marketUpdatesData ?? this.marketUpdatesData,\n      analystRatingData: analystRatingData ?? this.analystRatingData,\n      quantScoreData: quantScoreData ?? this.quantScoreData,"
+      },
+      "after_code": {
+        "code": "void main() {\n  group('TechnicalDataManager.resetErrors', () {\n    test('clears failedSections and firstError, keeps data', () {\n      final MovingAverage ma = MovingAverage();\n      final TechnicalDataManager m = TechnicalDataManager(movingAverageData: ma)\n          .addFailedSections(<String>['Beta'], error: ErrorException(key: 'No Internet!', message: 'x'));\n      final TechnicalDataManager r = m.resetErrors();\n      expect(r.failedSections, isEmpty);\n      expect(r.firstError, isNull); // fails today (copyWith no-op), passes after I7\n      expect(identical(r.movingAverageData, ma), isTrue);\n    });\n  });\n\n  test('formatYear tolerates periods without a space', () {\n    expect(FinancialChartMapper.formatYear('Jun 24'), 'Jun 2024');\n    expect(() => FinancialChartMapper.formatYear('FY24'), returnsNormally);\n  });\n}"
+      },
+      "safety": [
+        "Tests only."
+      ],
+      "regression_checks": [
+        "Package tests green after I5/I7/J1 step 1."
+      ],
+      "after_improvement": "Data managers and helpers covered; the copyWith/reset class of bug is caught automatically.",
+      "depends_on": [
+        "I5",
+        "I7",
+        "J1"
+      ],
+      "verify": false
+    },
+    {
+      "id": "K5",
+      "title": "Test races and emit-after-close",
+      "summary": "Add tests for fast switching (latest request wins), leaving the page while background loads run (no emit after close), and cache hit/miss in the repository.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Test-only.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/test/mo_get_quote_cubit_race_test.dart",
+          "lines": "new",
+          "change": "Completer-driven mocks for out-of-order responses; fake_async for debounce timers."
+        },
+        {
+          "path": "packages/mo_get_quote/test/data/mo_get_quote_repository_impl_test.dart",
+          "lines": "new group",
+          "change": "Cache hit returns without network; miss calls network once; TTL expiry."
+        }
+      ],
+      "current": "close() (cubit 3290-3295) only cancels the two debounce timers. There are no tests where responses arrive out of order, where the cubit is closed mid-load, or where the repository's cache is exercised end to end.",
+      "steps": [
+        "Latest wins: changeAssetType(futures) then changeAssetType(cash) within 300 ms with the futures response delayed; expect final AssetTypeDataLoaded for cash only (I11 request token).",
+        "Exchange toggle NSE->BSE->NSE with delayed scrip details; selectedScripId and broadcastSymbol end on NSE.",
+        "Emit after close: start loadAssetTypeData with Completers, call cubit.close(), complete the futures; expect no error in the zone (runZonedGuarded collects errors) (I4).",
+        "Tab switch during a fundamentals load: sections from the old load do not appear in the new tab's state.",
+        "Repository: with a fake cache store, second call within TTL makes no HTTP call."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "3290-3295",
+        "code": "  @override\n  Future<void> close() {\n    _debounceTimer?.cancel();\n    _sectionDebounceTimer?.cancel();\n    return super.close();\n  }"
+      },
+      "after_code": {
+        "code": "test('no error when closed while overview loads', () async {\n  final Completer<QuoteOverviewResponse> overview = Completer<QuoteOverviewResponse>();\n  when(() => repo.fetchQuoteOverviewData(symbol: any(named: 'symbol'), sections: any(named: 'sections')))\n      .thenAnswer((_) => overview.future);\n  final List<Object> errors = <Object>[];\n  await runZonedGuarded(() async {\n    final MoGetQuoteCubit cubit = QuoteFixtures.cashCubit(repo);\n    unawaited(cubit.loadAssetTypeData());\n    await pumpEventQueue();\n    await cubit.close();\n    overview.complete(QuoteOverviewResponse());\n    await pumpEventQueue();\n  }, (Object e, StackTrace _) => errors.add(e));\n  expect(errors, isEmpty); // fails today with 'Cannot emit new states after calling close'\n});"
+      },
+      "safety": [
+        "Tests only."
+      ],
+      "regression_checks": [
+        "Run the race suite 20 times in CI (--repeat) to catch flakiness."
+      ],
+      "after_improvement": "Race and lifecycle bugs (I4, I11) are covered and cannot silently return.",
+      "depends_on": [
+        "I4",
+        "I11"
+      ],
+      "verify": false
+    },
+    {
+      "id": "K6",
+      "title": "Add widget and golden tests for key areas",
+      "summary": "There are no widget tests. Add widget tests and goldens for the header (StockInfoCard / app bar), the content area states, the main Overview sections, per-section errors and the offline banner.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Test-only; goldens need a fixed font and device size to be stable.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/test/widgets/header_test.dart",
+          "lines": "new",
+          "change": "StockInfoCard with empty name (I2), long name, cash/futures/options variants; text scale 2.0 (J13)."
+        },
+        {
+          "path": "packages/mo_get_quote/test/widgets/content_area_test.dart",
+          "lines": "new",
+          "change": "Shimmer on Loading, inline error on SectionError, correct tab widget on SectionChanged."
+        },
+        {
+          "path": "packages/mo_get_quote/test/widgets/goldens/",
+          "lines": "new",
+          "change": "Light/dark goldens for header, Overview key sections, offline banner."
+        },
+        {
+          "path": "packages/mo_get_quote/test/helpers/fake_broadcast.dart",
+          "lines": "new",
+          "change": "Fake tick stream for StreamingBaseWidget."
+        }
+      ],
+      "current": "QuoteContentArea picks the widget by state (quote_content_area.dart:45-58 and 135-152); StockInfoCard and the app bar depend on live ticks through StreamingBaseWidget. None of this is covered, so I1/I2/I8/J13 regressions would only be found manually.",
+      "steps": [
+        "Create a test harness: MaterialApp with mofsl theme, BlocProvider with a MockCubit (bloc_test MockCubit) and a fake broadcaster.",
+        "Widget tests for each QuoteContentArea state.",
+        "Goldens (light/dark, 360x800, textScaler 1.0 and 2.0) for header and Overview sections; tag 'golden' and run on one CI image only.",
+        "Offline banner golden once H1 exists."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+        "lines": "45-58",
+        "code": "    return BlocBuilder<MoGetQuoteCubit, MoGetQuoteState>(\n      buildWhen: (final MoGetQuoteState prev, final MoGetQuoteState curr) =>\n          curr is MoGetQuoteLoading ||\n          curr is MoGetQuoteAssetTypeDataLoading ||\n          curr is MoGetQuoteSectionChangeLoading ||\n          curr is MoGetQuoteSectionChanged ||\n          curr is MoGetQuoteAssetTypeDataLoaded ||\n          curr is MoGetQuoteSectionError,\n      builder: (final BuildContext context, final MoGetQuoteState state) {\n        if (state is MoGetQuoteLoading ||\n            state is MoGetQuoteAssetTypeDataLoading ||\n            state is MoGetQuoteSectionChangeLoading) {\n          return const QuoteContentAreaShimmer();\n        }"
+      },
+      "after_code": {
+        "code": "testWidgets('SectionError shows inline error with retry', (tester) async {\n  final MockQuoteCubit cubit = MockQuoteCubit();\n  whenListen(cubit, Stream<MoGetQuoteState>.fromIterable(<MoGetQuoteState>[\n    MoGetQuoteSectionError(MoGetQuoteSections.technicals,\n        ErrorException(key: 'x', message: 'failed'), 'failed'),\n  ]), initialState: MoGetQuoteSectionChangeLoading(MoGetQuoteSections.technicals));\n  await tester.pumpWidget(QuoteTestApp(cubit: cubit, child: const QuoteContentArea()));\n  await tester.pump();\n  expect(find.byType(ErrorCaseWidget), findsOneWidget);\n  expect(find.byType(QuoteContentAreaShimmer), findsNothing);\n});\n\ntestWidgets('header renders with empty symbol name', (tester) async {\n  await tester.pumpWidget(QuoteTestApp(cubit: QuoteFixtures.cubitWithEmptyName(), child: StockInfoCard(cubit: ...)));\n  expect(tester.takeException(), isNull); // I2\n});"
+      },
+      "safety": [
+        "Tests only; goldens isolated by tag so font differences on other machines do not block PRs."
+      ],
+      "regression_checks": [
+        "Golden diffs reviewed on intentional UI changes."
+      ],
+      "after_improvement": "Header, content-area states and Overview sections covered by widget tests; visual changes visible in PR diffs.",
+      "depends_on": [
+        "I2",
+        "I8"
+      ],
+      "verify": false
+    },
+    {
+      "id": "K7",
+      "title": "Add an on-device performance smoke test in CI",
+      "summary": "Add an integration_test that opens a quote, switches tabs, scrolls Overview and idles, recording a timeline summary (frame build/raster times, missed frames, idle frame count, open time). Run it in profile mode on a real device on a schedule and keep the numbers per build.",
+      "categories": [
+        "FE",
+        "FE-Shared"
+      ],
+      "risk": "Low",
+      "risk_reason": "New test and CI job only; no app code change. It lives in apps/super_app because it needs the real app shell.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "apps/super_app/integration_test/quote_perf_smoke_test.dart",
+          "lines": "new",
+          "change": "traceAction around open, tab switch, scroll; idle window after market close data."
+        },
+        {
+          "path": "apps/super_app/test_driver/perf_driver.dart",
+          "lines": "new",
+          "change": "integrationDriver(responseDataCallback) writing timeline_summary.json."
+        },
+        {
+          "path": "apps/super_app/pubspec.yaml",
+          "lines": "dev_dependencies",
+          "change": "Declare integration_test / flutter_driver if not already declared (the existing logging_device_metrics_test.dart imports integration_test)."
+        },
+        {
+          "path": ".github/workflows/quote_perf_smoke.yml",
+          "lines": "new",
+          "change": "Nightly + manual job: build profile APK, run on Firebase Test Lab or a lab device, upload summary, fail on large regression."
+        }
+      ],
+      "current": "apps/super_app/integration_test/ has only logging_device_metrics_test.dart. .github/workflows has performance_verification.yml (compile/build time) and firebase_deploy.yml; nothing measures runtime frame times. The benchmark numbers (37 fps scroll, 13.3 fps idle redraw, 1.3 s repeat open, 900 ms tab switch) were taken by hand.",
+      "steps": [
+        "Test flow: login with a test account (credentials from CI secrets) or a mocked session; open RELIANCE from search; wait for header price; switch Overview -> Fundamentals -> Overview; fling-scroll Overview 5 times; then idle 10 s with no input.",
+        "Wrap each step in binding.traceAction(..., reportKey: 'quote_open' / 'tab_switch' / 'overview_scroll' / 'idle'); compute TimelineSummary.summarize(timeline): average/90th/99th frame build and raster time, missed frame count; for idle, count frames rendered.",
+        "Measure open time as a Stopwatch from tap to find.byKey(QuoteKeys.headerPrice) visible.",
+        "Run in --profile on a mid-range Android device (same class as the Samsung M14 used in the benchmark); emulators are not reliable for frame times.",
+        "Store JSON per build as a CI artifact; start as report-only, then fail the job when 90th-percentile frame time or open time regresses by more than 20 % against the last 5 runs."
+      ],
+      "before_code": {
+        "path": "apps/super_app/integration_test/logging_device_metrics_test.dart",
+        "lines": "25-28",
+        "code": "void main() {\n  IntegrationTestWidgetsFlutterBinding.ensureInitialized();\n\n  const int n = 1000;"
+      },
+      "after_code": {
+        "code": "void main() {\n  final IntegrationTestWidgetsFlutterBinding binding =\n      IntegrationTestWidgetsFlutterBinding.ensureInitialized();\n\n  testWidgets('quote page perf smoke', (WidgetTester tester) async {\n    await app.main(); // assumed test entry with a test session\n    await tester.pumpAndSettle();\n    final Stopwatch open = Stopwatch()..start();\n    await binding.traceAction(() async {\n      await openQuoteFromSearch(tester, 'RELIANCE');\n      await pumpUntilFound(tester, find.byKey(const ValueKey('quote_header_price')));\n    }, reportKey: 'quote_open');\n    binding.reportData!['quote_open_ms'] = open.elapsedMilliseconds;\n\n    await binding.traceAction(() async {\n      for (int i = 0; i < 5; i++) {\n        await tester.fling(find.byType(CustomScrollView), const Offset(0, -600), 3000);\n        await tester.pumpAndSettle();\n      }\n    }, reportKey: 'overview_scroll');\n\n    await binding.traceAction(() => Future<void>.delayed(const Duration(seconds: 10)),\n        reportKey: 'idle_10s'); // expect ~0 frames when nothing animates\n  });\n}"
+      },
+      "safety": [
+        "Runs outside the release pipeline; report-only until baselines are stable."
+      ],
+      "regression_checks": [
+        "Job runs green 3 nights in a row with stable numbers (spread < 10 %)."
+      ],
+      "after_improvement": "Scroll fps, jank %, idle frames and open time recorded for every nightly build, so module changes show up as numbers.",
+      "depends_on": [],
+      "verify": true
+    },
+    {
+      "id": "K8",
+      "title": "Track quote page timings in production",
+      "summary": "The app already runs Datadog RUM (navigation observer, HTTP tracking, vitals) and Crashlytics, but has no Firebase Performance and no Sentry dependency in super_app. Add custom RUM timings for quote open -> first content, tab switch and chart open through a small interface, and build dashboards with targets.",
+      "categories": [
+        "FE",
+        "FE-Shared",
+        "Product"
+      ],
+      "risk": "Low",
+      "risk_reason": "Adds a few timing calls through an interface whose default is a no-op; no UI or data change. RUM sampling is already 100 % of sessions, so volume must be checked.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": "Agree the production targets and the dashboard owner: p75 quote open to header price <= 400 ms (repeat) / <= 500 ms (first), p75 tab switch <= 250 ms, p75 chart first paint <= 0.5 s, plus alerting when p75 regresses by 20 % week over week. Is 100 % session sampling acceptable for these custom timings, or should they use a lower sample?",
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/trader_core/lib/utils/perf/perf_tracer.dart",
+          "lines": "new",
+          "change": "abstract PerfTracer { start(name, attrs); stop(name, attrs); } with a no-op default registered in DI."
+        },
+        {
+          "path": "apps/super_app/lib/main_common.dart",
+          "lines": "2184-2222",
+          "change": "Register DatadogPerfTracer after Datadog init (uses DatadogSdk.instance.rum timing/action APIs)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "231-283, 1886-1954",
+          "change": "Mark quote_open start in loadAssetTypeData, stop at first header price and at AssetTypeDataLoaded; tab_switch from changeSection to SectionChanged."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+          "lines": "260-268",
+          "change": "Stop 'quote_first_price' when the first non-empty tick is drawn."
+        },
+        {
+          "path": "packages/trader_native_charts/lib/new_charts/charts_impl/charts_webview.dart",
+          "lines": "chart ready callback",
+          "change": "Stop 'chart_open' when the chart reports ready."
+        }
+      ],
+      "current": "main_common.dart initialises Datadog with RUM (2195-2200: traceSampleRate 100, sessionSamplingRate 100, vitals average), enableHttpTracking and Session Replay at 20 %, and adds DatadogNavigationObserver (1511-1513), so route views and API calls are already visible per session. Crashlytics is present (pubspec firebase_crashlytics). There is no firebase_performance and no sentry package in apps/super_app/pubspec.yaml. Nothing marks when the quote page shows its first price or finishes a tab switch, so the benchmark numbers cannot be tracked for real users.",
+      "steps": [
+        "Add PerfTracer in trader_core (FE-Shared, additive) with a no-op default, so packages do not depend on Datadog directly.",
+        "Implement DatadogPerfTracer in super_app: start -> record a monotonic timestamp; stop -> addTiming/custom action with duration_ms and attributes (asset_type, section, is_first_open, network type). Check the exact RUM API in datadog_flutter_plugin 2.15 (addTiming / addViewLoadingTime / addAction) before coding.",
+        "Instrument: quote_open_to_price, quote_open_to_settled, tab_switch (from/to), chart_open; attach scrip type but never user identifiers.",
+        "Build a Datadog dashboard: p50/p75/p95 per metric, by app version and device class; add monitors for the agreed thresholds.",
+        "Report the same metric names from the K7 nightly test so lab and field numbers can be compared."
+      ],
+      "before_code": {
+        "path": "apps/super_app/lib/main_common.dart",
+        "lines": "2195-2203",
+        "code": "            rumConfiguration: DatadogRumConfiguration(\n              applicationId: config.datadogApplicationId,\n              traceSampleRate: 100.0,\n              sessionSamplingRate: 100.0,\n              vitalUpdateFrequency: VitalsFrequency.average,\n            ),\n            firstPartyHosts: extractDomainsFromFlavorConfig(config),\n          )\n          ..enableHttpTracking()"
+      },
+      "after_code": {
+        "code": "// trader_core: utils/perf/perf_tracer.dart\nabstract class PerfTracer {\n  void start(String name);\n  void stop(String name, {Map<String, Object?> attributes = const <String, Object?>{}});\n}\nclass NoopPerfTracer implements PerfTracer {\n  const NoopPerfTracer();\n  @override void start(String name) {}\n  @override void stop(String name, {Map<String, Object?> attributes = const {}}) {}\n}\n\n// super_app\nclass DatadogPerfTracer implements PerfTracer {\n  final Map<String, int> _t0 = <String, int>{};\n  @override void start(String name) => _t0[name] = DateTime.now().microsecondsSinceEpoch;\n  @override void stop(String name, {Map<String, Object?> attributes = const {}}) {\n    final int? t0 = _t0.remove(name);\n    if (t0 == null) return;\n    final double ms = (DateTime.now().microsecondsSinceEpoch - t0) / 1000;\n    DatadogSdk.instance.rum?.addAction(RumActionType.custom, name,\n        <String, Object?>{...attributes, 'duration_ms': ms}); // or addTiming - verify API\n  }\n}\n\n// cubit, loadAssetTypeData\n_perf.start('quote_open_to_price');"
+      },
+      "safety": [
+        "No-op default when Datadog is not initialised (rum == null) or in tests.",
+        "No user identifiers in attributes; reuses the existing Datadog consent (TrackingConsent.granted) and configuration."
+      ],
+      "regression_checks": [
+        "Datadog RUM explorer shows the new actions/timings for a test session on UAT.",
+        "No change to session replay or HTTP tracking volume beyond the new events."
+      ],
+      "after_improvement": "Real-user p75 values for quote open, tab switch and chart open visible per release, with alerts when they regress.",
+      "depends_on": [
+        "K7"
+      ],
+      "verify": false
+    }
+  ]
+}

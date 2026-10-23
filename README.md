@@ -9,6 +9,8 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 | File | What |
 |---|---|
 | `.claude/agents/benchmark-runner.md` | The agent. `/benchmark <module>`, `/benchmark-report`, `/benchmark-module <name>` |
+| `.claude/agents/benchmark-execution-plan.md` | The optional planning agent. `/benchmark-execution-plan <benchmark-file> <module-folder or RISE-repo> [mode]` turns a benchmark into an issues report and a multi-page fix plan for the module's code |
+| `execution-plan/` | Everything for the planner: data format (`SCHEMA.md`), `tools/` (checker, HTML generator), `examples/quote/`, and `plans/`, where generated plans go (git-ignored) |
 | `PROTOCOL.md` | How every run is done (pre-flight, order, run counts, market hours, safety) |
 | `METRICS.md` | The 50 metrics: method, tool, unit, expected runs. Generated from `benchlib.py` |
 | `modules/<name>.json` | One file per module: RISE screen, list, detail, competitor screens, scroll/gesture scripts, offline and data items |
@@ -47,8 +49,10 @@ python3 record.py --me "Your Name"     # stored in ~/.riise-benchmark/me.json
 
 ## The agent: what it is and how to use it
 
-The agent is a Claude Code agent definition in this repo. When you open Claude Code inside the
-cloned folder, it is picked up automatically together with its three slash commands.
+The agents are Claude Code agent definitions in this repo. When you open Claude Code inside the
+cloned folder, they are picked up automatically together with their slash commands:
+`benchmark-runner` measures, and `benchmark-execution-plan` turns the results into a fix plan (see
+[After the benchmark: execution plan](#after-the-benchmark-execution-plan)).
 
 | File | What it is | Review it for |
 |---|---|---|
@@ -123,6 +127,37 @@ python3 build_report.py --module fno
 
 `/benchmark-report` (or `python3 build_report.py --combined`) rebuilds the combined workbook and
 scorecard from every developer's results.
+
+## After the benchmark: execution plan (optional)
+
+When your module's report is built, the runner asks whether you want an execution plan. Say **no**
+and nothing more happens. Say **yes** and it asks where the code is. You can give either the
+**module folder** or the **RISE repository**; with the repository, the planner finds the module
+folder and asks you to confirm it. The `benchmark-execution-plan` agent then starts.
+
+You can also run it yourself at any time, on any benchmark file: a per-module report or workbook,
+the combined scorecard, or a comparison `.md` / `.html` / `.xlsx` from anywhere on your Mac.
+
+```
+/benchmark-execution-plan reports/quote/RISE-quote-page-benchmark.md ~/StudioProjects/mosl-riseapp-repo/packages/mo_get_quote full
+/benchmark-execution-plan ~/Desktop/application-benchmarking/benchmark-comparison.md ~/StudioProjects/mosl-riseapp-repo preferred
+```
+
+The agent reads the benchmark and maps the module's code. It is read-only: it never edits or builds
+the app. It finds the cause of each weak metric, with the file and line. Each plan goes into its own
+folder, `execution-plan/plans/<module>_<date>/`:
+
+| Mode | Output |
+|---|---|
+| `issues` | `issues-report.md`: a plain line-by-line issues report with file:line and the fix |
+| `plan` | `site/`: a multi-page HTML plan. Each change is section-wise, file-wise and team-wise (FE, FE · shared, BE, Product), with current and proposed code, a risk to existing functionality, how today's behaviour is kept, regression checks and the expected result |
+| `summary` | `site/summary.html`: the main problems, today vs after, and a 2–4 day package |
+| `optimized` | `site/optimized-plan.html`: the smallest FE-only set, what it achieves and what it does not fix |
+| `preferred` | `site/most-preferred-plan.html`: per factor (loading, tab switch, scroll and jank, idle cost, chart, memory, offline, stability), the causes that contribute most and the FE changes that remove them, with a problem statement and what each covers |
+| `full` (default) | all of the above |
+
+Plans talk only about today vs after improvement; competitor names and ranks stay in the
+benchmark. See `execution-plan/README.md` for the folder layout and how to rebuild a plan by hand.
 
 ## Sharing (git)
 

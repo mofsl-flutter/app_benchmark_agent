@@ -1,0 +1,544 @@
+{
+ "intro": "The smallest set of front-end changes inside the module that removes the biggest causes of slowness: idle animation, scroll cost, the slow open and crash paths. No backend work, no shared-package changes, no new dependencies, no feature switches, and no change to what users see apart from faster screens and fixed bugs.",
+ "items": [
+  {
+   "n": 1,
+   "title": "Carousels rotate only while visible",
+   "ids": [
+    "A1",
+    "A2"
+   ],
+   "area": "Idle cost",
+   "files": [
+    {
+     "path": "lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+     "lines": "27-48, 96-124"
+    },
+    {
+     "path": "lib/ui/widgets/overview/news/news_accordion.dart",
+     "lines": "23-35, 80-104"
+    }
+   ],
+   "why": "Both carousels auto-play every 4–5 s forever, even when scrolled off screen, inside a collapsed section, under another page, or with the app in the background. This is the most likely cause of the 13.3 fps idle redraw and the ~54 % idle CPU.",
+   "change": "Add three things to each carousel's State: a VisibilityDetector around the existing CarouselSlider (already used in this module by research_ideas_accordion.dart and last_visited_stocks_accordion.dart), an app-lifecycle observer, and a route-is-current check. Pass the combined result as autoPlay instead of true.",
+   "before": "// market_updates_accordion.dart:103-108\noptions: CarouselOptions(\n  // ...\n  autoPlay: true,\n  autoPlayInterval: Duration(seconds: 5),\n\n// news_accordion.dart:84-86\noptions: CarouselOptions(\n  height: 110.0,\n  autoPlay: true,",
+   "after": "class _MarketUpdatesAccordionState extends State<MarketUpdatesAccordion>\n    with WidgetsBindingObserver {\n  bool _isVisible = false;\n  bool _isAppResumed = true;\n\n  // Rotate only while the user can actually see the carousel.\n  bool get _autoPlay =>\n      _isVisible && _isAppResumed && (ModalRoute.of(context)?.isCurrent ?? true);\n\n  @override\n  void initState() {\n    super.initState();\n    WidgetsBinding.instance.addObserver(this);\n    // ... existing initState code\n  }\n\n  @override\n  void dispose() {\n    WidgetsBinding.instance.removeObserver(this);\n    super.dispose();\n  }\n\n  @override\n  void didChangeAppLifecycleState(AppLifecycleState state) {\n    final bool resumed = state == AppLifecycleState.resumed;\n    if (resumed != _isAppResumed) setState(() => _isAppResumed = resumed);\n  }\n\n  // In build(): wrap the existing CarouselSlider; nothing else changes.\n  //   VisibilityDetector(\n  //     key: const ValueKey<String>('market_updates_carousel'),\n  //     onVisibilityChanged: (VisibilityInfo info) {\n  //       final bool v = info.visibleFraction > 0.5;\n  //       if (mounted && v != _isVisible) setState(() => _isVisible = v);\n  //     },\n  //     child: CarouselSlider(options: CarouselOptions(autoPlay: _autoPlay, ...)),\n  //   )\n}\n// Same three additions in _NewsAccordionState (key 'news_carousel').",
+   "risk": "Low",
+   "risk_why": "Two widgets only. When the carousel is on screen it rotates exactly as today, with the same interval, cards, taps and dots.",
+   "test": [
+    "Carousel rotates when on screen, stops when scrolled away, resumes when scrolled back",
+    "Stops when the section is collapsed, another page is pushed, or the app goes to background",
+    "Tap on a card and swipe still work",
+    "Idle frame counter on an idle Overview after market close"
+   ],
+   "effect": "Idle redraw ≈ 0 fps when the carousels are not on screen; a large drop in idle CPU and battery.",
+   "days": "0.5"
+  },
+  {
+   "n": 2,
+   "title": "Stop walking the widget tree on every scroll",
+   "ids": [
+    "B7",
+    "B1"
+   ],
+   "area": "Scrolling",
+   "files": [
+    {
+     "path": "lib/ui/widgets/fundamentals/fundamentals.dart",
+     "lines": "153-155"
+    },
+    {
+     "path": "lib/ui/widgets/technicals/technicals.dart",
+     "lines": "140-142"
+    },
+    {
+     "path": "lib/ui/widgets/overview/scroll_visibility_tracker.dart",
+     "lines": "6-27"
+    },
+    {
+     "path": "lib/ui/widgets/sticky_chips_section.dart",
+     "lines": "53-125, 342-406"
+    }
+   ],
+   "why": "On every scroll event the sticky chips run a full depth-first walk of the page's element tree, up to 16 times (once per section), to find where each section is. Fundamentals and Technicals also create a new GlobalKey on every build, which remounts their sections.",
+   "change": "First make the Fundamentals/Technicals section keys stable (same putIfAbsent map Overview already uses). Then look up each section by the key it already registers with WidgetVisibilityTracker, cache the offsets until an accordion opens/closes or data changes, and check at most every 100 ms plus once on scroll end.",
+   "before": null,
+   "after": null,
+   "risk": "Medium",
+   "risk_why": "Touches chip selection while scrolling. The offset formula (top + offset − 100) and the 50 px hysteresis stay the same, so the same chip is selected; the old walk stays as a fallback when a key is missing.",
+   "test": [
+    "Chip highlight follows the scroll on Overview, Fundamentals and Technicals",
+    "Tapping a chip scrolls to the right section",
+    "Expand/collapse a section, then scroll: chip still correct",
+    "Scroll fps on Overview"
+   ],
+   "effect": "The largest per-scroll UI-thread cost removed; expected to be the biggest single scroll improvement.",
+   "days": "1.5"
+  },
+  {
+   "n": 3,
+   "title": "Rebuild only the section that changed",
+   "ids": [
+    "B4",
+    "B6"
+   ],
+   "area": "Scrolling",
+   "files": [
+    {
+     "path": "lib/ui/widgets/overview/overview_main.dart",
+     "lines": "89-110, 140-157, 262-264, 873-875"
+    },
+    {
+     "path": "lib/ui/widgets/fundamentals/fundamentals.dart",
+     "lines": "159-160"
+    },
+    {
+     "path": "lib/ui/widgets/technicals/technicals.dart",
+     "lines": "146-147"
+    }
+   ],
+   "why": "Any accordion tap rebuilds all 16 Overview sections (or all 5 in Fundamentals/Technicals), and the Overview section list is re-created as ~16 new objects on every call, which also re-opens sections the user collapsed.",
+   "change": "Add the section and index to the three buildWhen checks, and turn the _sections getter into a list built once (plus a type-to-section map).",
+   "before": null,
+   "after": null,
+   "risk": "Low",
+   "risk_why": "The builder body is unchanged; non-matching sections render the same thing because their inputs did not change. Collapsed sections now stay collapsed, which fixes a bug.",
+   "test": [
+    "Expand/collapse every section on all three tabs",
+    "Collapse a section, wait for background data: it stays collapsed",
+    "Switch stock/segment: default expansion as today"
+   ],
+   "effect": "An accordion tap rebuilds 1 section instead of 16; fewer long frames while data arrives.",
+   "days": "0.5"
+  },
+  {
+   "n": 4,
+   "title": "Painters repaint only on real change",
+   "ids": [
+    "B13"
+   ],
+   "area": "Scrolling",
+   "files": null,
+   "why": null,
+   "change": "Replace shouldRepaint => true (and the closure/identity comparison in the financial chart) with field comparisons using listEquals; restart the bar animation only when the values changed.",
+   "before": null,
+   "after": null,
+   "risk": "Low",
+   "risk_why": "Painted output for a given input is unchanged; theme changes still repaint.",
+   "test": [
+    "15-min build-up, moving-average gauge and financial bar chart look and animate as today on first show",
+    "Charts don't replay their animation on unrelated taps"
+   ],
+   "effect": "No repaint of unchanged charts on every frame or tick; the financial chart stops replaying its 300 ms animation.",
+   "days": "0.5"
+  },
+  {
+   "n": 5,
+   "title": "Remove debug logging from hot paths",
+   "ids": [
+    "B16",
+    "C12"
+   ],
+   "area": "Scrolling / open",
+   "files": null,
+   "why": null,
+   "change": "Delete the debugPrint calls inside paint() and build(), and the print / per-item loops on the Overview load path. debugPrint still prints in release builds.",
+   "before": null,
+   "after": null,
+   "risk": "Low",
+   "risk_why": "Logging only.",
+   "test": [
+    "Smoke test of Overview, Fundamentals, 15-min build-up"
+   ],
+   "effect": "No string building and log I/O during paint, build and every Overview load.",
+   "days": "0.25"
+  },
+  {
+   "n": 6,
+   "title": "Faster open: no duplicate getQuote, no artificial waits",
+   "ids": [
+    "C3",
+    "C4"
+   ],
+   "area": "Opening / tab switch",
+   "files": [
+    {
+     "path": "lib/mo_get_quote_cubit.dart",
+     "lines": "240-244, 1259-1289 (C3); 305-315, 336, 1603, 1927-1953 (C4)"
+    }
+   ],
+   "why": "Every open calls getQuote twice (updateSelectedScripId fetches it again), then sleeps 100 ms. Every asset switch waits 300 ms and every tab switch 200 ms on a debounce timer.",
+   "change": "Keep the first getQuote result and reuse it once when updateSelectedScripId asks for the same scrip. Delete the two 100 ms sleeps. Replace the Timers with a generation counter, so only the latest tap emits (same result as the debounce, without the wait).",
+   "before": null,
+   "after": "// 1) Delete the two sleeps\n//    mo_get_quote_cubit.dart:336   await Future.delayed(const Duration(milliseconds: 100));\n//    mo_get_quote_cubit.dart:1603  await Future.delayed(const Duration(milliseconds: 100));\n\n// 2) Replace the 300 ms / 200 ms Timers with a 'latest tap wins' counter\nint _sectionGen = 0;\n\nFuture<void> changeSection(final MoGetQuoteSections section, ...) async {\n  if (selectedSection == section) return;\n  final int gen = ++_sectionGen;\n  bool stale() => gen != _sectionGen || isClosed;\n  // ... existing code up to emit(MoGetQuoteSectionChangeLoading(section));\n  if (assetType == MoGetQuoteAssetType.futures) {\n    await selectFuturesExpiry(section.label);\n    if (!stale()) emit(MoGetQuoteSectionChanged(section));\n    return;\n  }\n  await _loadSectionData(section);\n  if (!stale()) emit(MoGetQuoteSectionChanged(section));\n}\n// Same pattern with int _assetGen in changeAssetType (was the 300 ms Timer).",
+   "after_from": null,
+   "risk": "Medium",
+   "risk_why": "Changes timing in the cubit's open and switch flow. Same endpoints, same data and same final state; rapid taps still end on the last tap.",
+   "test": [
+    "Open cash, ETF, index, futures and options quotes",
+    "Exchange toggle NSE/BSE",
+    "Tap tabs and segments rapidly: ends on the last one with its data",
+    "Back during loading: no errors"
+   ],
+   "effect": "One round trip less on every open (~100–250 ms), 100 ms less per open, 300 ms less per asset switch, 200 ms less per tab switch.",
+   "days": "0.75"
+  },
+  {
+   "n": 7,
+   "title": "Drop wasted and duplicate Overview calls",
+   "ids": [
+    "C8"
+   ],
+   "area": "Opening",
+   "files": null,
+   "why": null,
+   "change": "Don't request the 'Market Updates' section (its response is thrown away), call loadPeerComparison only if SimilarStocks failed in the section loop, and reuse the in-flight FlashNews request instead of starting a second one.",
+   "before": null,
+   "after": null,
+   "risk": "Low",
+   "risk_why": "The same data reaches the page from the same endpoints; a failed first call still allows the second as a retry.",
+   "test": [
+    "Overview shows Market updates / flash news, Peer comparison and all other sections as today",
+    "Network log: 3 fewer requests per cash open"
+   ],
+   "effect": "About 18 → 15 requests per cash open (14 with item 6), less data per open.",
+   "days": "0.5"
+  },
+  {
+   "n": 8,
+   "title": "Show the last price on the first frame",
+   "ids": [
+    "C6"
+   ],
+   "area": "Opening",
+   "files": null,
+   "why": null,
+   "change": "Pass the cached last tick (BroadCastHelper.getBroadcastResponse(symbol)) as initialData to the price StreamBuilders in the stock info card and the app bar.",
+   "before": null,
+   "after": null,
+   "risk": "Low",
+   "risk_why": "Same value the stream delivers a moment later; no subscription change.",
+   "test": [
+    "Open a quote: price appears without a 0.00 flash",
+    "Price keeps updating during market hours"
+   ],
+   "effect": "No zero-price frame on open.",
+   "days": "0.25"
+  },
+  {
+   "n": 9,
+   "title": "Subscribe live prices once, not on every build",
+   "ids": [
+    "E2",
+    "E3"
+   ],
+   "area": "Idle network / CPU",
+   "files": [
+    {
+     "path": "lib/ui/widgets/overview/key_statistics/key_statistics_accordion.dart",
+     "lines": "62-64"
+    },
+    {
+     "path": "lib/ui/widgets/overview/cas/cas_accordion.dart",
+     "lines": "31"
+    },
+    {
+     "path": "lib/ui/widgets/overview/analysis_rating/analyst_rating_widget.dart",
+     "lines": "33"
+    },
+    {
+     "path": "lib/ui/widgets/overview/reasearch_ideas/research_ideas_accordion.dart",
+     "lines": "69-71"
+    },
+    {
+     "path": "lib/ui/widgets/overview/peer_comparision/peer_comparison_table.dart",
+     "lines": "48-55, 374"
+    },
+    {
+     "path": "lib/ui/widgets/stock_info_card.dart",
+     "lines": "254-265"
+    },
+    {
+     "path": "lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+     "lines": "209-210"
+    }
+   ],
+   "why": "Five widgets call startQuoteStreaming from build() or didUpdateWidget, and several create a new tick stream inside build(). Because each subscribe call replaces the whole symbol set, every rebuild re-sends subscribe packets and the widgets keep overriding each other.",
+   "change": "Move startQuoteStreaming to initState and call it again in didUpdateWidget only when the symbols actually changed (setEquals). Create each onTickReceived stream once in initState instead of inside build().",
+   "before": null,
+   "after": null,
+   "risk": "Medium",
+   "risk_why": "Each widget still subscribes the same symbols as today, just once. Resume and visibility paths are untouched; each file can be changed and reverted on its own.",
+   "test": [
+    "Prices update live in Key statistics, CAS, Analyst rating, Research ideas, Peers, header and depth (market hours)",
+    "Switch NSE/BSE and segments: prices follow",
+    "App background → foreground: prices resume"
+   ],
+   "effect": "Subscribe packets on an idle page drop from one per rebuild to about zero; less idle network and CPU.",
+   "days": "0.75"
+  },
+  {
+   "n": 10,
+   "title": "Load Fundamentals sections in parallel",
+   "ids": [
+    "D4"
+   ],
+   "area": "Tab switch",
+   "files": [
+    {
+     "path": "lib/mo_get_quote_cubit.dart",
+     "lines": "2283-2309"
+    },
+    {
+     "path": "test/mo_get_quote_cubit_test.dart",
+     "lines": "1060-1064"
+    }
+   ],
+   "why": "Fundamentals fetches its sections one after another and emits after each group.",
+   "change": "Use Future.wait over the foreground sections with one emit, and the same for the background group. Keep one request per section so one failure doesn't fail the others.",
+   "before": null,
+   "after": null,
+   "risk": "Medium",
+   "risk_why": "Same requests, same merge, same failure tracking; only concurrency and emit count change. One test expectation is updated.",
+   "test": [
+    "Fundamentals tab: every section shows as today",
+    "One section failing (offline mid-load): others still show, Retry works"
+   ],
+   "effect": "Cold Fundamentals load from ~5 serial requests to 2 parallel rounds.",
+   "days": "0.5"
+  },
+  {
+   "n": 11,
+   "title": "Close crash and stuck-loader paths",
+   "ids": [
+    "I1",
+    "I4",
+    "I5"
+   ],
+   "area": "Stability",
+   "files": [
+    {
+     "path": "lib/ui/widgets/quote_tabs.dart",
+     "lines": "121-178"
+    },
+    {
+     "path": "lib/ui/widgets/quote_content_area.dart",
+     "lines": "115-129"
+    },
+    {
+     "path": "lib/mo_get_quote_cubit.dart",
+     "lines": "157-158, 567-571, 735-740, 808-813, 2763-2764, 3290-3295"
+    }
+   ],
+   "why": "The cubit can keep a disposed TabController (swipe then throws); emits after the page closes throw; four places index lists without checking (indexWhere −1, .first on empty, split()[1]) and can leave a tab stuck on a shimmer.",
+   "change": "Keep the cubit's TabController reference in sync and clear it on dispose; override emit with an isClosed check; guard the four throw sites.",
+   "before": null,
+   "after": null,
+   "risk": "Low",
+   "risk_why": "For valid data the same index, expiry and label are produced; only error paths change.",
+   "test": [
+    "Swipe between tabs after switching segment",
+    "Leave the page while it loads",
+    "Options: switch expiry and call/put after an exchange switch",
+    "Futures with no expiries"
+   ],
+   "effect": "Five crash / non-fatal paths closed; no options or futures tab stuck on a loader.",
+   "days": "0.5"
+  }
+ ],
+ "achieve": [
+  {
+   "metric": "Idle redraw after market close",
+   "today": "13.3 fps (99 % identical frames)",
+   "after": "≈ 0 fps when the carousels are off screen",
+   "items": "1"
+  },
+  {
+   "metric": "Idle CPU after market close",
+   "today": "54.3 % of one core",
+   "after": "large drop (carousels stopped, no repeated subscribe calls)",
+   "items": "1, 9"
+  },
+  {
+   "metric": "Idle network after market close",
+   "today": "465 KB/min",
+   "after": "lower (subscribe packets no longer re-sent on every rebuild)",
+   "items": "9"
+  },
+  {
+   "metric": "Scroll on Overview",
+   "today": "37 fps, 11.97 % jank",
+   "after": "most per-scroll work removed; ≈ 50–55 fps",
+   "items": "2, 3, 4, 5"
+  },
+  {
+   "metric": "Quote open, repeat",
+   "today": "1,313 ms",
+   "after": "≈ 0.9–1.0 s; no 0.00 price flash",
+   "items": "6, 7, 8"
+  },
+  {
+   "metric": "Requests per cash open",
+   "today": "≈ 18",
+   "after": "≈ 14",
+   "items": "6, 7"
+  },
+  {
+   "metric": "Tab switch",
+   "today": "900 ms",
+   "after": "≈ 700 ms; Fundamentals cold load faster",
+   "items": "6, 10"
+  },
+  {
+   "metric": "Crashes / stuck loaders",
+   "today": "5 known paths",
+   "after": "closed",
+   "items": "11"
+  }
+ ],
+ "notice": [
+  "The page stops working and draining battery when left open. This is the biggest win (items 1 and 9).",
+  "Scrolling is clearly smoother on Overview, Fundamentals and Technicals (items 2–5).",
+  "Opening a quote and switching tabs or segments is noticeably faster, and the price shows straight away (items 6, 7, 8 and 10).",
+  "Fewer odd states: no frozen options or futures tab, no crash when swiping after a segment switch, and collapsed sections no longer re-open on their own (items 3 and 11)."
+ ],
+ "one_line": "About 4 days with two developers removes the idle waste and most of the scroll jank, and makes opening and tab switching noticeably faster. It roughly halves the gap to the full-plan targets, mostly on smoothness and battery.",
+ "schedule": [
+  {
+   "who": "Dev 1",
+   "rows": [
+    {
+     "when": "Day 1",
+     "items": "1, 5",
+     "work": "Carousels rotate only while visible; remove debug logging. PR 1."
+    },
+    {
+     "when": "Day 2–3",
+     "items": "2",
+     "work": "Stable section keys, then the key-based offset lookup in the sticky chips. PR 2."
+    },
+    {
+     "when": "Day 4",
+     "items": "3, 4",
+     "work": "Rebuild only the changed section; painter shouldRepaint. PR 3."
+    }
+   ]
+  },
+  {
+   "who": "Dev 2",
+   "rows": [
+    {
+     "when": "Day 1",
+     "items": "6, 8",
+     "work": "Reuse the first getQuote, remove the sleeps and debounce timers, initial price value. PR 4."
+    },
+    {
+     "when": "Day 2",
+     "items": "7, 10",
+     "work": "Drop the wasted/duplicate Overview calls; Fundamentals in parallel. PR 5."
+    },
+    {
+     "when": "Day 3",
+     "items": "9",
+     "work": "Subscribe once in initState / didUpdateWidget; streams created once. PR 6."
+    },
+    {
+     "when": "Day 4",
+     "items": "11",
+     "work": "TabController, emit-after-close and the four throw-site guards. PR 7."
+    }
+   ]
+  },
+  {
+   "who": "QA",
+   "rows": [
+    {
+     "when": "Day 2–5",
+     "items": "all",
+     "work": "Run each PR's checks as it lands, then the full quote-page smoke test and a re-measure on the same device."
+    }
+   ]
+  }
+ ],
+ "schedule_intro": "Two FE developers, about 4 days, 7 small pull requests, each releasable and revertible on its own. With one developer the same order takes about 1.5 weeks.",
+ "not_fixed": [
+  {
+   "what": "Quote open under 0.5 s",
+   "where": "1.3 s today, ≈ 0.9–1.0 s after this plan",
+   "why": "The opening calls still run one after another, and the Overview sections still load one by one.",
+   "ids": [
+    "C2",
+    "C7",
+    "C10"
+   ]
+  },
+  {
+   "what": "Instant tab revisits with no skeleton",
+   "where": "Overview still rebuilds behind a skeleton (~1.4 s)",
+   "why": "Tab data is still thrown away on every switch.",
+   "ids": [
+    "D1",
+    "D2",
+    "D3"
+   ]
+  },
+  {
+   "what": "Scrolling at a full 58–60 fps",
+   "where": "≈ 50–55 fps after this plan",
+   "why": "All 16 Overview sections are still built and laid out at once.",
+   "ids": [
+    "B10",
+    "B9"
+   ]
+  },
+  {
+   "what": "Lower RAM (≈ 1.1 GB, up to ≈ 2 GB)",
+   "where": "Unchanged",
+   "why": "Quote pages still stack on each other, and the chart WebView stays alive after leaving.",
+   "ids": [
+    "F1",
+    "F2",
+    "G8"
+   ]
+  },
+  {
+   "what": "Idle network down to ≤ 10 KB/min",
+   "where": "Lower, but not at target",
+   "why": "Needs one live-price hub per page and an unsubscribe API in mosl_broadcaster (shared package).",
+   "ids": [
+    "E1",
+    "E5",
+    "E6"
+   ]
+  },
+  {
+   "what": "A chart on the quote page",
+   "where": "Still none",
+   "why": "Needs a price-history API (backend) and a Product design.",
+   "ids": [
+    "G1",
+    "G3"
+   ]
+  },
+  {
+   "what": "Faster first full-chart open (> 7 s)",
+   "where": "Unchanged",
+   "why": "Needs chart pre-warm in the shared chart package and a Remote Config change.",
+   "ids": [
+    "G4",
+    "G5",
+    "G7"
+   ]
+  },
+  {
+   "what": "Offline banner and an 'as of' time on frozen prices",
+   "where": "Still no banner",
+   "why": "Needs a Product decision on the design and wording.",
+   "ids": [
+    "H1",
+    "H2",
+    "H6"
+   ]
+  }
+ ]
+}

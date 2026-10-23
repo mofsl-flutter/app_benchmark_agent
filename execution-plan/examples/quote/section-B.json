@@ -1,0 +1,1227 @@
+{
+  "section": "B",
+  "title": "Scrolling and rendering",
+  "intro": "This area covers how the quote page scrolls and paints: the sticky chips and header, the way tab content is laid out, the accordion sections, and the custom-drawn charts. Today a scroll event walks the whole widget tree once per section, a fling is interrupted by an automatic snap, all sections are built and laid out at once, any accordion tap rebuilds every section, and several painters, blurs and shadows redraw more than needed. The changes remove the per-scroll tree walks, narrow rebuilds and repaints to what changed, and (behind flags) make the content lazy and the snap and default expansion Product decisions.",
+  "measured": [
+    {
+      "metric": "Scroll frame rate on Overview (Samsung M14, 60 Hz)",
+      "current": "37 fps",
+      "expected": ">= 58 fps"
+    },
+    {
+      "metric": "Janky frames while scrolling",
+      "current": "11.97 %",
+      "expected": "<= 2 %"
+    },
+    {
+      "metric": "Frame rate during tab switch",
+      "current": "40-45 fps",
+      "expected": ">= 58 fps"
+    }
+  ],
+  "changes": [
+    {
+      "id": "B1",
+      "title": "Stop walking the element tree on every scroll",
+      "summary": "The sticky chips find each section by walking the whole Scaffold element tree, once per section, on every scroll event. Look sections up through the GlobalKeys that already exist, cache their offsets, and recompute only after layout changes.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Internal to StickyChipsSection, but chip highlighting while scrolling and chip-tap scroll-to-section both depend on these offsets on Overview, Fundamentals and Technicals. Output offsets are the same numbers computed a cheaper way.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_chips_section.dart",
+          "lines": "53-125, 342-406",
+          "change": "Replace _findWidgetWithValueKey with a key lookup and an offset cache; throttle _onScroll."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/scroll_visibility_tracker.dart",
+          "lines": "6-27",
+          "change": "Add a read-only keyFor(id) accessor for the RectGetter keys sections already register."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+          "lines": "255-258",
+          "change": "No logic change; confirms Overview already registers a cached key per section type."
+        }
+      ],
+      "current": "_onScroll runs on every ScrollController tick. For each visible section, from last to first, it calls _findWidgetWithValueKey, which does a depth-first visit of every element under the Scaffold (app bar, details, sticky header, all sections) until it finds the Container with the matching ValueKey. Near the top of the page no section matches, so with up to 16 Overview sections this is up to 16 near-complete tree walks per scroll frame on the UI thread.",
+      "steps": [
+        "Add `static GlobalKey<RectGetterState>? keyFor(String id) => _keys[id];` to WidgetVisibilityTracker. Overview registers 'overview_<type.name>', Fundamentals 'fundamental_<type.name>', Technicals 'technical_<type.name>'; each RectGetter wraps exactly the ValueKey'd Container, so its RenderBox top is the same point the walk finds today.",
+        "In StickyChipsSection add `_sectionOffsetFor(id)` that reads keyFor(id)?.currentContext?.findRenderObject() as RenderBox?, and returns localToGlobal(Offset.zero, ancestor: scrollRenderBox).dy + offset - 100 (same formula as today). Map the chip type to the tracker id with the enum's `name`.",
+        "Cache the resulting List<double?> per section list. Invalidate the cache on MoGetQuoteAccordionExpanded, MoGetQuoteOverviewLoaded, MoGetQuoteFundamentalLoaded, MoGetQuoteTechnicalLoaded and MoGetQuoteSectionChanged (the BlocBuilder already sees most of these), on ScrollEndNotification, and when maxScrollExtent changes. Offsets in scroll coordinates do not change while the user only scrolls.",
+        "Throttle the highlight update to at most once per 100 ms while scrolling, and always run it once on scroll end so the final chip is correct.",
+        "Keep _findWidgetWithValueKey as a fallback when keyFor returns null (for example a section type not registered) for one release, behind a debug log, then delete it.",
+        "Use the same lookup in _scrollToSection (chip tap)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/sticky_chips_section.dart",
+        "lines": "113-116, 376-379, 386-392, 396-399",
+        "code": "    for (int i = availableTypes.length - 1; i >= 0; i--) {\n      final ValueKey<String> valueKey =\n          ValueKey<String>(\"${(availableTypes[i] as dynamic).label}_$suffix\");\n      final double? sectionOffset = _findWidgetWithValueKey(valueKey);\n// ...\n    void visitElement(final Element element) {\n      if (foundOffset != null) return;\n\n      final Widget childWidget = element.widget;\n// ...\n        if (valueKey.value == targetKey.value) {\n          final RenderBox? renderBox = element.renderObject as RenderBox?;\n          if (renderBox != null) {\n            final Offset targetPosition =\n                renderBox.localToGlobal(Offset.zero, ancestor: scrollRenderBox);\n            foundOffset =\n                targetPosition.dy + widget.scrollController!.offset - 100;\n// ...\n      }\n\n      element.visitChildren(visitElement);\n    }"
+      },
+      "after_code": {
+        "code": "// sticky_chips_section.dart (sketch)\nList<double?>? _offsetCache;          // cleared by _invalidateOffsets()\nDateTime _lastScrollCheck = DateTime(0);\n\ndouble? _sectionOffsetFor(String trackerId) {\n  final RenderBox? scrollBox = widget.scrollController!.position.context\n      .storageContext.findRenderObject() as RenderBox?;\n  final RenderBox? box = WidgetVisibilityTracker.keyFor(trackerId)\n      ?.currentContext?.findRenderObject() as RenderBox?;\n  if (scrollBox == null || box == null || !box.attached) return null;\n  return box.localToGlobal(Offset.zero, ancestor: scrollBox).dy +\n      widget.scrollController!.offset - 100; // same formula as today\n}\n\nvoid _onScroll() {\n  final DateTime now = DateTime.now();\n  if (now.difference(_lastScrollCheck).inMilliseconds < 100) return;\n  _lastScrollCheck = now;\n  // ... existing logic, but read _offsetCache ??= [for (t in types) _sectionOffsetFor('${prefix}_${t.name}')]\n}"
+      },
+      "safety": [
+        "Same offset formula (dy + scroll offset - 100) and same 50 px hysteresis, so the selected chip is the same.",
+        "Old tree walk kept as a fallback for one release when a key is missing.",
+        "A final update always runs on ScrollEndNotification, so throttling cannot leave a stale chip."
+      ],
+      "regression_checks": [
+        "Scroll slowly and fast through Overview, Fundamentals and Technicals: highlighted chip follows the section on screen and the last chip is selected at the bottom.",
+        "Tap each chip: page scrolls to that section, including after collapsing/expanding sections.",
+        "Futures and options Overview chips.",
+        "Switch stock and tab, then repeat."
+      ],
+      "after_improvement": "UI-thread cost per scroll event drops from up to 16 element-tree walks to a cached list read; expected to be the largest single part of the gain from 37 fps towards 58 fps. Measure UI-thread frame time in DevTools before/after.",
+      "depends_on": [
+        "B7"
+      ],
+      "verify": false
+    },
+    {
+      "id": "B2",
+      "title": "Snap to sticky position only after scroll ends",
+      "summary": "When the page crosses about 115 px, the screen starts a 300 ms animateTo in the middle of the user's fling, which stops the fling and drives the scroll for 300 ms. Move the snap to ScrollEndNotification, or turn it off, behind a Remote Config flag.",
+      "categories": [
+        "FE",
+        "Product",
+        "BE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes how the page scrolls near the top (visible). Default flag value keeps today's behaviour, so no change until Product enables it.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": "When the user scrolls past the price header, should the page still auto-snap so the tabs pin at the top? Proposed: snap only after the finger lifts and the scroll settles within the snap zone (no snap mid-fling); option B: no auto-snap at all.",
+      "be_request": "Add Remote Config key quote_sticky_snap_mode with values 'immediate' (default, today), 'on_scroll_end', 'off'.",
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "109-143, 248-259",
+          "change": "Move the snap call from the threshold crossing to ScrollEndNotification, controlled by the flag."
+        }
+      ],
+      "current": "_handleScrollNotification flips _isScrolledNotifier when pixels cross 115 (or 53) and immediately calls _animateToStickyPosition(). animateTo replaces the user's ballistic scroll activity, so a fling is cut short and then animated to 195 px over 300 ms. The same frame also rebuilds the app bar through _isScrolledNotifier.",
+      "steps": [
+        "Read quote_sticky_snap_mode once in initState (fallback 'immediate').",
+        "'immediate': keep today's code path unchanged.",
+        "'on_scroll_end': on threshold crossing only update _isScrolledNotifier and updateButtonVisibility(); on ScrollEndNotification, if 0 < pixels < stickyPosition (the zone between the threshold and the pin point), call _animateToStickyPosition(). If the user flung past the pin point, do nothing.",
+        "'off': never call _animateToStickyPosition() from scroll; keep the call from MoGetQuoteSectionChanged (tab change) as it is today.",
+        "Log the mode in the existing scroll analytics so the effect can be compared."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+        "lines": "129-143",
+        "code": "  void _handleScrollNotification(final ScrollNotification scrollNotification) {\n    if (scrollNotification is ScrollUpdateNotification &&\n        scrollNotification.metrics.axis == Axis.vertical) {\n      final int tabsLength = _cubit.availableTabsLength;\n      final bool isScrolled = scrollNotification.metrics.pixels >\n          (tabsLength > 1 ? _scrollThresholdMultipleTabs : _scrollThresholdSingleTab);\n      if (isScrolled != _isScrolledNotifier.value) {\n        _isScrolledNotifier.value = isScrolled;\n        if (isScrolled) {\n          _cubit.updateButtonVisibility();\n          _animateToStickyPosition();\n        }\n      }\n    }\n  }"
+      },
+      "after_code": {
+        "code": "void _handleScrollNotification(final ScrollNotification n) {\n  if (n.metrics.axis != Axis.vertical) return;\n  if (n is ScrollUpdateNotification) {\n    final bool isScrolled = n.metrics.pixels > _scrollThreshold; // see B3\n    if (isScrolled != _isScrolledNotifier.value) {\n      _isScrolledNotifier.value = isScrolled;\n      if (isScrolled) {\n        _cubit.updateButtonVisibility();\n        if (_snapMode == SnapMode.immediate) _animateToStickyPosition(); // today\n      }\n    }\n  } else if (n is ScrollEndNotification && _snapMode == SnapMode.onScrollEnd) {\n    final double px = n.metrics.pixels;\n    if (px > _scrollThreshold && px < _stickyPosition) {\n      _animateToStickyPosition();\n    }\n  }\n}"
+      },
+      "safety": [
+        "Flag default 'immediate' runs exactly today's code.",
+        "The tab-change snap (listener on MoGetQuoteSectionChanged) is not touched.",
+        "Snapping from ScrollEndNotification never fights an active drag or fling."
+      ],
+      "regression_checks": [
+        "Fling up from the top: with 'on_scroll_end' the fling continues naturally; with 'immediate' it behaves as today.",
+        "Slow drag past the threshold and release: page settles with tabs pinned (on_scroll_end).",
+        "App bar switches to the compact title at the same point as today.",
+        "Tab change still scrolls to the sticky position."
+      ],
+      "after_improvement": "No forced 300 ms animation inside a fling; removes the visible stop-and-jump and the jank frames at the threshold crossing.",
+      "depends_on": [
+        "B3"
+      ],
+      "verify": true
+    },
+    {
+      "id": "B3",
+      "title": "Measure header height instead of fixed pixels",
+      "summary": "Scroll thresholds and the sticky position are hard-coded (195, 135, 115, 53, +40 for options, and 100 in the chips). Measure the quote details section with a key and derive these values from its real height.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes the exact pixel where the app bar switches and where the snap lands. On a default font size the measured value should equal today's constants; on large text size or a taller header it will differ (that is the fix).",
+      "effort": "M",
+      "user_visible": true,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "104-127, 288-290",
+          "change": "Add a GlobalKey on QuoteDetailsSection; compute stickyPosition and scroll threshold from its height after layout."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_chips_section.dart",
+          "lines": "64, 392",
+          "change": "Use the shared measured threshold instead of 115/53, and the header extent instead of 100."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_tab_delegate.dart",
+          "lines": "20",
+          "change": "Expose the extents (36/60/96) as named constants so the chips offset reads the same value."
+        }
+      ],
+      "current": "The pin point of the sticky tabs is the height of QuoteDetailsSection, which depends on whether the segment tabs are shown, the asset type and the user's text scale. The code assumes 195 px (135 with one tab, +40 for options) and switches the app bar at 115/53. With larger text or an added row the snap lands in the wrong place and the chips' active-section check is off.",
+      "steps": [
+        "Wrap QuoteDetailsSection in a KeyedSubtree with _detailsKey (or give the SliverToBoxAdapter child a GlobalKey).",
+        "Add `double get _stickyPosition => (_detailsKey.currentContext?.findRenderObject() as RenderBox?)?.size.height ?? <today's constant>;` so the old value remains the fallback.",
+        "Derive the app-bar threshold from the same height (today 115 = 195 - 80, 53 for single tab); keep the ratio by subtracting the same 80 px, so default devices see the same switch point.",
+        "Pass the threshold to StickyChipsSection (constructor or a ValueListenable) instead of recomputing 115/53 there.",
+        "Replace the literal 100 in the chips offset formula with StickyTabDelegate's current maxExtent plus the existing small margin, so the result is the same on default layouts.",
+        "In debug builds log measured vs old constant per asset type to confirm equality before release."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+        "lines": "104-116, 125-127",
+        "code": "  // Custom constants for scroll positions (not available in DSM)\n  static const double _baseStickyPosition = 195.0;\n  static const double _reducedStickyPosition = 135.0; // 195.0 - 60.0\n  static const Duration _scrollAnimationDuration = Duration(milliseconds: 300);\n\n  void _animateToStickyPosition() {\n    if (_scrollController.hasClients) {\n      final int tabsLength = _cubit.availableTabsLength;\n      final double stickyPosition = tabsLength > 1\n          ? _cubit.selectedAssetType == MoGetQuoteAssetType.options\n              ? _baseStickyPosition + MOSpacing.spacing40\n              : _baseStickyPosition\n          : _reducedStickyPosition;\n// ...\n  // Custom constants for scroll thresholds (not available in DSM)\n  static const double _scrollThresholdMultipleTabs = 115.0;\n  static const double _scrollThresholdSingleTab = 53.0;"
+      },
+      "after_code": {
+        "code": "final GlobalKey _detailsKey = GlobalKey();\n\ndouble get _stickyPosition {\n  final RenderBox? box =\n      _detailsKey.currentContext?.findRenderObject() as RenderBox?;\n  if (box != null && box.hasSize) return box.size.height;\n  // fallback = today's constants\n  final bool multi = _cubit.availableTabsLength > 1;\n  if (!multi) return _reducedStickyPosition;\n  return _cubit.selectedAssetType == MoGetQuoteAssetType.options\n      ? _baseStickyPosition + MOSpacing.spacing40\n      : _baseStickyPosition;\n}\n\n// same 80 px gap as today (195 -> 115, 135 -> 53 is ~82)\ndouble get _scrollThreshold => _stickyPosition - 80;\n\nSliverToBoxAdapter _buildQuoteDetailsSliver() =>\n    SliverToBoxAdapter(child: KeyedSubtree(key: _detailsKey,\n        child: const QuoteDetailsSection()));"
+      },
+      "safety": [
+        "Old constants remain as the fallback when the header has not been laid out.",
+        "Debug log comparing measured and constant values for cash, futures, options, index and ETF before the constants are relied on less.",
+        "No change to StickyTabDelegate extents themselves."
+      ],
+      "regression_checks": [
+        "Cash, futures, options, index, ETF: tabs pin at the top after snap; app bar switches at the same point as before on default font.",
+        "Android font size largest and display size large: tabs pin exactly at the top.",
+        "Chips highlight the correct section at the top of each section."
+      ],
+      "after_improvement": "Snap and chip selection land on the real pin point on every asset type and text size; removes a mismatch that becomes worse once an inline chart is added to the header.",
+      "depends_on": [],
+      "verify": true
+    },
+    {
+      "id": "B4",
+      "title": "Rebuild only the accordion that changed",
+      "summary": "Every section's BlocBuilder in Overview, Fundamentals and Technicals rebuilds on any MoGetQuoteAccordionExpanded, because buildWhen does not check the index or tab. Filter buildWhen by section and index.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes rebuild timing of accordions on three tabs. Logic inside the builder already ignores events for other indexes, so the rendered output is the same; a side effect is that the Fundamentals financial chart no longer re-plays its bar animation when another section is toggled.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+          "lines": "262-264",
+          "change": "buildWhen: current is MoGetQuoteAccordionExpanded && current.section == overview && current.accordionIndex == index."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+          "lines": "159-160",
+          "change": "Same filter for MoGetQuoteSections.fundamentals."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/technicals/technicals.dart",
+          "lines": "146-147",
+          "change": "Same filter for MoGetQuoteSections.technicals."
+        }
+      ],
+      "current": "Tapping one accordion header, or a chip, emits MoGetQuoteAccordionExpanded. All 16 Overview section builders (and all Fundamentals/Technicals builders, even on another tab's event) rebuild their full content: models are re-parsed, MarketDepth/KeyStatistics/charts get new widget instances. In Fundamentals, the financial chart's didUpdateWidget always restarts its 300 ms bar animation, so unrelated taps replay it.",
+      "steps": [
+        "Change the three buildWhen callbacks to check the section and the index.",
+        "Keep the builder body unchanged (it already uses section.isExpanded for non-matching events).",
+        "Check that MarketDepthContent's onScrollToDepth (index 0) and chips (index of chip) still match the item index; both pass the visible-list index, which is the same index used by itemBuilder."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+        "lines": "262-273",
+        "code": "      child: BlocBuilder<MoGetQuoteCubit, MoGetQuoteState>(\n        buildWhen: (final MoGetQuoteState previous, final MoGetQuoteState current) =>\n            current is MoGetQuoteAccordionExpanded,\n        builder: (final BuildContext context, final MoGetQuoteState state) {\n          bool isExpanded = section.isExpanded;\n          if (state is MoGetQuoteAccordionExpanded &&\n              state.accordionIndex == index &&\n              state.section == MoGetQuoteSections.overview) {\n            isExpanded = state.isExpanded;\n            section.isExpanded = isExpanded;\n            WidgetVisibilityTracker.updateExpansion('overview_${section.type.name}', isExpanded);\n          }"
+      },
+      "after_code": {
+        "code": "child: BlocBuilder<MoGetQuoteCubit, MoGetQuoteState>(\n  buildWhen: (final MoGetQuoteState previous, final MoGetQuoteState current) =>\n      current is MoGetQuoteAccordionExpanded &&\n      current.section == MoGetQuoteSections.overview &&\n      current.accordionIndex == index,\n  builder: (final BuildContext context, final MoGetQuoteState state) {\n    bool isExpanded = section.isExpanded;\n    if (state is MoGetQuoteAccordionExpanded) {\n      // buildWhen guarantees section and index match\n      isExpanded = state.isExpanded;\n      section.isExpanded = isExpanded;\n      WidgetVisibilityTracker.updateExpansion('overview_${section.type.name}', isExpanded);\n    }\n    // ... unchanged\n"
+      },
+      "safety": [
+        "Builder logic for the matching index is unchanged; non-matching sections render exactly what they rendered before, because their inputs did not change.",
+        "Sections still rebuild when their parent list rebuilds on data emissions."
+      ],
+      "regression_checks": [
+        "Expand/collapse each section on Overview, Fundamentals, Technicals; other sections keep their state.",
+        "Chip tap expands and scrolls to the right section.",
+        "Market depth 'scroll to depth' still expands section 0.",
+        "Financial overview chart: bars animate on first show and on tab/data change, not on other accordion taps."
+      ],
+      "after_improvement": "An accordion tap rebuilds 1 section instead of all 16 (Overview) or 5 (Fundamentals/Technicals); removes the long frame on expand/collapse and the replayed chart animation.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "B5",
+      "title": "Parse section models once per data update",
+      "summary": "Section builders convert API responses into view models inside build(): AnalystRating, QuantScore, PeerComparison (twice), CorporateActions and Holdings. Cache each result keyed by the source object so it is computed once per data emission.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Pure functions moved behind a cache keyed by the identity of the same input; outputs are identical.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+          "lines": "648-654, 700-750, 787-797",
+          "change": "Read models from a small per-State memo instead of re-parsing in build."
+        }
+      ],
+      "current": "Every rebuild of a section (data emission, accordion event, parent setState from TopMutualFund) re-runs fromApiResponse/fromApi/fromSimilarSymbols. PeerComparisonDataTransformer.fromSimilarSymbols runs twice per rebuild, once for Peer Comparison and once for Last Visited.",
+      "steps": [
+        "Add a tiny helper `_memo<S, R>(String key, S source, R Function(S) build)` that stores (identical(source) check, result) in a Map<String, (Object?, Object?)>.",
+        "Use it for AnalystRatingModel, QuantScore, PeerComparison list (shared by both sections), CorporateActionEvent list and OverviewHoldingDetails (key also includes scripId).",
+        "Clear the memo when MoGetQuoteAssetTypeDataLoaded arrives (new stock/segment).",
+        "Later step (optional): move these conversions into OverviewDataManager so the cubit does them once off the build path."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+        "lines": "648-650, 700-703, 711-714, 728-730, 741-743, 787-788",
+        "code": "  Widget _buildHoldingsSection(final ScripsHoldingResponse data) {\n    final OverviewHoldingDetails holdingsData =\n        HoldingsCalculationHelper.fromApiResponse(data, _cubit.quoteArguments?.scripId);\n// ...\n  Widget _buildAnalystRatingSection(final OverviewDataManager data) {\n    final AnalystRatingModel ratingData = data.analystRatingData != null\n        ? AnalystRatingModel.fromApiResponse(data.analystRatingData!)\n        : AnalystRatingModel.getDummyData();\n// ...\n  Widget _buildQuantScoreSection(final OverviewDataManager data) {\n    final QuantScore quantScore = data.quantScoreData != null\n        ? QuantScore.fromApiResponse(data.quantScoreData!)\n        : QuantScore.defaultScore();\n// ...\n  Widget _buildPeerComparisonSection(final OverviewDataManager data) {\n    final List<PeerCompanyData> peerData =\n        PeerComparisonDataTransformer.fromSimilarSymbols(data.similarStocksData);\n// ...\n  Widget _buildLastVisitedSection(final OverviewDataManager data) {\n    final List<PeerCompanyData> peerData =\n        PeerComparisonDataTransformer.fromSimilarSymbols(data.similarStocksData);\n// ...\n  Widget _buildCorporateActionsSection(final CorpActionData data) {\n    final List<CorporateActionEvent> corporateActionEventList = CorporateActionEvent.fromApi(data);"
+      },
+      "after_code": {
+        "code": "final Map<String, (Object?, Object?)> _memoCache = <String, (Object?, Object?)>{};\n\nR _memo<S, R>(String key, S source, R Function(S) build) {\n  final (Object?, Object?)? hit = _memoCache[key];\n  if (hit != null && identical(hit.$1, source)) return hit.$2 as R;\n  final R value = build(source);\n  _memoCache[key] = (source, value);\n  return value;\n}\n\nList<PeerCompanyData> _peerData(OverviewDataManager d) => _memo(\n    'peer', d.similarStocksData, PeerComparisonDataTransformer.fromSimilarSymbols);\n\nWidget _buildAnalystRatingSection(final OverviewDataManager data) {\n  final AnalystRatingModel ratingData = data.analystRatingData != null\n      ? _memo('rating', data.analystRatingData!, AnalystRatingModel.fromApiResponse)\n      : AnalystRatingModel.getDummyData();\n  // ... unchanged\n}"
+      },
+      "safety": [
+        "Same functions, same inputs; cache hit only when the input object is identical.",
+        "Cache cleared on stock/segment change."
+      ],
+      "regression_checks": [
+        "Analyst rating, quant score, peer comparison, last visited, corporate actions and holdings show the same values as before for 3 stocks.",
+        "Switch stock from Peer/Last visited: new stock shows its own data."
+      ],
+      "after_improvement": "Removes repeated model parsing from every section rebuild; fewer allocations during expand/collapse and data emissions.",
+      "depends_on": [
+        "B4"
+      ],
+      "verify": false
+    },
+    {
+      "id": "B6",
+      "title": "Build the Overview section list once",
+      "summary": "The _sections getter allocates 16 new OverviewSection objects on every call, and it is called once per visible section in _getVisibleSections and once per default title. Build the list once in State and look sections up from a map.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Removes allocation. Side effect: because the objects are recreated today, each Overview data emission resets every section's isExpanded to true, which can re-open sections the user collapsed while background data is still arriving; with one list they stay as the user left them.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+          "lines": "89-110, 140-157, 873-875",
+          "change": "Replace the getter with a late final list plus Map<OverviewType, OverviewSection>; use it in _getVisibleSections and _getSectionByTitle."
+        }
+      ],
+      "current": "_getVisibleSections calls _sections inside map() for each visible type, so N visible sections allocate 16xN objects per Overview rebuild; buildDefaultSectionTitle calls _getSectionByTitle which allocates 16 more per section. The new objects all start with isExpanded = true.",
+      "steps": [
+        "Change `List<OverviewSection> get _sections => [...]` to `late final List<OverviewSection> _sections = [...]` and add `late final Map<OverviewType, OverviewSection> _sectionByType` and a title map.",
+        "In _getVisibleSections use `_sectionByType[type] ?? _extraSections.putIfAbsent(type, () => OverviewSection(type.label, type))` so types not in the list (stockReturns, advanceDecline) also keep one instance.",
+        "Reset the list (recreate) on MoGetQuoteAssetTypeDataLoaded so a new segment starts with today's default expansion."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+        "lines": "89-92, 151-156, 873-875",
+        "code": "  List<OverviewSection> get _sections => <OverviewSection>[\n        OverviewSection(MoGetQuoteStrings.marketDepth, OverviewType.marketDepth,\n            showInfoIcon: true),\n        OverviewSection(MoGetQuoteStrings.cas, OverviewType.cas, showInfoIcon: true),\n// ...\n    return availableTypes.map((final OverviewType type) {\n      return _sections.firstWhere(\n        (final OverviewSection s) => s.type == type,\n        orElse: () => OverviewSection(type.label, type),\n      );\n    }).toList();\n// ...\n  OverviewSection? _getSectionByTitle(final String title) {\n    return _sections.where((final OverviewSection s) => s.title == title).firstOrNull;\n  }"
+      },
+      "after_code": {
+        "code": "late final List<OverviewSection> _sections = _createSections();\nlate Map<OverviewType, OverviewSection> _sectionByType = _index(_sections);\nfinal Map<OverviewType, OverviewSection> _extraSections = {};\n\nList<OverviewSection> _getVisibleSections(\n    final MoGetQuoteAssetType assetType, final OverviewDataManager data) {\n  // ... same flags\n  return availableTypes\n      .map((final OverviewType t) => _sectionByType[t] ??\n          _extraSections.putIfAbsent(t, () => OverviewSection(t.label, t)))\n      .toList();\n}\n\nOverviewSection? _getSectionByTitle(final String title) =>\n    _sectionByTitle[title];"
+      },
+      "safety": [
+        "Same titles, types and info-icon flags.",
+        "Expansion state resets when the stock or segment changes, matching the start state of today.",
+        "Can be shipped together with B4 (same file)."
+      ],
+      "regression_checks": [
+        "Collapse two Overview sections right after opening a stock while data is loading; they stay collapsed.",
+        "Switch segment (cash/futures): sections start expanded as today.",
+        "Info icons appear on the same sections."
+      ],
+      "after_improvement": "Removes up to ~250 object allocations per Overview rebuild and keeps user-collapsed sections collapsed.",
+      "depends_on": [],
+      "verify": true
+    },
+    {
+      "id": "B7",
+      "title": "Reuse section keys in Fundamentals and Technicals",
+      "summary": "Fundamentals and Technicals create a new GlobalKey in the item builder on every build, so every rebuild unmounts and remounts each section with its charts, grids and TabControllers. Create the keys once per section type, as Overview already does.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Element identity becomes stable, which is the normal Flutter behaviour; local widget state (selected sub-tab, chart selection) now survives data emissions instead of being reset.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+          "lines": "153-155",
+          "change": "Use a Map<FundamentalType, GlobalKey<RectGetterState>> putIfAbsent, as overview_main.dart:86-87 does."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/technicals/technicals.dart",
+          "lines": "140-142",
+          "change": "Same with Map<TechnicalType, GlobalKey<RectGetterState>>."
+        }
+      ],
+      "current": "Fundamentals emits MoGetQuoteFundamentalLoaded once after foreground sections and again for each background section; Technicals similarly. Each emission rebuilds the list and each _buildSection mints a new GlobalKey, so Flutter disposes the old section subtree (FinancialOverviewWidget's two TabControllers, the bar chart and its AnimationController, Moving Average tables) and builds a new one.",
+      "steps": [
+        "Add `final Map<FundamentalType, GlobalKey<RectGetterState>> _sectionRectKeys = {};` to _FundamentalsScreenState and use putIfAbsent(section.type, RectGetter.createGlobalKey).",
+        "Same in _TechnicalsScreenState.",
+        "Leave WidgetVisibilityTracker.register calls as they are (they now register the same key each time)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+        "lines": "153-159",
+        "code": "  Widget _buildSection(final BuildContext context, final FundamentalSection section, final FundamentalDataManager dataManager, final int index) {\n    final GlobalKey<RectGetterState> rectKey = RectGetter.createGlobalKey();\n    WidgetVisibilityTracker.register('fundamental_${section.type.name}', rectKey, isExpanded: section.isExpanded);\n    \n    return RectGetter(\n      key: rectKey,\n      child: BlocBuilder<MoGetQuoteCubit, MoGetQuoteState>("
+      },
+      "after_code": {
+        "code": "final Map<FundamentalType, GlobalKey<RectGetterState>> _sectionRectKeys =\n    <FundamentalType, GlobalKey<RectGetterState>>{};\n\nWidget _buildSection(final BuildContext context, final FundamentalSection section,\n    final FundamentalDataManager dataManager, final int index) {\n  final GlobalKey<RectGetterState> rectKey =\n      _sectionRectKeys.putIfAbsent(section.type, RectGetter.createGlobalKey);\n  WidgetVisibilityTracker.register('fundamental_${section.type.name}', rectKey,\n      isExpanded: section.isExpanded);\n  return RectGetter(\n    key: rectKey,\n    // ... unchanged\n"
+      },
+      "safety": [
+        "Same pattern already in production in overview_main.dart:80-87 (added to fix MarketDepth state being reset).",
+        "No change to what each section renders."
+      ],
+      "regression_checks": [
+        "Fundamentals: select a Financial Overview sub-tab, wait for background sections to load; the selection stays.",
+        "Technicals: Moving Average tab selection stays after data updates.",
+        "Chips scroll to the right Fundamentals/Technicals section."
+      ],
+      "after_improvement": "No remount of Fundamentals/Technicals sections on each data emission; removes the long frames when background sections arrive and the reset of sub-tab state.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "B8",
+      "title": "Use Column for short lists inside sections",
+      "summary": "Eight sections render small fixed lists through shrink-wrapped, non-scrolling ListViews, each adding a viewport and sliver layout inside the outer scroll view. Replace them with Column (same children, same spacing).",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Same children and separators in the same order; only the container type changes. stock_returns_info_widget has no NeverScrollableScrollPhysics today, so it is technically scrollable; Column removes that (its content always fits).",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/your_holdings/holdings_content.dart",
+          "lines": "28-31",
+          "change": "ListView -> Column(mainAxisSize: min)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/widgets/key_statistics_content.dart",
+          "lines": "55-60",
+          "change": "ListView.builder -> Column with List.generate(rowCount, ...)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/stock_returns/stock_returns_info_widget.dart",
+          "lines": "41-46",
+          "change": "ListView.separated -> Column with separators."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/last_visited_stocks/last_visited_stocks_accordion.dart",
+          "lines": "113-118",
+          "change": "ListView.separated -> Column; keep the per-item StreamBuilder."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/corporate_actions/corporate_actions_accordion.dart",
+          "lines": "124-131",
+          "change": "ListView.separated -> Column (displayCount is small); the horizontal chips ListView at 95 stays."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/top_mutual_fund_invested/top_mutual_fund_accordion.dart",
+          "lines": "100-112",
+          "change": "ListView.builder -> Column; pass index instead of _mutualFunds.indexOf(fund) (O(n^2))."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/analysis_rating/rating_breakdown_widget.dart",
+          "lines": "47-57",
+          "change": "ListView.separated -> Column."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/quant_score/quant_score_detail_card.dart",
+          "lines": "78-89",
+          "change": "ListView.separated -> Column."
+        }
+      ],
+      "current": "Each shrinkWrap ListView builds all its children anyway (no laziness inside an unbounded parent) but adds a RenderShrinkWrappingViewport, sliver list, scroll position and per-item RepaintBoundary/KeepAlive wrappers. That is extra layout work on every relayout of these sections, which happens on ticks and accordion animations.",
+      "steps": [
+        "Add a small helper `List<Widget> separated(int count, Widget Function(int) item, Widget separator)` in a shared widgets file of the module.",
+        "Replace each ListView with Column(crossAxisAlignment as the item expects, mainAxisSize: MainAxisSize.min, children: separated(...)).",
+        "Keep padding: EdgeInsets.zero cases as no padding.",
+        "For lists that can be long (none of these today), keep a ListView or move to slivers with B10."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/quant_score/quant_score_detail_card.dart",
+        "lines": "78-89",
+        "code": "          ListView.separated(\n            shrinkWrap: true,\n            physics: const NeverScrollableScrollPhysics(),\n            itemCount: quantScore.metrics.length,\n            padding: EdgeInsets.zero,\n            itemBuilder: (BuildContext context, int index) {\n              return QuantScoreMetricItem(metric: quantScore.metrics[index]);\n            },\n            separatorBuilder: (BuildContext context, int index) {\n              return MOSpacing.verticalSpace24;\n            },\n          ),"
+      },
+      "after_code": {
+        "code": "Column(\n  crossAxisAlignment: CrossAxisAlignment.stretch,\n  mainAxisSize: MainAxisSize.min,\n  children: <Widget>[\n    for (int i = 0; i < quantScore.metrics.length; i++) ...<Widget>[\n      if (i > 0) MOSpacing.verticalSpace24,\n      QuantScoreMetricItem(metric: quantScore.metrics[i]),\n    ],\n  ],\n),"
+      },
+      "safety": [
+        "Identical child widgets and separators; screenshots before/after should match pixel for pixel.",
+        "No change to data or callbacks."
+      ],
+      "regression_checks": [
+        "Visual compare of Holdings, Key Statistics, Stock Returns, Last Visited, Corporate Actions, Top Mutual Funds, Analyst Rating, Quant Score in light and dark theme.",
+        "Last Visited rows still update live prices and watchlist tap works."
+      ],
+      "after_improvement": "Removes 8 nested viewports from the Overview tree; cheaper layout on every tick-driven relayout and accordion animation.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "B9",
+      "title": "Collapse lower sections by default (flagged)",
+      "summary": "Every Overview, Fundamentals and Technicals section starts expanded, and MOAccordion uses maintainState: true, so all content is built and laid out at open even when off screen. Behind a flag, expand only the first N sections and build collapsed ones on first expand.",
+      "categories": [
+        "FE",
+        "Product",
+        "BE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes what the user sees on open (sections collapsed). Default flag value keeps all sections expanded as today.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": "Should all quote sections still open expanded? Proposed: expand the first 2 Overview sections and the first Fundamentals/Technicals section; others collapsed until tapped (or tapped via chips, which already expand).",
+      "be_request": "Add Remote Config key quote_sections_expanded_count (int, default -1 = all expanded, today's behaviour).",
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+          "lines": "232-236, 284-285, 905-912",
+          "change": "Default isExpanded from the flag; pass maintainState: hasBeenExpanded so a never-opened section is not built."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+          "lines": "112-115, 178-179, 271-278",
+          "change": "Same for FundamentalSection."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/technicals/technicals.dart",
+          "lines": "103-106, 165-166, 261-268",
+          "change": "Same for TechnicalSection."
+        }
+      ],
+      "current": "OverviewSection, FundamentalSection and TechnicalSection all default isExpanded = true. MOAccordion with maintainState: true keeps children in an Offstage even when collapsed, and Offstage still lays its child out, so collapsing would not save work either. Result: all sections (market depth, charts, carousels, research cards) are built at open.",
+      "steps": [
+        "Read quote_sections_expanded_count once per screen; -1 keeps today's code path.",
+        "When N >= 0: the first N visible sections start expanded, others collapsed.",
+        "Track `hasBeenExpanded` per section; pass maintainState: section.hasBeenExpanded to MOAccordion so a collapsed section that was never opened builds no children; once opened it keeps today's maintainState: true behaviour.",
+        "Chips already call notifyAccordionExpanded(isExpanded: true) before scrolling, so chip navigation still opens the section.",
+        "Check analytics: WidgetVisibilityTracker only logs expanded sections; collapsed sections will log less (tell Product/Analytics)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+        "lines": "232-236, 284-289, 905-912",
+        "code": "    // Initialize first section as expanded if none are expanded\n    if (visibleSections.isNotEmpty &&\n        !visibleSections.any((final OverviewSection s) => s.isExpanded)) {\n      visibleSections[0].isExpanded = true;\n    }\n// ...\n            child: MOAccordion(\n              maintainState: true,\n              iconColor: context.surfaceIconNeutralNormal,\n              collapsedIconColor: context.surfaceIconNeutralNormal,\n              backgroundColor: context.surfaceBackgroundNeutralSubtle,\n              isExpanded: isExpanded,\n// ...\nclass OverviewSection {\n  final String title;\n  final OverviewType type;\n  final bool showInfoIcon;\n  bool isExpanded;\n\n  OverviewSection(this.title, this.type, {this.isExpanded = true, this.showInfoIcon = false});\n}"
+      },
+      "after_code": {
+        "code": "class OverviewSection {\n  final String title;\n  final OverviewType type;\n  final bool showInfoIcon;\n  bool isExpanded;\n  bool hasBeenExpanded;\n  OverviewSection(this.title, this.type,\n      {this.isExpanded = true, this.showInfoIcon = false})\n      : hasBeenExpanded = isExpanded;\n}\n\n// _buildContent: after computing visibleSections\nfinal int n = QuoteFlags.sectionsExpandedCount; // -1 = today\nif (n >= 0 && !_appliedDefaultExpansion) {\n  for (int i = 0; i < visibleSections.length; i++) {\n    visibleSections[i].isExpanded = i < n;\n    visibleSections[i].hasBeenExpanded = i < n;\n  }\n  _appliedDefaultExpansion = true;\n}\n\n// MOAccordion(\n//   maintainState: n < 0 || section.hasBeenExpanded,\n//   isExpanded: isExpanded, ...)"
+      },
+      "safety": [
+        "Flag default -1 = all expanded, maintainState true: exactly today.",
+        "Chip navigation and market-depth 'scroll to depth' already force-expand their section.",
+        "Once a section has been opened it behaves as today (state kept when collapsed)."
+      ],
+      "regression_checks": [
+        "Flag -1: no visible change on all three tabs.",
+        "Flag 2: first two Overview sections open, others closed; tapping opens with content; chips open and scroll.",
+        "Streaming sections (market depth, peer comparison) subscribe when opened.",
+        "Scroll analytics events still fire for expanded sections."
+      ],
+      "after_improvement": "With the flag on, Overview builds 2 sections instead of up to 16 at open; less layout per frame while scrolling and faster tab switch (40-45 fps tab-switch frames should move towards 60).",
+      "depends_on": [
+        "B6"
+      ],
+      "verify": true
+    },
+    {
+      "id": "B10",
+      "title": "Move tab content into lazy slivers (staged)",
+      "summary": "All tab content sits in one SliverToBoxAdapter and Overview is a shrink-wrapped ListView, so every section is built and laid out at once. Safe first step: render Overview sections as a SliverList inside the existing CustomScrollView behind a flag; Fundamentals/Technicals follow.",
+      "categories": [
+        "FE",
+        "BE"
+      ],
+      "risk": "High",
+      "risk_reason": "Changes the scroll structure that chips, sticky snap, swipe-to-switch-tab, visibility analytics and section offsets depend on. Off-screen sections are no longer built, so chip scroll-to-section must handle sections with no render object. Needs a flag and full regression of the quote page.",
+      "effort": "L",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": "Add Remote Config key quote_overview_slivers (bool, default false).",
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "266-312",
+          "change": "When the flag is on and Overview is selected, put OverviewSliver after the sticky header instead of _buildContentAreaSliver; keep minHeight with SliverFillRemaining(hasScrollBody: false)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+          "lines": "224-251",
+          "change": "Extract _buildSection into a sliver variant: SliverList.separated(itemCount, itemBuilder: _buildSection)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+          "lines": "98-108",
+          "change": "Move the horizontal-swipe GestureDetector to wrap the CustomScrollView so it still works with sliver content."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_chips_section.dart",
+          "lines": "342-360",
+          "change": "Chip tap to an unbuilt section: jump to an estimated offset, then correct with Scrollable.ensureVisible on the next frame."
+        }
+      ],
+      "current": "CustomScrollView has three slivers: details, pinned tabs, and one SliverToBoxAdapter containing QuoteContentArea. Inside it OverviewScreen uses ListView.separated(shrinkWrap: true) (overview_main.dart:240-249), which in an unbounded parent builds and lays out every section. Fundamentals (fundamentals.dart:119-121) and Technicals (technicals.dart:109-111) do the same.",
+      "steps": [
+        "Stage 1 (this change): flag-gated OverviewSliver = SliverList.separated with the same _buildSection items, keys, separators and bottom padding; keep the old path when the flag is off.",
+        "Keep a RectGetter around the sliver list's visible area for WidgetVisibilityTracker (or switch the tracker to the CustomScrollView's key).",
+        "Chip tap: if keyFor(id) has no render object, animate to an offset estimated from cached heights, then ensureVisible on the next frame (repeat once).",
+        "Move the swipe GestureDetector from KeyedSubtree content to around the CustomScrollView (only for Overview while flagged).",
+        "Stage 2: same for Fundamentals and Technicals. Stage 3: News/Stocks/Transactions if they show long lists.",
+        "Measure with DevTools: built sections at open, layout time per frame, scroll fps."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+        "lines": "266-272, 283-285, 303-312",
+        "code": "  Widget _buildCustomScrollView() {\n    return CustomScrollView(\n      controller: _scrollController,\n      physics: const ClampingScrollPhysics(),\n      slivers: <Widget>[\n        _buildQuoteDetailsSliver(),\n        BlocBuilder<MoGetQuoteCubit, MoGetQuoteState>(\n// ...\n        _buildContentAreaSliver(),\n      ],\n    );\n// ...\n  SliverToBoxAdapter _buildContentAreaSliver() {\n    return SliverToBoxAdapter(\n      child: ConstrainedBox(\n        constraints: BoxConstraints(\n          minHeight: MediaQuery.of(context).size.height - _minHeightOffset,\n        ),\n        child: const QuoteContentArea(),\n      ),\n    );\n  }"
+      },
+      "after_code": {
+        "code": "slivers: <Widget>[\n  _buildQuoteDetailsSliver(),\n  /* sticky header BlocBuilder unchanged */\n  if (QuoteFlags.overviewSlivers && _cubit.selectedSection == MoGetQuoteSections.overview)\n    const OverviewSliver()          // SliverList.separated of sections\n  else\n    _buildContentAreaSliver(),       // today\n  if (QuoteFlags.overviewSlivers)\n    const SliverFillRemaining(hasScrollBody: false, child: SizedBox.shrink()),\n],\n\n// overview_main.dart\n// Widget buildSliver(...) => SliverList.separated(\n//   itemCount: visibleSections.length,\n//   separatorBuilder: (_, __) => MOSpacing.verticalSpace24,\n//   itemBuilder: (c, i) => _buildSection(c, visibleSections[i], data, i),\n// );"
+      },
+      "safety": [
+        "Flag default false keeps the SliverToBoxAdapter path unchanged.",
+        "Same _buildSection widgets and keys in both paths; only the parent changes.",
+        "Rollout to a small percentage first; watch crash-free rate and scroll fps."
+      ],
+      "regression_checks": [
+        "Full quote page regression with flag on: all asset types, all tabs.",
+        "Chips to the last section from the top (section not yet built).",
+        "Sticky snap (B2/B3), app bar switch, swipe to switch tab, pull back to top.",
+        "Scroll analytics (logQuotePageScroll) still fire once per visible section.",
+        "Streaming sections stop/start when scrolled off/on screen."
+      ],
+      "after_improvement": "Only sections near the viewport are built and laid out; open and tab-switch cost no longer grows with the number of sections. Expected main contributor to tab-switch frames reaching 60 fps.",
+      "depends_on": [
+        "B1",
+        "B3",
+        "B7"
+      ],
+      "verify": true
+    },
+    {
+      "id": "B11",
+      "title": "Remove IntrinsicHeight from ticking widgets",
+      "summary": "IntrinsicHeight runs an extra layout pass over its subtree. Five sites use it, including market depth and moving average, which relayout on every price tick. Replace with layouts that give the same result without intrinsics.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Layout change in visible tables; output should be pixel-identical but each site needs a screenshot check (dividers, equal column heights).",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+          "lines": "271-288",
+          "change": "Draw the middle divider as a right border on the bid column instead of a 1 px Container that needs IntrinsicHeight."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/peer_comparision/peer_comparison_table.dart",
+          "lines": "151-153",
+          "change": "Most cells use fixed heights (PeerComparisonConstants.cellHeight, 33) but some rows use height: null; make those fixed too, then drop IntrinsicHeight + stretch. If not possible, keep IntrinsicHeight here (this table does not tick per frame)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/research_report/research_report_section.dart",
+          "lines": "74, 87",
+          "change": "Give the card a fixed/measured height (SizedBox) instead of IntrinsicHeight so its Spacer resolves."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/technicals/moving_average.dart",
+          "lines": "293-310",
+          "change": "Remove IntrinsicHeight/Expanded/inner SingleChildScrollView (table is short); also compute _getTableData(tab, ltp) once instead of once per row."
+        }
+      ],
+      "current": "Market depth updates on every depth tick and is wrapped in IntrinsicHeight so a 1 px vertical divider stretches; every tick runs intrinsic measurement of both columns and then the real layout. Moving Average does the same inside a StreamBuilder, and also calls _getTableData(tab, data.ltp) again for each row to check the last index. Peer comparison and research report do it on each rebuild.",
+      "steps": [
+        "Market depth: wrap the bid column in a DecoratedBox with Border(right: BorderSide(width: 1, color: surfaceBorderNeutralNormal)) and remove the divider Container and IntrinsicHeight.",
+        "Moving Average: build `final rows = _getTableData(tab, data.ltp);` once; replace IntrinsicHeight + Expanded + SingleChildScrollView with a plain Column.",
+        "Peer comparison: most cells already use fixed heights; give the rows that use height: null a fixed height, then set Row crossAxisAlignment to start and remove IntrinsicHeight. Skip this site if equal heights cannot be guaranteed.",
+        "Research report: wrap the card in SizedBox(height: ResearchIdeasConstants-like fixed card height) or measure once; keep the Spacer.",
+        "Take before/after screenshots of each site (light/dark, 5 and 20 depth levels)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+        "lines": "271-288",
+        "code": "      child: IntrinsicHeight(\n        child: Column(\n          children: [\n            Row(\n              children: <Widget>[\n                Expanded(child: _buildBidColumn(context, depthData, isExpanded)),\n                Container(\n                  width: 1,\n                  color: context.surfaceBorderNeutralNormal,\n                ),\n                Expanded(child: _buildAskColumn(context, depthData, isExpanded)),\n              ],\n            ),\n            if(isExpanded)\n            MOSpacing.verticalSpace12\n          ],\n        ),\n      ),"
+      },
+      "after_code": {
+        "code": "child: Column(\n  children: <Widget>[\n    Row(\n      crossAxisAlignment: CrossAxisAlignment.start,\n      children: <Widget>[\n        Expanded(\n          child: DecoratedBox(\n            decoration: BoxDecoration(\n              border: Border(right: BorderSide(\n                  color: context.surfaceBorderNeutralNormal, width: 1)),\n            ),\n            child: _buildBidColumn(context, depthData, isExpanded),\n          ),\n        ),\n        Expanded(child: _buildAskColumn(context, depthData, isExpanded)),\n      ],\n    ),\n    if (isExpanded) MOSpacing.verticalSpace12,\n  ],\n),\n// assumption: bid and ask columns have the same row count, so the\n// border spans the full height; verify with 5 and 20 levels"
+      },
+      "safety": [
+        "Pixel comparison per site before merge.",
+        "If a column can be shorter than the other, keep IntrinsicHeight for that site only."
+      ],
+      "regression_checks": [
+        "Market depth 5 and 20 levels: divider full height, columns aligned, live updates.",
+        "Peer comparison horizontal scroll and row alignment.",
+        "Research report single card and multi-card carousel heights.",
+        "Moving average SMA/EMA tabs and last row without trailing gap."
+      ],
+      "after_improvement": "One layout pass instead of two on each market-depth and moving-average tick; fewer long UI frames while scrolling during market hours.",
+      "depends_on": [],
+      "verify": true
+    },
+    {
+      "id": "B12",
+      "title": "Make card shadows and blur cheaper to draw",
+      "summary": "Research idea cards draw blur-15 shadows, each restricted card has its own BackdropFilter, the sticky tab draws a blur-13 shadow, and market updates use Material elevation. Keep the look, but isolate these with RepaintBoundary and replace per-card BackdropFilter with a blur of the card itself.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Visual detail on research cards and the sticky header; the blur and shadow parameters stay the same but the technique changes, so design must compare screenshots.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/widgets/restricted_access_overlay.dart",
+          "lines": "38-59",
+          "change": "Replace BackdropFilter with ImageFiltered applied to the card content in research_idea_card.dart; keep the 50 % overlay container."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/research_idea_card.dart",
+          "lines": "92-104, 125-135, 477-487",
+          "change": "Wrap each card in RepaintBoundary; when restricted, wrap _buildCard in ImageFiltered(blur) instead of drawing a BackdropFilter on top."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_tab_with_shadow.dart",
+          "lines": "68-81",
+          "change": "Wrap the shadow container in RepaintBoundary."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+          "lines": "192-195",
+          "change": "Replace Material(elevation: 4) with an equivalent BoxDecoration shadow inside the existing card decoration."
+        }
+      ],
+      "current": "BackdropFilter blurs whatever is behind it in every frame where anything under it moves, so during a scroll every visible restricted research card re-blurs its area on the raster thread (the M14 Mali GPU is slow at this). The card under the overlay also rebuilds on each tick. Large blur shadows and Material elevation are redrawn whenever their layer is repainted.",
+      "steps": [
+        "Restricted card: `ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: r, sigmaY: r), child: _buildCard(...))` plus the existing white 50 % Container and lock icon on top (no BackdropFilter).",
+        "Wrap each ResearchIdeaCard in RepaintBoundary so ticking text in one card does not repaint shadows of the others.",
+        "Sticky tab shadow: RepaintBoundary around the Positioned child.",
+        "Market updates: remove Material elevation; add BoxShadow(color: Color(0xffC0C0C4) at 0.2, blurRadius about 8, offset (0, 2)) tuned by design to match elevation 4.",
+        "Leave blur radius and colours unchanged unless design agrees to lighter values."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/widgets/restricted_access_overlay.dart",
+        "lines": "38-59",
+        "code": "  Widget _buildBlurOverlay(final BuildContext context) {\n    return Positioned.fill(\n      child: GestureDetector(\n        onTap: () => _handleTap(context),\n        child: ClipRect(\n          child: BackdropFilter(\n            filter: ImageFilter.blur(\n                sigmaX: ResearchIdeasConstants.overlayBlurRadius,\n                sigmaY: ResearchIdeasConstants.overlayBlurRadius),\n            child: Container(\n              decoration: BoxDecoration(\n                color: AppColors.isDarkTheme\n                      ? AppColors.foreGround.withOpacity(0.5)\n                      : Colors.white.withOpacity(0.5),\n                borderRadius: MOSpacing.borderRadius8,\n                border: Border.all(color: context.surfaceBorderNeutralNormal),\n              ),\n            ),\n          ),\n        ),\n      ),\n    );"
+      },
+      "after_code": {
+        "code": "// research_idea_card.dart (_buildCardWithAccess)\nfinal Widget card = _buildCard(context, currentLtp, currentExpectedProfit);\nreturn SizedBox(\n  height: cardHeight,\n  child: Stack(children: <Widget>[\n    if (accessLevel == UserAccessLevel.restricted)\n      ImageFiltered(\n        imageFilter: ImageFilter.blur(\n            sigmaX: ResearchIdeasConstants.overlayBlurRadius,\n            sigmaY: ResearchIdeasConstants.overlayBlurRadius),\n        child: card,\n      )\n    else\n      card,\n    if (accessLevel == UserAccessLevel.restricted)\n      RestrictedAccessOverlay(/* same args */ blurBehind: false),\n  ]),\n);\n// restricted_access_overlay.dart: when blurBehind == false, draw only the\n// 50% Container (no ClipRect/BackdropFilter)."
+      },
+      "safety": [
+        "Same blur sigma, overlay colour, border and radius; screenshot comparison with design before merge.",
+        "RestrictedAccessOverlay keeps a parameter defaulting to today's BackdropFilter, so other call sites are unchanged.",
+        "Tap handling on the overlay unchanged."
+      ],
+      "regression_checks": [
+        "Research ideas for active, non-traded and blocked users in light/dark: look matches.",
+        "Tap on restricted card opens the same bottom sheet.",
+        "Market updates card shadow matches.",
+        "Sticky header shadow in light theme, border in dark theme."
+      ],
+      "after_improvement": "Raster thread no longer re-blurs backdrops on every scroll frame when research cards are visible; fewer raster jank frames in that part of Overview.",
+      "depends_on": [],
+      "verify": true
+    },
+    {
+      "id": "B13",
+      "title": "Repaint custom painters only on real change",
+      "summary": "Four painters return shouldRepaint => true, and the financial bar chart compares closures and lists by identity, which are new on every build, so it always repaints. Compare the actual fields, and only restart the bar animation when values change.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Painters draw the same output; they just skip repaints when inputs are equal. The bar-animation change stops replaying the animation on unrelated rebuilds.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/custom_painter/buildup_chart_painter.dart",
+          "lines": "465",
+          "change": "Compare chartData (listEquals), tooltipBarIndex, tooltipData, plotBandColor and colours."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/painters/buildup_x_axis_painter.dart",
+          "lines": "113",
+          "change": "Compare timeIntervals and chartData (listEquals) and colours."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/technicals/moving_average_chart_painter.dart",
+          "lines": "106",
+          "change": "Compare bullishCount, bearishCount, currentValue, segment counts, sizes and colours (listEquals)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/pe_comparision_widget.dart",
+          "lines": "510",
+          "change": "KeyStatisticsPainter: compare data fields."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+          "lines": "154-166, 818-840",
+          "change": "Compare series values, not closure identity; in didUpdateWidget restart the animation only when y-values differ."
+        }
+      ],
+      "current": "shouldRepaint only matters when the parent rebuilds with a new painter. These painters sit inside sections that rebuild on ticks, accordion events and data emissions, and each of those triggers a full repaint of the chart. The financial chart also calls _animationController.forward(from: 0) in every didUpdateWidget, so each rebuild replays 300 ms of animation frames (18 repaints, each creating TextPainters and calling debugPrint).",
+      "steps": [
+        "Implement field comparisons with listEquals from package:flutter/foundation.dart.",
+        "Financial chart: compare `series` by length and per-series data values (yValueMapper results), selectedBar/Series, animationValue, layout fields; drop the closure comparisons. Closures are rebuilt each build but are pure functions of data + theme; add a `styleKey` (theme brightness) to catch theme changes.",
+        "Financial chart didUpdateWidget: compute new y-values; if deep-equal to old ones, do not restart the animation.",
+        "Keep shouldRepaint true while a tooltip/selection animation is running only where needed."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+        "lines": "818-840",
+        "code": "  @override\n  bool shouldRepaint(covariant final BarChartPainter<T> oldDelegate) {\n    final bool seriesChanged = oldDelegate.series != series;\n    final bool selectionChanged = oldDelegate.selectedBar != selectedBar ||\n        oldDelegate.selectedSeries != selectedSeries;\n    final bool mappersChanged = oldDelegate.xValueMapper != xValueMapper ||\n        oldDelegate.yValueMapper != yValueMapper;\n    final bool formattersChanged =\n        oldDelegate.xAxisLabelStyleFormatter != xAxisLabelStyleFormatter;\n    final bool layoutChanged = oldDelegate.barWidth != barWidth ||\n        oldDelegate.seriesSpacing != seriesSpacing ||\n        oldDelegate.maxXLabels != maxXLabels ||\n        oldDelegate.minY != minY ||\n        oldDelegate.maxY != maxY;\n    final bool animationChanged = oldDelegate.animationValue != animationValue;\n\n    return seriesChanged ||\n        selectionChanged ||\n        mappersChanged ||\n        formattersChanged ||\n        layoutChanged ||\n        animationChanged;\n  }"
+      },
+      "after_code": {
+        "code": "@override\nbool shouldRepaint(covariant final BarChartPainter<T> old) {\n  return old.animationValue != animationValue ||\n      old.selectedBar != selectedBar ||\n      old.selectedSeries != selectedSeries ||\n      old.barWidth != barWidth ||\n      old.seriesSpacing != seriesSpacing ||\n      old.maxXLabels != maxXLabels ||\n      old.minY != minY || old.maxY != maxY ||\n      old.styleKey != styleKey ||                 // e.g. theme brightness\n      !_sameValues(old.series, old.yValueMapper, series, yValueMapper);\n}\n\n// moving_average_chart_painter.dart\n@override\nbool shouldRepaint(covariant MovingAverageChartPainter old) =>\n    old.bullishCount != bullishCount || old.bearishCount != bearishCount ||\n    old.currentValue != currentValue || old.totalSegments != totalSegments ||\n    old.totalSegmentForPaint != totalSegmentForPaint ||\n    old.barWidth != barWidth || old.indicatorColor != indicatorColor ||\n    !listEquals(old.colors, colors);"
+      },
+      "safety": [
+        "Painted output for a given input is unchanged.",
+        "Theme switch still repaints because colours/styleKey are compared.",
+        "Bars still animate on first show and on real data/tab change."
+      ],
+      "regression_checks": [
+        "15-min buildup: tap bar shows tooltip, auto-hide works.",
+        "Financial overview: switch main/sub tabs, bars animate; toggle another accordion, bars do not replay.",
+        "Moving average gauge, PE comparison slider correct; theme switch light/dark repaints all."
+      ],
+      "after_improvement": "Painters skip repaint when nothing changed; removes repeated 300 ms chart animations and their frames.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "B14",
+      "title": "Cache and dispose TextPainters in painters",
+      "summary": "The bar chart and slider painters create new TextPainters on every paint (labels that rarely change) and never dispose them. Build label painters once per input, reuse them, and dispose them.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Same text, style and positions; only object lifetime changes.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/widgets/sliders/slider_painter.dart",
+          "lines": "160-208",
+          "change": "Lay out min/max/Low/High TextPainters once per (min, max, decimals, colours) and reuse on each tick repaint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+          "lines": "618-622, 747-751, 774-778, 804-808",
+          "change": "Lay out x-axis and below-axis labels once per data set in the State; reuse during the 300 ms animation (bar value labels change per frame and stay per paint but are disposed)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/painters/buildup_x_axis_painter.dart",
+          "lines": "33, 61-65, 103-108",
+          "change": "Reuse one TextPainter and dispose it at the end of paint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/custom_painter/buildup_chart_painter.dart",
+          "lines": "209-219",
+          "change": "Dispose tooltip TextPainter after use."
+        }
+      ],
+      "current": "SliderPainter repaints on every LTP tick (current changes) and each time lays out 4 TextPainters for min/max values and the fixed 'Low'/'High' labels. BarChartPainter lays out one TextPainter per x-label, per bar value and per below-axis value on every animation frame. None are disposed, so native paragraph objects wait for GC.",
+      "steps": [
+        "SliderPainter: move label painters into a small `_SliderLabels` cache object created by the widget State, keyed by min/max/decimals/style; painter receives it and only paints.",
+        "Dispose cached painters when the key changes and in State.dispose().",
+        "BarChartPainter: precompute x-axis label painters in the chart State when series/formatter changes; pass them to the painter.",
+        "For per-paint painters that must stay (animated bar values), call textPainter.dispose() after paint."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/widgets/sliders/slider_painter.dart",
+        "lines": "170-189",
+        "code": "    // Draw min value above track (left)\n    final TextPainter minValuePainter = TextPainter(\n      text: TextSpan(text: minValue, style: valueStyle),\n      textDirection: TextDirection.ltr,\n    )..layout();\n\n    minValuePainter.paint(\n        canvas, Offset(0, size.height / 2 - MOSpacing.spacing12 - minValuePainter.height));\n\n    // Draw max value above track (right)\n    final TextPainter maxValuePainter = TextPainter(\n      text: TextSpan(text: maxValue, style: valueStyle),\n      textDirection: TextDirection.ltr,\n    )..layout();\n\n    maxValuePainter.paint(\n      canvas,\n      Offset(size.width - maxValuePainter.width,\n          size.height / 2 - MOSpacing.spacing12 - maxValuePainter.height),\n    );"
+      },
+      "after_code": {
+        "code": "class SliderLabels {\n  SliderLabels(this.minText, this.maxText, TextStyle valueStyle, TextStyle labelStyle)\n      : min = _tp(minText, valueStyle), max = _tp(maxText, valueStyle),\n        low = _tp('Low', labelStyle), high = _tp('High', labelStyle);\n  final String minText, maxText;\n  final TextPainter min, max, low, high;\n  static TextPainter _tp(String t, TextStyle s) => TextPainter(\n      text: TextSpan(text: t, style: s), textDirection: TextDirection.ltr)..layout();\n  void dispose() { min.dispose(); max.dispose(); low.dispose(); high.dispose(); }\n}\n\n// SliderPainter._drawLabels\nfinal double y = size.height / 2 - MOSpacing.spacing12;\nlabels.min.paint(canvas, Offset(0, y - labels.min.height));\nlabels.max.paint(canvas, Offset(size.width - labels.max.width, y - labels.max.height));\nlabels.low.paint(canvas, Offset(0, size.height / 2 + MOSpacing.spacing8));\nlabels.high.paint(canvas, Offset(size.width - labels.high.width, size.height / 2 + MOSpacing.spacing8));"
+      },
+      "safety": [
+        "Same strings, styles and offsets.",
+        "Cache rebuilt whenever min, max, decimals or theme colours change."
+      ],
+      "regression_checks": [
+        "Key statistics sliders (day range, 52-week) show correct min/max and move with LTP.",
+        "Financial overview labels and values in all tabs; theme switch."
+      ],
+      "after_improvement": "No text layout on each tick repaint of sliders; fewer allocations during chart animation.",
+      "depends_on": [
+        "B15"
+      ],
+      "verify": false
+    },
+    {
+      "id": "B15",
+      "title": "Pass resolved colours into painters, not BuildContext",
+      "summary": "Several painters keep a BuildContext and read theme colours (and MediaQuery, through a closure) inside paint(). Resolve colours and sizes in build() and pass plain values.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Same colours; they are now resolved in build. Fixes a latent stale-colour case: LtpGraphPainter.shouldRepaint ignores colours, so after a theme switch it can keep old colours.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/ltp_graph_painter.dart",
+          "lines": "7-16, 44-77, 147-187, 217, 259, 306, 318-330, 392, 426",
+          "change": "Replace context with a LtpGraphColors value object; compare it in shouldRepaint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/key_statistics/widgets/sliders/slider_painter.dart",
+          "lines": "10, 19, 162-168",
+          "change": "Replace context with text styles/colours."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/custom_painter/buildup_chart_painter.dart",
+          "lines": "14, 27, 112-131",
+          "change": "Pass a colour map for build-up annotations."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/painters/buildup_x_axis_painter.dart",
+          "lines": "19, 24, 30, 63, 94, 105",
+          "change": "Pass border/text colours."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/financial_overview.dart",
+          "lines": "208-210, 398-424",
+          "change": "Compute screenWidth with MediaQuery.sizeOf in build and capture the value, not context, in the label formatter called from paint."
+        }
+      ],
+      "current": "Each context.<token> call in paint does Theme.of(context) plus an extension lookup, a dozen times per paint, on tick-driven repaints. _buildAdaptiveLabel calls MediaQuery.of(context) from inside BarChartPainter.paint via the xAxisLabelStyleFormatter closure. A painter that outlives its element would read an unmounted context.",
+      "steps": [
+        "Create small immutable colour holders (e.g. LtpGraphColors with == and hashCode) built in the widget's build from context.",
+        "Painters take the holder; shouldRepaint compares it.",
+        "financial_overview.dart: `final double screenWidth = MediaQuery.sizeOf(context).width; final Color labelColor = context.surfaceTextNeutralIntense;` in build, and the formatter closes over these values."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/ltp_graph_painter.dart",
+        "lines": "7-16, 44-57",
+        "code": "class LtpGraphPainter extends CustomPainter {\n  final LtpGraphModel model;\n  final Color ltpMarkerColor;\n  final BuildContext context;\n\n  LtpGraphPainter({\n    required this.model,\n    required this.ltpMarkerColor,\n    required this.context,\n  });\n// ...\n      final Paint leftPaint = Paint()\n        ..shader = LinearGradient(\n          begin: Alignment.centerLeft,\n          end: Alignment.centerRight,\n          colors: model.isBuyAction\n              ? <Color>[\n                  context.feedbackBackgroundNegativeStrong,\n                  context.feedbackBackgroundNegativeSubtle\n                ] // Red gradient for buy\n              : <Color>[\n                  context.feedbackBackgroundPositiveNormal,\n                  context.feedbackBackgroundPositiveSubtle\n                ], // Green gradient for sell\n        ).createShader(leftRect);"
+      },
+      "after_code": {
+        "code": "@immutable\nclass LtpGraphColors {\n  const LtpGraphColors({required this.negStrong, required this.negSubtle,\n      required this.posNormal, required this.posSubtle, required this.text,\n      required this.textStrong, required this.icon});\n  final Color negStrong, negSubtle, posNormal, posSubtle, text, textStrong, icon;\n  factory LtpGraphColors.of(BuildContext c) => LtpGraphColors(\n      negStrong: c.feedbackBackgroundNegativeStrong, /* ... */);\n  // == / hashCode over all fields\n}\n\nclass LtpGraphPainter extends CustomPainter {\n  LtpGraphPainter({required this.model, required this.ltpMarkerColor, required this.colors});\n  final LtpGraphModel model;\n  final Color ltpMarkerColor;\n  final LtpGraphColors colors;\n  @override\n  bool shouldRepaint(LtpGraphPainter old) =>\n      old.model.currentLtp != model.currentLtp ||\n      old.model.targetPrice != model.targetPrice ||\n      old.model.stopLossPrice != model.stopLossPrice ||\n      old.colors != colors;\n}"
+      },
+      "safety": [
+        "Colour values are the same tokens, resolved one frame earlier (in build).",
+        "Adding colours to shouldRepaint only adds repaints on theme change."
+      ],
+      "regression_checks": [
+        "Research idea LTP graph, key statistics sliders, 15-min buildup chart and axis, financial overview labels in light and dark; switch theme while on the quote page."
+      ],
+      "after_improvement": "No Theme/MediaQuery lookups inside paint; painters repaint correctly on theme change.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "B16",
+      "title": "Remove debugPrint from paint and build paths",
+      "summary": "debugPrint runs inside BarChartPainter.paint (every animation frame), per news item per build, and per legend colour lookup in 15-min build-up. debugPrint is not stripped in release builds. Remove these or guard with kDebugMode.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Logging only; no behaviour change.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+          "lines": "580-582",
+          "change": "Remove the per-paint debugPrint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/news/news_content_widget.dart",
+          "lines": "108, 119",
+          "change": "Remove per-build and per-item debugPrint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/fifteen_min_build_up_section.dart",
+          "lines": "195, 211",
+          "change": "Remove debugPrint in _getAnnotationColor (called 5 times per build)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+          "lines": "35",
+          "change": "Remove initState debugPrint (emoji string)."
+        }
+      ],
+      "current": "debugPrint builds the interpolated string and writes to the platform log through a throttled queue in release too. In paint() it runs up to 18 times per 300 ms animation and per repaint; in the News list it runs once per item on every rebuild.",
+      "steps": [
+        "Delete the four call groups listed.",
+        "Optional: add an analysis rule or grep check in CI to flag debugPrint inside paint()/build() in this package."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+        "lines": "580-582",
+        "code": "    // Debug logging to verify values\n    debugPrint(\n        'BarChartPainter - sepY: $sepY, chartMaxY: $chartMaxY, chartMinY: $chartMinY, yRange: $yRange, chartHeight: $chartHeight');"
+      },
+      "after_code": {
+        "code": "// removed: per-paint debug log\n// If needed while debugging:\n// assert(() { debugPrint('BarChartPainter sepY=$sepY'); return true; }());"
+      },
+      "safety": [
+        "No functional code touched."
+      ],
+      "regression_checks": [
+        "Smoke test of Financial overview chart, News tab, 15-min build-up."
+      ],
+      "after_improvement": "Removes string building and log I/O from paint and build in release.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "B17",
+      "title": "Use MediaQuery.sizeOf instead of MediaQuery.of",
+      "summary": "All 33 MediaQuery.of(context) calls in the module only read size.width or size.height, but register a dependency on every MediaQuery field (insets, padding, text scale). Switch them to MediaQuery.sizeOf(context).",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Mechanical; same values. Widgets rebuild on fewer events (keyboard insets, padding) than today.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "307",
+          "change": "Screen-level call: rebuilds the whole quote screen on any MediaQuery change today."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+          "lines": "97, 105-106 and 1 more",
+          "change": "sizeOf."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/custom_painter/buildup_custom_chart.dart",
+          "lines": "37, 50, 58 and 1 more",
+          "change": "sizeOf."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+          "lines": "103, 136",
+          "change": "sizeOf."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/technicals/technicals.dart",
+          "lines": "125",
+          "change": "sizeOf."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+          "lines": "65",
+          "change": "sizeOf."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/",
+          "lines": "various",
+          "change": "Remaining files: transaction_screen, market_updates_accordion_shimmer_widget, market_depth_content, price_target_widget, stock_info_card, research_report_section, research_ideas_accordion, news_accordion, fifteen_min_build_up_section, news_content_widget, events_content_widget, deals_content_widget, mo_get_quote_app_bar, shareholding_pattern, financial_overview, quote_subsection_chips."
+        }
+      ],
+      "current": "MediaQuery.of(context).size subscribes the widget to the whole MediaQueryData. At mo_get_quote_screen.dart:307 the subscribing context is the screen State, so opening the keyboard in any sheet over the quote page, or a system inset change, rebuilds the whole screen including the scroll view.",
+      "steps": [
+        "Replace `MediaQuery.of(context).size.width` with `MediaQuery.sizeOf(context).width` and `.size.height` with `MediaQuery.sizeOf(context).height` in all 33 places (a single search/replace; all usages are size-only).",
+        "Run flutter analyze on the package."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+        "lines": "303-312",
+        "code": "  SliverToBoxAdapter _buildContentAreaSliver() {\n    return SliverToBoxAdapter(\n      child: ConstrainedBox(\n        constraints: BoxConstraints(\n          minHeight: MediaQuery.of(context).size.height - _minHeightOffset,\n        ),\n        child: const QuoteContentArea(),\n      ),\n    );\n  }"
+      },
+      "after_code": {
+        "code": "SliverToBoxAdapter _buildContentAreaSliver() {\n  return SliverToBoxAdapter(\n    child: ConstrainedBox(\n      constraints: BoxConstraints(\n        minHeight: MediaQuery.sizeOf(context).height - _minHeightOffset,\n      ),\n      child: const QuoteContentArea(),\n    ),\n  );\n}"
+      },
+      "safety": [
+        "Identical size values; available since Flutter 3.10 (repo is on 3.44)."
+      ],
+      "regression_checks": [
+        "Open a sheet with a text field over the quote page (e.g. add to watchlist / order) and close it: page keeps scroll position and state.",
+        "Rotate/split-screen if supported."
+      ],
+      "after_improvement": "Keyboard and inset changes no longer rebuild the quote screen and its sections.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "B18",
+      "title": "Add RepaintBoundary around painters and live widgets",
+      "summary": "The quote page has two RepaintBoundary widgets. Each Overview section is one repaint unit, so a ticking price inside a section repaints every chart and gauge in it. Isolate custom painters, the SfLinearGauge, shimmers, the pinned header and ticking price widgets.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "RepaintBoundary does not change layout or output; too many boundaries cost memory, so add them only where DevTools shows repaints.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/custom_painter/buildup_custom_chart.dart",
+          "lines": "42-51",
+          "change": "Wrap CustomPaint in RepaintBoundary."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/fifteen_min_build_up_section.dart",
+          "lines": "51-58",
+          "change": "Wrap the x-axis CustomPaint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+          "lines": "199-229",
+          "change": "Wrap the AnimatedBuilder/CustomPaint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/technicals/moving_average_chart_widget.dart",
+          "lines": "24-37",
+          "change": "Wrap CustomPaint."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/reasearch_ideas/enhanced_ltp_tracker.dart",
+          "lines": "214",
+          "change": "Wrap SfLinearGauge."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_tab_with_shadow.dart",
+          "lines": "21-28",
+          "change": "Wrap the pinned header Stack."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/shimmers/",
+          "lines": "various",
+          "change": "Wrap shimmer roots (QuoteContentAreaShimmer, StickyTabsShimmer, QuoteSectionShimmer) so the shimmer animation repaints only itself."
+        }
+      ],
+      "current": "The inner Overview ListView adds one RepaintBoundary per section, so during market hours any ticking text in a section (market depth, key statistics, research cards) repaints that whole section, including painters with shouldRepaint => true, gradients and shadows. The pinned sticky header is repainted with the scroll viewport each frame.",
+      "steps": [
+        "Record a DevTools 'Highlight repaints' / Perfetto trace while scrolling during market hours to confirm which areas repaint with ticks.",
+        "Add RepaintBoundary at the listed sites, starting with painters and the gauge.",
+        "Re-measure raster and UI frame times; keep only boundaries that reduce repaint area."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/overview/fifteen_min_build_up/custom_painter/buildup_custom_chart.dart",
+        "lines": "36-53",
+        "code": "    return SizedBox(\n      width: MediaQuery.of(context).size.width - FifteenMinConstants.chartWidthOffset,\n      height: FifteenMinConstants.chartAreaHeight, // Match SfCartesian height\n      child: GestureDetector(\n        onTapDown: (final TapDownDetails details) => _handleTouch(details.localPosition),\n        // onTapUp: (_) => _hideTooltip(), // Removed - let tooltip stay for 30 seconds\n        child: CustomPaint(\n          painter: BuildupChartPainter(\n            chartData: widget.chartData,\n            tooltipData: _tooltipData,      // NEW: Pass tooltip data to painter\n            tooltipBarIndex: _tooltipBarIndex, // NEW: Pass bar index to painter\n            plotBandColor: context.surfaceBorderNeutralNormal,\n            context: context, // Direct neutral color\n          ),\n          size: Size(MediaQuery.of(context).size.width - FifteenMinConstants.chartWidthOffset, FifteenMinConstants.chartAreaHeight),\n        ),\n      ),\n    );"
+      },
+      "after_code": {
+        "code": "return SizedBox(\n  width: MediaQuery.sizeOf(context).width - FifteenMinConstants.chartWidthOffset,\n  height: FifteenMinConstants.chartAreaHeight,\n  child: GestureDetector(\n    onTapDown: (final TapDownDetails d) => _handleTouch(d.localPosition),\n    child: RepaintBoundary(\n      child: CustomPaint(\n        painter: BuildupChartPainter(\n          chartData: widget.chartData,\n          tooltipData: _tooltipData,\n          tooltipBarIndex: _tooltipBarIndex,\n          plotBandColor: context.surfaceBorderNeutralNormal,\n          colors: BuildupColors.of(context), // B15\n        ),\n        size: Size(MediaQuery.sizeOf(context).width - FifteenMinConstants.chartWidthOffset,\n            FifteenMinConstants.chartAreaHeight),\n      ),\n    ),\n  ),\n);"
+      },
+      "safety": [
+        "No layout or visual change.",
+        "Each boundary justified by a before/after repaint trace."
+      ],
+      "regression_checks": [
+        "Visual smoke of each wrapped widget; charts still respond to taps."
+      ],
+      "after_improvement": "Ticks repaint only the changed text, not neighbouring charts and gauges; lower raster time per frame during market hours.",
+      "depends_on": [
+        "B13",
+        "B15"
+      ],
+      "verify": true
+    },
+    {
+      "id": "B19",
+      "title": "Fix chart gesture conflict with tab swipe and scroll",
+      "summary": "The financial bar chart's _CustomPanGestureRecognizer never claims the gesture and, when it loses, keeps tracking the pointer. So a horizontal scrub on the chart also triggers the content area's swipe-to-next-tab, and a vertical scroll that starts on the chart keeps moving the bar selection. Make the chart claim horizontal drags and stop tracking when it loses, behind a flag.",
+      "categories": [
+        "FE",
+        "Product",
+        "BE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes touch behaviour on the Fundamentals chart: scrubbing the chart no longer switches tab, and vertical scrolling over the chart no longer highlights bars. Default flag keeps today's recognizer.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": "On the Financial Overview chart, should a horizontal drag scrub the bars (and not switch to the next tab)? Proposed: yes; swipe-to-switch-tab still works everywhere outside the chart.",
+      "be_request": "Add Remote Config key quote_chart_gesture_fix (bool, default false).",
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+          "lines": "38-76, 178-198",
+          "change": "New recognizer behaviour: resolve(accepted) once horizontal movement passes kTouchSlop and exceeds vertical movement; on reject, stopTrackingPointer and clear selection updates."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+          "lines": "98-133",
+          "change": "No change needed when the chart claims the arena; optionally ignore swipes that start inside a registered chart rect."
+        }
+      ],
+      "current": "_CustomPanGestureRecognizer (OneSequenceGestureRecognizer) calls onPointerDown in addAllowedPointer, never calls resolve(), and overrides rejectGesture to call acceptGesture, so after the arena gives the pointer to the scroll view or to QuoteContentArea's horizontal drag, it still receives every move and calls _updateSelection -> setState. Pointer down also always calls setState. Result: tab switches mid-scrub, and bar highlight/rebuild on every move while scrolling.",
+      "steps": [
+        "When the flag is on, use a new _ChartScrubRecognizer: track the start position; on move, if |dx| > kTouchSlop and |dx| > |dy| call resolve(GestureDisposition.accepted); if |dy| > kTouchSlop first, call resolve(GestureDisposition.rejected).",
+        "Only call onPointerMove after acceptance; in rejectGesture call stopTrackingPointer(pointer) and do not update selection.",
+        "Keep tap selection (pointer up without movement) via a TapGestureRecognizer in the same RawGestureDetector.",
+        "Flag off: keep today's recognizer unchanged."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/custom_financial_overview_chart.dart",
+        "lines": "55-62, 64-67, 72-75",
+        "code": "  @override\n  void handleEvent(final PointerEvent event) {\n    if (event is PointerMoveEvent) {\n      onPointerMove?.call(event.position);\n    } else if (event is PointerUpEvent || event is PointerCancelEvent) {\n      onPointerUp?.call();\n    }\n  }\n// ...\n  @override\n  void didStopTrackingLastPointer(final int pointer) {\n    // Let other gestures handle if not consumed\n  }\n// ...\n  @override\n  void rejectGesture(final int pointer) {\n    acceptGesture(pointer);\n  }"
+      },
+      "after_code": {
+        "code": "class _ChartScrubRecognizer extends OneSequenceGestureRecognizer {\n  _ChartScrubRecognizer({this.onScrub, this.onEnd});\n  final void Function(Offset)? onScrub;\n  final VoidCallback? onEnd;\n  Offset? _start; bool _accepted = false;\n  @override\n  void addAllowedPointer(PointerDownEvent e) {\n    super.addAllowedPointer(e); _start = e.position; _accepted = false;\n  }\n  @override\n  void handleEvent(PointerEvent e) {\n    if (e is PointerMoveEvent && _start != null) {\n      final Offset d = e.position - _start!;\n      if (!_accepted && d.dx.abs() > kTouchSlop && d.dx.abs() > d.dy.abs()) {\n        _accepted = true; resolve(GestureDisposition.accepted);\n      } else if (!_accepted && d.dy.abs() > kTouchSlop) {\n        resolve(GestureDisposition.rejected); return;\n      }\n      if (_accepted) onScrub?.call(e.position);\n    } else if (e is PointerUpEvent || e is PointerCancelEvent) {\n      onEnd?.call(); stopTrackingPointer(e.pointer);\n    }\n  }\n  @override\n  void rejectGesture(int pointer) => stopTrackingPointer(pointer);\n  @override\n  void didStopTrackingLastPointer(int pointer) {}\n  @override\n  String get debugDescription => 'chartScrub';\n}"
+      },
+      "safety": [
+        "Flag default false keeps today's recognizer and behaviour.",
+        "Tap-to-select on a bar is kept through a tap recognizer.",
+        "Swipe to switch tab is unchanged outside the chart."
+      ],
+      "regression_checks": [
+        "Fundamentals > Financial Overview: tap a bar shows value; horizontal scrub moves selection and does not switch tab (flag on).",
+        "Vertical scroll starting on the chart scrolls the page without highlighting bars (flag on).",
+        "Swipe left/right elsewhere on every tab still switches tab.",
+        "Flag off: identical to today."
+      ],
+      "after_improvement": "No setState per pointer move during page scrolls that start on the chart, and no accidental tab switch while scrubbing.",
+      "depends_on": [],
+      "verify": true
+    }
+  ]
+}

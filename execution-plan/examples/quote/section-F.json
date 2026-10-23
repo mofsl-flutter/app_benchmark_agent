@@ -1,0 +1,501 @@
+{
+ "section": "F",
+ "title": "Memory and navigation",
+ "intro": "The quote page holds far more memory than it shows. Every quote-to-quote tap pushes a complete new page on top of the old one, and the old page keeps its streams, depth subscription and timers. Logos are decoded at full size, tick-driven price rows rebuild SVG icons that paint through an offscreen layer, and several objects outlive the page: the chart WebView, a network listener in the shared BasePageState, the depth error handler's timers and a static list in Fundamentals. These changes keep one live quote page, pause hidden ones and release what the page no longer needs. Building the Overview lazily is the other big lever for the 775 MB of graphics memory; it is covered by the lazy-slivers change in section B and is not repeated here.",
+ "measured": [
+  {
+   "metric": "PSS on the quote page",
+   "current": "1,126 MB (775 MB graphics)",
+   "expected": "<= 450 MB"
+  },
+  {
+   "metric": "PSS after about 20 quote-to-quote navigations",
+   "current": "up to 1,958 MB (about 50 MB per navigation)",
+   "expected": "flat across navigations (within about 50 MB of the first open)"
+  },
+  {
+   "metric": "Objects alive after leaving the quote page",
+   "current": "chart WebView page, BasePageState network listener (race), depth handler timers, static Fundamentals sections",
+   "expected": "none retained by the quote module"
+  }
+ ],
+ "changes": [
+  {
+   "id": "F1",
+   "title": "Replace, not stack, on quote-to-quote taps",
+   "summary": "A tap on a last-visited stock, an index constituent or the market-depth header pushes a new quote page over the current one, so pages pile up with their cubits and streams. Behind a flag, replace the current quote page instead.",
+   "categories": [
+    "FE",
+    "FE-Shared",
+    "Product"
+   ],
+   "risk": "High",
+   "risk_reason": "Changes the back stack: with the flag on, Back from the new quote returns to the screen before the first quote page, not to the previous stock. Flag default keeps today's push.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "When the user opens another stock from inside a quote page (Last visited, Index stocks list, market-depth header), should Back return to the previous stock's quote page (today) or to the screen they came from before the first quote page? Proposed: replace the current quote page, behind Remote Config quote_nav_replace_enabled (default false = today's stacking). Alternative if Back-to-previous-stock must stay: keep stacking but keep at most 3 quote pages and drop the oldest.",
+   "be_request": "Remote Config: add boolean quote_nav_replace_enabled (default false).",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new",
+     "change": "New QuotePerfFlags holder: static bool Function() hooks, all defaulting to false, set by the host app (pattern of ChartLibraryWarmer.isEnabled). Reused by the flagged changes in F, G and H."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/mo_get_quote_navigator.dart",
+     "lines": "22-241",
+     "change": "Each navigateToX gains fromQuotePage (default false) and calls one private _openQuote() that uses Routes.navigateToReplacement when the flag is on and the caller is a quote route."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/last_visited_stocks/stock_list_item.dart",
+     "lines": "200-225",
+     "change": "Pass fromQuotePage: true."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stocks/stocks_main.dart",
+     "lines": "203-210",
+     "change": "Pass fromQuotePage: true."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_widget.dart",
+     "lines": "501-515",
+     "change": "Pass fromQuotePage: widget.isFromQuoteScreen && !widget.isFromChartScreen (the sheet-from-chart path keeps today's push)."
+    },
+    {
+     "path": "apps/super_app/lib/core/app_initializer.dart",
+     "lines": "945",
+     "change": "Next to ChartLibraryPrefetch.install(), wire QuotePerfFlags hooks to FirebaseRemoteConfig.getBool (any read failure = false)."
+    }
+   ],
+   "current": "MoGetQuoteNavigator always calls Routes.navigateTo, which is Navigator.pushNamed (trader_core navigation_util.dart:6-9). The route is a MaterialPageRoute with maintainState true (mo_get_quote_navigator.dart:534-540), so each tap leaves the previous quote page alive under the new one with its cubit, StreamBuilders, 5-level depth subscription and carousel timers. This matches the growth of about 50 MB per navigation.",
+   "steps": [
+    "Add helper/quote_perf_flags.dart with static hooks (replaceOnQuoteToQuote, and the others used in F2, G3, G4, H1-H6), each defaulting to () => false.",
+    "Add _openQuote(context, args, fromQuotePage) in MoGetQuoteNavigator; replace the eight Routes.navigateTo(...getQuoteScreen...) calls with it. Only replace when the current ModalRoute name is MoGetQuoteNavigationStrings.getQuoteScreen or GetQuotePaths.quotePath.",
+    "Pass fromQuotePage: true from the three in-module call sites listed in files; all external callers (watchlist, search, deep links) keep the default false.",
+    "Wire the flag in app_initializer.dart from Remote Config quote_nav_replace_enabled.",
+    "Re-run the 20-navigation memory test with the flag on (the earlier leak test was invalid for RISE; this is the re-run the report asks for)."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/helper/mo_get_quote_navigator.dart",
+    "lines": "35-54",
+    "code": "    final GetQuoteArguments args = GetQuoteArguments(\n      scripId: scripId,\n      tradeSymbol: tradeSymbol,\n      // ...\n      moEngageSource: moEngageSource,\n    );\n\n    unawaited(Routes.navigateTo(context, MoGetQuoteNavigationStrings.getQuoteScreen,\n        arguments: args));\n    return Future.value(null);"
+   },
+   "after_code": {
+    "code": "// helper/quote_perf_flags.dart (new). The host app sets these; defaults keep today's behaviour.\nclass QuotePerfFlags {\n  static bool Function() replaceOnQuoteToQuote = () => false; // RC quote_nav_replace_enabled\n}\n\n// mo_get_quote_navigator.dart\nstatic Future<void> _openQuote(final BuildContext context, final GetQuoteArguments args,\n    {final bool fromQuotePage = false}) {\n  final String? current = ModalRoute.of(context)?.settings.name;\n  final bool onQuote = current == MoGetQuoteNavigationStrings.getQuoteScreen ||\n      current == GetQuotePaths.quotePath;\n  if (fromQuotePage && onQuote && QuotePerfFlags.replaceOnQuoteToQuote()) {\n    return Routes.navigateToReplacement(context, MoGetQuoteNavigationStrings.getQuoteScreen,\n        arguments: args);\n  }\n  return Routes.navigateTo(context, MoGetQuoteNavigationStrings.getQuoteScreen, arguments: args);\n}\n\n// in each navigateToX: unawaited(_openQuote(context, args, fromQuotePage: fromQuotePage));\n\n// app_initializer.dart, next to ChartLibraryPrefetch.install():\nQuotePerfFlags.replaceOnQuoteToQuote = () {\n  try { return FirebaseRemoteConfig.instance.getBool('quote_nav_replace_enabled'); }\n  catch (_) { return false; }\n};"
+   },
+   "safety": [
+    "Remote Config flag quote_nav_replace_enabled defaults to false, so the default build pushes exactly as today.",
+    "Only three in-module call sites opt in; every other caller of MoGetQuoteNavigator keeps pushNamed.",
+    "The market-depth sheet opened from the chart (isFromChartScreen) keeps its current pop-then-push path.",
+    "pushReplacementNamed disposes the old route normally, so the old cubit's close() runs; nothing else in the route changes.",
+    "MyNavigatorObserver already implements didReplace (my_navigator_observer.dart:224), so its route stack stays consistent."
+   ],
+   "regression_checks": [
+    "Flag off: Back after quote -> quote returns to the previous quote (unchanged).",
+    "Flag on: Back after quote -> quote returns to the origin screen (watchlist, search, home); Android back and iOS swipe-back both.",
+    "Index constituent -> stock -> Back; last-visited index -> index quote.",
+    "Market-depth header from a quote page and from the chart's depth sheet.",
+    "MoEngage/CleverTap entry-point source still logged on the new page.",
+    "Memory: 20 quote-to-quote navigations, PSS sampled after each."
+   ],
+   "after_improvement": "With the flag on, only one quote page is alive after any number of quote-to-quote taps, so PSS should stay flat instead of growing about 50 MB per navigation (up to 1,958 MB today).",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": true
+  },
+  {
+   "id": "F2",
+   "title": "Pause quote pages that are covered",
+   "summary": "A quote page under another route (a second quote page, the chart, order pad) keeps its depth stream and timers running. Subscribe the screen to the existing app route observer and pause on didPushNext, resume on didPopNext.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "High",
+   "risk_reason": "Touches the subscription model: stopping depth and re-subscribing quotes on return changes when the page talks to the broadcaster. A missed resume would leave a frozen price. Behind a flag.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Remote Config: add boolean quote_pause_hidden_enabled (default false).",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+     "lines": "33-76",
+     "change": "Mix in RouteAware, subscribe to MyNavigatorObserver.routeObserver in didChangeDependencies, unsubscribe in dispose, forward didPushNext/didPopNext to the cubit."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "179-183, 3291-3295",
+     "change": "Add isPageVisible ValueNotifier, onPageHidden() (stop 5-level depth for the page symbol) and onPageVisible() (re-subscribe the page's quote symbols and depth); dispose the notifier in close()."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new (F1)",
+     "change": "Add pauseHiddenPages hook."
+    }
+   ],
+   "current": "_MoGetQuoteScreenState only owns a ScrollController and a ValueNotifier and has no route awareness (mo_get_quote_screen.dart:50-66). Flutter keeps a covered MaterialPageRoute built (maintainState) and only stops tickers; Timer-driven work, the 5-level depth started in MarketDepthContent.initState (market_depth_content.dart:85) and every StreamBuilder that receives ticks keep running. MyNavigatorObserver.routeObserver already exists (trader_core my_navigator_observer.dart:17) and is registered in main_common.dart:1508, but no quote widget uses it.",
+   "steps": [
+    "Mix RouteAware into _MoGetQuoteScreenState; in didChangeDependencies subscribe to MyNavigatorObserver.routeObserver when the flag is on (RouteObserver.subscribe is idempotent per subscriber).",
+    "didPushNext -> cubit.onPageHidden(): set isPageVisible=false and stop 5-level depth for the page symbol (BroadCastHelper.stopBidStreaming).",
+    "didPopNext -> cubit.onPageVisible(): set isPageVisible=true, re-send startQuoteStreaming for the page's symbol set and restart depth if the depth section is mounted. This also repairs the subscription the chart replaced (see G9).",
+    "Carousel auto-play and other timers (section A changes) read cubit.isPageVisible so they also stop while covered.",
+    "Unsubscribe in dispose before the existing dispose calls.",
+    "Lazy Overview build (section B) further cuts what a covered page retains; measure with and without it."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+    "lines": "50-66",
+    "code": "  @override\n  void initState() {\n    super.initState();\n    _cubit = context.read<MoGetQuoteCubit>();\n\n    // Show amber container based on news timestamp\n    WidgetsBinding.instance.addPostFrameCallback((final _) {\n      _checkNewsTimestamp();\n    });\n  }\n\n  @override\n  void dispose() {\n    _scrollController.dispose();\n    _isScrolledNotifier.dispose();\n    super.dispose();\n  }"
+   },
+   "after_code": {
+    "code": "class _MoGetQuoteScreenState extends State<MoGetQuoteScreen>\n    with TickerProviderStateMixin, RouteAware {\n  @override\n  void didChangeDependencies() {\n    super.didChangeDependencies();\n    final ModalRoute<dynamic>? route = ModalRoute.of(context);\n    if (route != null && QuotePerfFlags.pauseHiddenPages()) {\n      MyNavigatorObserver.routeObserver.subscribe(this, route);\n    }\n    // ... existing one-time init unchanged\n  }\n\n  @override\n  void didPushNext() => _cubit.onPageHidden();\n\n  @override\n  void didPopNext() => _cubit.onPageVisible();\n\n  @override\n  void dispose() {\n    MyNavigatorObserver.routeObserver.unsubscribe(this);\n    _scrollController.dispose();\n    _isScrolledNotifier.dispose();\n    super.dispose();\n  }\n}\n\n// mo_get_quote_cubit.dart\nfinal ValueNotifier<bool> isPageVisible = ValueNotifier<bool>(true);\nvoid onPageHidden() {\n  isPageVisible.value = false;\n  BroadCastHelper.instance.stopBidStreaming(broadcastSymbol);\n}\nvoid onPageVisible() {\n  isPageVisible.value = true;\n  BroadCastHelper.instance.startQuoteStreaming(pageSymbols()); // union owned by the cubit (section A/E)\n  if (isDepthSectionMounted) BroadCastHelper.instance.startBidStreaming(broadcastSymbol);\n}"
+   },
+   "safety": [
+    "Remote Config quote_pause_hidden_enabled defaults to false; with it off the screen never subscribes and nothing changes.",
+    "didPushNext fires synchronously when the next route is pushed, before the next route's initState, so a chart or depth sheet for the same symbol starts its own depth after the pause and is not affected.",
+    "On didPopNext the page re-subscribes even if nothing was lost, which is the same request the page already sends from its widgets today.",
+    "No widget layout or content changes."
+   ],
+   "regression_checks": [
+    "Quote -> chart -> back: price, change and depth tick again within one tick interval.",
+    "Quote -> quote -> back (flag F1 off): the first page's price and depth resume.",
+    "Quote -> order pad -> back; quote -> option chain -> back.",
+    "App background/foreground while a quote page is covered.",
+    "Market depth 50-level (TBT) expanded, then push another route and return."
+   ],
+   "after_improvement": "Covered quote pages stop depth traffic and timer-driven rebuilds, so CPU and network on a stacked page drop to about zero; combined with F1 this removes most of the per-navigation growth. Exact memory effect to be measured.",
+   "depends_on": [
+    "C1",
+    "F1"
+   ],
+   "verify": true
+  },
+  {
+   "id": "F3",
+   "title": "Decode logos at display size",
+   "summary": "Research-report and peer-comparison logos are decoded at the source image size although they are shown at 38 dp and a few dp. Set cacheWidth / memCacheWidth to the display size in device pixels.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Only the decode size changes; the widget size, fit and placeholders are unchanged. Width only is set so the aspect ratio is kept.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/research_report/research_report_card.dart",
+     "lines": "122-131",
+     "change": "Add cacheWidth = 38 * devicePixelRatio to Image.network."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/peer_comparision/peer_comparison_table.dart",
+     "lines": "610-627",
+     "change": "Add memCacheWidth = width * devicePixelRatio to CachedNetworkImage."
+    }
+   ],
+   "current": "research_report_card.dart:124 uses Image.network with no cacheWidth inside a 38 x 38 circle, and peer_comparison_table.dart:611 uses CachedNetworkImage with no memCacheWidth. Both decode the full source bitmap into the image cache. The shared getCachedNetworkImage (trader_widgets custom_network_image_utility.dart:11-35), used by the stock info card, index stocks list and depth header, has the same gap.",
+   "steps": [
+    "In research_report_card.dart compute final int px = (38 * MediaQuery.devicePixelRatioOf(context)).round() and pass cacheWidth: px.",
+    "In peer_comparison_table.dart pass memCacheWidth: (width * MediaQuery.devicePixelRatioOf(context)).round().",
+    "Follow-up ticket (FE-Shared, not in this change): add an optional memCacheWidth parameter to getCachedNetworkImage in trader_widgets, default null so other modules are unchanged, then pass it from stock_info_card.dart:172, stocks_main.dart:234 and market_depth_header_widget.dart:84.",
+    "Check logo source sizes on device (DevTools image overlay: invertOversizedImages) to confirm the gain."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/research_report/research_report_card.dart",
+    "lines": "122-131",
+    "code": "      child: entry.logoUrl.isNotEmpty\n          ? ClipOval(\n              child: Image.network(\n                entry.logoUrl,\n                fit: BoxFit.cover,\n                errorBuilder: (_, __, ___) => _buildLogoPlaceholder(context),\n              ),\n            )\n          : _buildLogoPlaceholder(context),\n    );"
+   },
+   "after_code": {
+    "code": "      child: entry.logoUrl.isNotEmpty\n          ? ClipOval(\n              child: Image.network(\n                entry.logoUrl,\n                fit: BoxFit.cover,\n                // Decode at the 38 dp circle size, not the source size. Width only keeps aspect.\n                cacheWidth: (38 * MediaQuery.devicePixelRatioOf(context)).round(),\n                errorBuilder: (_, __, ___) => _buildLogoPlaceholder(context),\n              ),\n            )\n          : _buildLogoPlaceholder(context),\n    );\n\n// peer_comparison_table.dart _getCircleImage\nCachedNetworkImage(\n  fit: BoxFit.cover,\n  height: height,\n  width: width,\n  memCacheWidth: (width * MediaQuery.devicePixelRatioOf(context)).round(),\n  imageUrl: imageUrl,\n  // ... placeholder / errorWidget unchanged\n)"
+   },
+   "safety": [
+    "Same widget size, fit, clip, placeholder and error builder; only the decoded bitmap is smaller.",
+    "Images are cached under a size-specific key, so other screens showing the same URL at another size are unaffected.",
+    "Revert is removing one argument per call."
+   ],
+   "regression_checks": [
+    "Research report cards and peer table logos look sharp on a 3x device and in dark mode.",
+    "Broken logo URL still shows the initials placeholder."
+   ],
+   "after_improvement": "Each logo costs about (38 dp x dpr)^2 x 4 bytes (about 52 KB at 3x) instead of the full source decode. Gain depends on source sizes; measure the image cache size before and after.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "F4",
+   "title": "Keep change arrows out of the per-tick rebuild",
+   "summary": "The up/down arrow next to the price is a new MOIcon (SvgPicture with a ColorFilter) on every tick in the stock info card, the scrolled app bar and each index-stocks row. Build the two arrow widgets once per theme and reuse the same instances.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Same icon, size and colours; only the widget instance is reused. Theme changes rebuild the cached widgets in didChangeDependencies.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+     "lines": "313-321",
+     "change": "Return cached _upIcon/_downIcon (RepaintBoundary-wrapped) built in didChangeDependencies."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+     "lines": "276-283",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stocks/stocks_main.dart",
+     "lines": "319-327",
+     "change": "Same (keep the SizedBox for change == 0)."
+    }
+   ],
+   "current": "MOIcon (mofsl_ui_library mo_icons.dart) builds SvgPicture.asset with a ColorFilter. In vector_graphics 1.2.4 the picture strategy paints a ColorFilter through canvas.saveLayer (render_vector_graphic.dart:420-423), so every repaint of the price row allocates an offscreen layer for a 6 dp icon. The StreamBuilder in _buildPriceInfo (stock_info_card.dart:260-268) rebuilds the whole row, icon included, on every tick.",
+   "steps": [
+    "Add late Widget _upIcon, _downIcon to the three States; build them in didChangeDependencies with the same iconLayerName, size and colour token as today, wrapped in RepaintBoundary.",
+    "_buildChangeIcon returns the cached instance; identical widget instances are skipped by Element.updateChild, so the SvgPicture is not rebuilt or repainted on a tick.",
+    "Follow-up for the UI library team (not in this change): ship pre-compiled vector_graphics assets for MOIcons to remove runtime SVG parsing everywhere.",
+    "Confirm with DevTools (raster thread, saveLayer count) on a live-market session."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+    "lines": "313-321",
+    "code": "  Widget _buildChangeIcon(final double change, final Color color) {\n    // if (change == 0) return const SizedBox.shrink();\n    return MOIcon(\n      iconLayerName:\n          change < 0 ? MOIcons.iconlyRegularBoldArrowDown2 : MOIcons.iconlyRegularBoldArrowUp2,\n      size: MOSpacing.spacing6,\n      color: color,\n    );\n  }"
+   },
+   "after_code": {
+    "code": "  late Widget _upIcon;\n  late Widget _downIcon;\n\n  @override\n  void didChangeDependencies() {\n    super.didChangeDependencies();\n    // Rebuilt only when the theme (colour tokens) changes, never per tick.\n    _upIcon = RepaintBoundary(\n      child: MOIcon(\n        iconLayerName: MOIcons.iconlyRegularBoldArrowUp2,\n        size: MOSpacing.spacing6,\n        color: context.feedbackTextPositiveNormal,\n      ),\n    );\n    _downIcon = RepaintBoundary(\n      child: MOIcon(\n        iconLayerName: MOIcons.iconlyRegularBoldArrowDown2,\n        size: MOSpacing.spacing6,\n        color: context.feedbackTextNegativeNormal,\n      ),\n    );\n  }\n\n  // Same mapping as today: change < 0 -> down/negative, otherwise up/positive.\n  Widget _buildChangeIcon(final double change, final Color _) => change < 0 ? _downIcon : _upIcon;"
+   },
+   "safety": [
+    "Icon asset, size and colour mapping are identical to today (change < 0 negative, else positive; stocks_main keeps its SizedBox for 0).",
+    "didChangeDependencies runs again on theme change, so dark/light switching still recolours the arrows.",
+    "No API change; private methods only."
+   ],
+   "regression_checks": [
+    "Arrow direction and colour on positive, negative and zero change, in light and dark theme.",
+    "Theme toggle while on the quote page.",
+    "Index stocks tab rows during live ticks."
+   ],
+   "after_improvement": "No SVG widget rebuild and no saveLayer per tick for the arrows; small but constant raster and allocation savings on every tick (to be measured with DevTools).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "F5",
+   "title": "Release the chart WebView under memory pressure",
+   "summary": "The shared chart WebView and its TradingView page stay loaded for the whole session after the first chart open. When the OS reports memory pressure and no chart is on screen, destroy it; the next open pays the cold path.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "High",
+   "risk_reason": "Shared chart package used by every chart entry point, and it touches the WebView lifecycle that this branch just fixed (claim-delegate, probe/recover, rewarm). Behind a flag and limited to the no-chart-mounted case.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Remote Config: add boolean chart_release_on_memory_pressure (default false).",
+   "files": [
+    {
+     "path": "packages/trader_native_charts/lib/new_charts/charts_impl/data/chart_controller.dart",
+     "lines": "825-833",
+     "change": "Add releaseForMemory(reason): no-op while any chart (full or mini) is registered or a recovery runs; otherwise destroy the WebView, clear pending tick JS, set state initial and bump webViewGeneration (same steps as _hardReset without the reload)."
+    },
+    {
+     "path": "packages/trader_native_charts/lib/new_charts/charts_impl/chart_prewarm_service.dart",
+     "lines": "140-152",
+     "change": "Register a WidgetsBindingObserver next to the AppLifecycleListener; didHaveMemoryPressure calls releaseForMemory when the flag is on."
+    },
+    {
+     "path": "apps/super_app/lib/Common/chart_library_prefetch.dart",
+     "lines": "50-56",
+     "change": "Wire the Remote Config flag in install()."
+    }
+   ],
+   "current": "The plugin's platform view dispose only detaches: \"Detach only - never pause or destroy\" (WebViewMoFlutterViewFactory.kt:142-157) and detachWebView deliberately does not pause (887-891). That is what makes the warm reopen 0.38-0.43 s, but it also keeps the page's DOM, JS heap and timers for the rest of the session. destroyWebView already exists on both platforms (plugin 0.0.4, used by _hardReset at chart_controller.dart:803-823). Nothing reacts to memory pressure.",
+   "steps": [
+    "Add ChartController.releaseForMemory(String reason) next to markStale (chart_controller.dart:828).",
+    "In ChartPrewarmService._observeLifecycle also add a WidgetsBindingObserver whose didHaveMemoryPressure calls ChartController.instanceOrNull?.releaseForMemory('memory-pressure') when the flag is on.",
+    "Log the release in Hive (tag Trader Chart) so a device log shows it before a slow open.",
+    "Do not change the plugin's dispose()/detachWebView: keep the detach-only rule for normal navigation.",
+    "Verify on device: which onTrimMemory level reaches Flutter as memory pressure, that the next open recreates the WebView through loadUrl/getOrCreateWebView, and that the resume rewarm (ChartPrewarmService.rewarm) creating an empty WebView after a release is acceptable.",
+    "Optional later step: an idle release after N minutes with no chart mounted, behind its own flag (unset = never)."
+   ],
+   "before_code": {
+    "path": "packages/trader_native_charts/lib/new_charts/charts_impl/chart_prewarm_service.dart",
+    "lines": "140-152",
+    "code": "  static void _observeLifecycle() {\n    if (_lifecycle != null) return;\n    try {\n      _lifecycle = AppLifecycleListener(\n        onHide: _markAway,\n        onPause: _markAway,\n        onResume: () => unawaited(_handleResume()),\n      );\n    } catch (e) {\n      // No widgets binding yet (a test, or very early startup): the rewarm is optional.\n      debugPrint('ChartPrewarmService: lifecycle not observed: $e');\n    }\n  }"
+   },
+   "after_code": {
+    "code": "// chart_controller.dart, next to markStale()\n/// Frees the page and its renderer when nothing shows a chart. The next open pays the cold path.\nFuture<bool> releaseForMemory(String reason) async {\n  if (hasMountedScreen || _recovering) return false; // a full or mini chart owns the WebView\n  _log('release ($reason) from ${_currentState.name}');\n  _ackTimer?.cancel();\n  _pendingTickJs.clear();\n  await destroyCall();\n  _setState(ChartState.initial);\n  webViewGeneration.value++; // any later screen mounts a fresh platform view\n  return true;\n}\n\n// chart_prewarm_service.dart\nstatic bool Function() releaseOnPressureEnabled = () => false; // RC chart_release_on_memory_pressure\n\nclass _MemoryPressureObserver with WidgetsBindingObserver {\n  @override\n  void didHaveMemoryPressure() {\n    if (!ChartPrewarmService.releaseOnPressureEnabled()) return;\n    unawaited(ChartController.instanceOrNull?.releaseForMemory('memory-pressure'));\n  }\n}\n// in _observeLifecycle(): WidgetsBinding.instance.addObserver(_MemoryPressureObserver());"
+   },
+   "safety": [
+    "Flag chart_release_on_memory_pressure defaults to false: no release happens and today's keep-alive behaviour stays.",
+    "Never runs while a full or mini chart is registered (hasMountedScreen) or while recover() is running.",
+    "Uses the same destroy -> state initial -> webViewGeneration++ steps the self-heal hard reset already uses, so FullViewChart already knows how to remount.",
+    "The plugin's detach-only dispose and the warm reopen path are untouched; recent fixes (delegate claim, probe, rewarm) are not reverted."
+   ],
+   "regression_checks": [
+    "Open chart, close, trigger memory pressure (adb shell am send-trim-memory <pkg> RUNNING_LOW), reopen: chart loads (cold), no stuck loader.",
+    "Same with a mini chart (F&O index view) on screen: nothing is released.",
+    "Background 2 hours with a push (the T028937 scenario), resume, open chart.",
+    "Flag off: warm reopen still 0.38-0.43 s."
+   ],
+   "after_improvement": "Under memory pressure the chart page's renderer and JS heap are returned to the OS instead of being held for the session. Expected to remove the WebView share of PSS after the chart is closed (size to be measured; verify).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "F6",
+   "title": "Fix the BasePageState listener race",
+   "summary": "BasePageState creates its network subscription after an await; if the State is disposed during that await, the listener is created afterwards and never cancelled, keeping the State and its cubit alive. Check mounted after the await.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Medium",
+   "risk_reason": "trader_widgets BasePageState has 278 subclasses across the monorepo, but the guard only acts on a State that is already disposed, so live screens behave exactly as today.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+     "lines": "212-228",
+     "change": "Return early when !mounted after awaiting getConnectivityResult()."
+    }
+   ],
+   "current": "startNetworkStreaming (StreamingBaseWidget.dart:212-228) awaits ConnectivityManager.getConnectivityResult() and only then assigns subscription = ...listen(...). dispose (158-164) cancels subscription, which is still null if the await has not finished, so a page closed quickly (fast quote-to-quote taps) leaves a listener on the app-wide network stream that captures the State. Quote widgets that extend BasePageState include the stock info card, app bar, moving average, resistance/support, fundamental ratios, index stocks list and market depth.",
+   "steps": [
+    "Add if (!mounted) return; right after the await in startNetworkStreaming.",
+    "Separate finding, not changed here: stopNetworkStreaming (208-210) cancels the subscription without setting it to null, so after the first app pause startNetworkStreaming's subscription ?? ... keeps the cancelled subscription and the network listener never restarts. Fixing it (subscription = null) would start delivering toggleIsInterNetAvailable again on every screen that overrides it; raise it with the trader_widgets owners as its own change.",
+    "Confirm the leak with DevTools memory: open/close 20 quote pages quickly and count _StockInfoCardState instances."
+   ],
+   "before_code": {
+    "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+    "lines": "212-228",
+    "code": "  void startNetworkStreaming() async {\n    // Use unified ConnectivityManager to prevent TooManyRequestsException\n    final connectivityResult = await ConnectivityManager.instance.getConnectivityResult();\n    //Todo need to check\n    latConnectedType ??= ConnectivityResultExtension(connectivityResult.last).network;\n    subscription = subscription ??\n        AppEventStreamImpl.getInstance()\n            .network\n            .startWith(ConnectivityResultExtension(connectivityResult.last).network)\n            .listen((event) {\n          debugPrint(\"The internet is available $event\");\n          if (!event.isConnected) {\n            checkConnectivityWithDelay();\n          }\n          _handleNetworkEvent(event);\n        });\n  }"
+   },
+   "after_code": {
+    "code": "  void startNetworkStreaming() async {\n    // Use unified ConnectivityManager to prevent TooManyRequestsException\n    final connectivityResult = await ConnectivityManager.instance.getConnectivityResult();\n    // dispose() may have run during the await. A listener created now would never be\n    // cancelled and would keep this State (and whatever it references) alive.\n    if (!mounted) return;\n    //Todo need to check\n    latConnectedType ??= ConnectivityResultExtension(connectivityResult.last).network;\n    subscription = subscription ??\n        AppEventStreamImpl.getInstance()\n            .network\n            .startWith(ConnectivityResultExtension(connectivityResult.last).network)\n            .listen((event) {\n          // ... unchanged\n          _handleNetworkEvent(event);\n        });\n  }"
+   },
+   "safety": [
+    "Live (mounted) States run exactly the same code as today.",
+    "Only a State that was already disposed skips creating its listener, which is the intended lifetime.",
+    "No public API change in trader_widgets."
+   ],
+   "regression_checks": [
+    "Quote page offline/online toggling (behaviour unchanged).",
+    "Spot-check two other modules that override toggleIsInterNetAvailable (watchlist, positions) for unchanged behaviour.",
+    "App pause/resume on the quote page."
+   ],
+   "after_improvement": "No BasePageState (and through it no quote cubit) is retained after its page closes; removes a per-navigation leak in fast navigation (size to be measured).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "F7",
+   "title": "Make Fundamentals expansion state per page",
+   "summary": "Fundamentals keeps its five sections, including the mutable isExpanded flag, in a static list, so expand/collapse state is shared by every quote page and every stock for the whole session. Keep the list per State and the expansion per page in the cubit.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Low",
+   "risk_reason": "One widget and one cubit field. Within a single quote page the state survives tab switches as today; only the carry-over to other stocks stops.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "Today a section collapsed in Fundamentals stays collapsed for every other stock opened later in the session (a side effect of a static list). Proposed: keep expansion only within one quote page, as Technicals already does. Confirm this is acceptable (no flag; the old carry-over is one line to restore).",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+     "lines": "38-44, 111-115, 159-166",
+     "change": "Instance list instead of static; restore and save isExpanded through the cubit map."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+     "lines": "179-183",
+     "change": "Add final Map<FundamentalType, bool> fundamentalExpansion."
+    }
+   ],
+   "current": "fundamentals.dart:38-44 declares static final List<FundamentalSection> _sections, and FundamentalSection.isExpanded is mutable (fundamentals.dart:271-277). The builder writes section.isExpanded (lines 114, 165). Because the list is static, the flags leak across quote pages and stocks. technicals.dart:35 already uses an instance list.",
+   "steps": [
+    "Change static final to final (instance) for _sections.",
+    "Add fundamentalExpansion map to the cubit (one cubit per quote page).",
+    "In initState restore isExpanded from the map; wherever isExpanded is written, also write the map.",
+    "No flag: it is a bug fix inside one widget; reverting is restoring the static keyword."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/fundamentals.dart",
+    "lines": "38-44",
+    "code": "  static final List<FundamentalSection> _sections = <FundamentalSection>[\n    FundamentalSection(MoGetQuoteStrings.fundamentalRatios, FundamentalType.ratios, showInfoIcon: true),\n    FundamentalSection(MoGetQuoteStrings.swotAnalysis, FundamentalType.swot),\n    FundamentalSection(MoGetQuoteStrings.financialOverview, FundamentalType.financial),\n    FundamentalSection(MoGetQuoteStrings.shareholdingPattern, FundamentalType.shareholding),\n    FundamentalSection(MoGetQuoteStrings.companyInformation, FundamentalType.company),\n  ];"
+   },
+   "after_code": {
+    "code": "  // Per State, as technicals.dart:35 already does.\n  final List<FundamentalSection> _sections = <FundamentalSection>[\n    // ... same five entries\n  ];\n\n  @override\n  void initState() {\n    super.initState();\n    _cubit = context.read<MoGetQuoteCubit>();\n    // Restore what the user chose earlier on this same quote page (survives tab switches).\n    for (final FundamentalSection s in _sections) {\n      s.isExpanded = _cubit.fundamentalExpansion[s.type] ?? s.isExpanded;\n    }\n    // ... existing WidgetVisibilityTracker.setViewport\n  }\n\n  // wherever section.isExpanded = value is assigned (lines 114, 165, onExpansionChanged):\n  //   _cubit.fundamentalExpansion[section.type] = value;\n\n// mo_get_quote_cubit.dart\nfinal Map<FundamentalType, bool> fundamentalExpansion = <FundamentalType, bool>{};"
+   },
+   "safety": [
+    "Within one quote page the behaviour is the same as today (state kept across tab switches via the cubit).",
+    "Default for a new page is the same as today's first open (all expanded, first forced open).",
+    "No change to Overview or Technicals."
+   ],
+   "regression_checks": [
+    "Collapse a Fundamentals section, switch to Overview and back: still collapsed.",
+    "Open another stock: Fundamentals starts with the default expansion.",
+    "Visibility tracking events for fundamentals sections still fire."
+   ],
+   "after_improvement": "No session-wide mutable state in Fundamentals; each quote page starts clean and nothing from a closed page is reachable from a static.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "F8",
+   "title": "Dispose the depth handler and notifier",
+   "summary": "MarketDepthContent never disposes its DepthStreamingHandler (20 s toast timer, 300 ms retry timer, TBT socket-state subscription, all capturing context) or its isDepthExpanded notifier. Dispose both in dispose().",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "MarketDepthContent is also used by trader_native_charts (chart bottom sheet, depth tab) and mo_peak_scalper_terminal. The change only cancels the widget's own timers and subscription; the shared 5-level depth stream is not stopped here.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+     "lines": "113-119",
+     "change": "Call depthStreamingHandler.dispose() and isDepthExpanded.dispose() in dispose()."
+    }
+   ],
+   "current": "dispose (market_depth_content.dart:113-119) only stops TBT depth when expanded. depthStreamingHandler.dispose() is called only from _handleTbtConnectionError when TBT is already logged in (634-641), so a page closed while TBT is connecting keeps a Timer(20 s) and a socketStateStream subscription that reference the dead context. The 5-level bid stream started in initState (line 85) is also never stopped.",
+   "steps": [
+    "Add depthStreamingHandler.dispose() and isDepthExpanded.dispose() before super.dispose(). Children (the ValueListenableBuilder) are unmounted before the parent's dispose, so disposing the notifier is safe.",
+    "Separate, later step (Medium, flagged): stop the 5-level bid stream on dispose only when no other MarketDepthContent shows the same symbol (a static per-symbol holder count). An unconditional stop would cut the depth of the quote page under a chart whose bottom sheet shows the same symbol.",
+    "F2 already stops page depth while the page is covered."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/market_depth_content.dart",
+    "lines": "113-119",
+    "code": "  @override\n  void dispose() {\n    if(isDepthExpanded.value){\n      BroadCastHelperTBT.instance.stopBidStreaming(widget.symbol);\n    }\n    super.dispose();\n  }"
+   },
+   "after_code": {
+    "code": "  @override\n  void dispose() {\n    if (isDepthExpanded.value) {\n      BroadCastHelperTBT.instance.stopBidStreaming(widget.symbol);\n    }\n    // Toast timer, quick-retry timer and TBT socket-state subscription all capture `context`\n    // and outlived the widget when it was closed while TBT was still connecting.\n    depthStreamingHandler.dispose();\n    isDepthExpanded.dispose();\n    super.dispose();\n  }"
+   },
+   "safety": [
+    "Live depth streams are unchanged; only this widget's own timers, subscription and notifier are released.",
+    "DepthStreamingHandler.dispose() is already idempotent (cancels nullable timers and subscription).",
+    "Same behaviour for the chart and peak scalper users of the widget."
+   ],
+   "regression_checks": [
+    "Expand 50-depth on a quote page, close the page within 20 s while TBT is connecting: no '50 Depth Engine is OFF' toast on the next screen.",
+    "Depth in the chart bottom sheet and in mo_peak_scalper_terminal sheets.",
+    "Toggle 5/50 depth repeatedly, then leave the page."
+   ],
+   "after_improvement": "No depth timers or socket listeners survive a closed quote page; removes a stray toast and a per-page leak.",
+   "depends_on": [],
+   "verify": false
+  }
+ ]
+}

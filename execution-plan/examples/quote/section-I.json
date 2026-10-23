@@ -1,0 +1,666 @@
+{
+  "section": "I",
+  "title": "Stability and bug fixes",
+  "intro": "This section covers crashes, stuck loading states and wrong data in the quote module. Today a few unguarded lines (a disposed TabController, name[0], force unwraps, index -1, .first on empty lists) can throw, and because most handlers catch only Exception, the page is often left on a shimmer instead of an error. Error bookkeeping in the data managers never clears, and single-section failures replace the whole page. The changes are small, local guards that keep today's behaviour for valid data; the two user-visible ones (section errors, exchange source) go behind flags and need a Product answer.",
+  "measured": [
+    {
+      "metric": "Whole-page MoGetQuoteError emit sites for non-initial failures",
+      "current": "11 (technicals x2, options x6, set alert, exchange toggle, overview batch)",
+      "expected": "0 behind flag (section error or snackbar)"
+    },
+    {
+      "metric": "Top-level loaders that leave Loading on an Error",
+      "current": "5 (catch only Exception)",
+      "expected": "0"
+    },
+    {
+      "metric": "Known throw sites on empty/odd data",
+      "current": "7 (disposed TabController, name[0], billdate parse, expiries[-1] x2, expiries.first, split()[1])",
+      "expected": "0"
+    }
+  ],
+  "changes": [
+    {
+      "id": "I1",
+      "title": "Keep the cubit's TabController reference valid",
+      "summary": "AnalysisTypeTabs disposes and recreates its TabController when the tab count changes, and disposes it on unmount, but the cubit keeps the old one. A horizontal swipe on the content then calls animateTo on a disposed controller and throws.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Two-line change inside one widget plus a null/dispose guard; tab switching logic is untouched.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_tabs.dart",
+          "lines": "121-178",
+          "change": "Call _cubit.setTabController() after recreating the controller; clear the cubit reference in dispose() if it still points to this controller."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "157-158, 3136-3138",
+          "change": "Add clearTabController(controller) that nulls the field only when it matches."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+          "lines": "115-129",
+          "change": "Return early when the controller length is below 2 (defensive)."
+        }
+      ],
+      "current": "setTabController is called only in initState (quote_tabs.dart:135). _updateTabController (148-157) and dispose (173-178) dispose the controller without telling the cubit. StickyTabSection replaces AnalysisTypeTabs with a SizedBox for the Options asset type (sticky_tab_section.dart:39-41), so after Cash -> Options the cubit holds a disposed controller and the swipe handler in quote_content_area.dart:115-129 calls animateTo on it. In debug this asserts 'TabController was used after being disposed'; in release it throws a null-check error from the disposed animation controller.",
+      "steps": [
+        "In _AnalysisTypeTabsState._updateTabController, after creating the new controller, call _cubit.setTabController(_tabController).",
+        "Add MoGetQuoteCubit.clearTabController(TabController c) { if (identical(tabController, c)) tabController = null; }.",
+        "In _AnalysisTypeTabsState.dispose, call _cubit.clearTabController(_tabController) before _tabController.dispose().",
+        "Later (J2) remove the controller from the cubit entirely and drive swipes through cubit.changeSection with the available subtabs."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/quote_tabs.dart",
+        "lines": "148-157",
+        "code": "  void _updateTabController() {\n    _tabController.removeListener(_handleTabSelection);\n    _tabController.dispose();\n    _tabController = TabController(\n      length: widget.tabs.length,\n      vsync: this,\n      initialIndex: widget.selectedIndex.clamp(0, widget.tabs.length - 1),\n    );\n    _tabController.addListener(_handleTabSelection);\n  }"
+      },
+      "after_code": {
+        "code": "  void _updateTabController() {\n    _tabController.removeListener(_handleTabSelection);\n    _cubit.clearTabController(_tabController);\n    _tabController.dispose();\n    _tabController = TabController(\n      length: widget.tabs.length,\n      vsync: this,\n      initialIndex: widget.selectedIndex.clamp(0, widget.tabs.length - 1),\n    );\n    _tabController.addListener(_handleTabSelection);\n    _cubit.setTabController(_tabController); // keep the cubit in sync\n  }\n\n  @override\n  void dispose() {\n    _tabController.removeListener(_handleTabSelection);\n    _cubit.clearTabController(_tabController);\n    _tabController.dispose();\n    super.dispose();\n  }\n\n// mo_get_quote_cubit.dart\nvoid clearTabController(final TabController c) {\n  if (identical(tabController, c)) tabController = null;\n}"
+      },
+      "safety": [
+        "Same controller instance the TabBar already uses, so tab visuals and onTabSelected are unchanged.",
+        "When no tabs are shown the reference becomes null and the existing null check at quote_content_area.dart:116 turns the swipe into a no-op instead of a crash."
+      ],
+      "regression_checks": [
+        "Swipe left/right on Overview, Fundamentals, Technicals for a cash stock.",
+        "Switch Cash -> Options -> Cash and swipe on each.",
+        "Futures with several expiries: swipe across expiry tabs, then switch exchange."
+      ],
+      "after_improvement": "No 'TabController used after dispose' errors from the swipe handler (check Crashlytics non-fatals before/after).",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "I2",
+      "title": "Guard the logo initial against an empty name",
+      "summary": "_buildLogoWithInitialName takes name[0]; when the symbol name is empty this throws a RangeError and the header shows an error box.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Pure local guard in one widget method; only the empty-name case changes.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+          "lines": "182-202",
+          "change": "Use the first character only when the name is not empty; otherwise render the empty circle."
+        }
+      ],
+      "current": "For cash scrips without a logo URL, the header builds an Initicon from name.toString()[0] (line 193). The name comes from _createInstrumentDisplayData (109-144), which falls back to cubit.quoteInfo?.tradeSymbol ?? ''. Before scrip details arrive, or for deep links/notifications that carry only a scrip code, the name is '' and [0] throws RangeError during build.",
+      "steps": [
+        "Compute final String initial = name.trim().isEmpty ? '' : name.trim()[0].toUpperCase();",
+        "If initial is empty, return the same 32x32 bordered circle without the Initicon child.",
+        "Check getCachedNetworkImage(... symbolName ...) in trader_widgets for the same pattern and guard it there in a follow-up if needed."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+        "lines": "182-201",
+        "code": "  Widget _buildLogoWithInitialName(final String name, final double? initIconFontSize) {\n    return Container(\n      width: MOSpacing.spacing32,\n      height: MOSpacing.spacing32,\n      decoration: ShapeDecoration(\n        color: context.isMODarkTheme ? context.surfaceBackgroundNeutralStrong : null,\n        shape: OvalBorder(\n          side: BorderSide(width: MOSpacing.borderWidth04, color: context.surfaceBorderNeutralNormal),\n        ),\n      ),\n      child: Initicon(\n        text: name.toString()[0],\n        backgroundColor: Colors.transparent,\n        // ...\n      ),\n    );\n  }"
+      },
+      "after_code": {
+        "code": "  Widget _buildLogoWithInitialName(final String name, final double? initIconFontSize) {\n    final String trimmed = name.trim();\n    final String initial = trimmed.isEmpty ? '' : trimmed[0];\n    return Container(\n      width: MOSpacing.spacing32,\n      height: MOSpacing.spacing32,\n      decoration: ShapeDecoration(/* unchanged */),\n      child: initial.isEmpty\n          ? null // empty circle until the name arrives\n          : Initicon(\n              text: initial,\n              backgroundColor: Colors.transparent,\n              style: /* unchanged */,\n            ),\n    );\n  }"
+      },
+      "safety": [
+        "Non-empty names render exactly as today (same first character)."
+      ],
+      "regression_checks": [
+        "Cash stock without logo URL: initial still shown.",
+        "Open a quote from a deep link or notification that has only the scrip code: header renders, no red box."
+      ],
+      "after_improvement": "No RangeError from stock_info_card.dart:193 in crash logs.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "I3",
+      "title": "Remove crash-prone force unwraps",
+      "summary": "Transaction rows parse billdate with DateTime.parse on a possibly null value and then use dateTime!; the Events tab uses quoteArguments!; the scrolled app bar uses symbolName!. Replace them with null-safe fallbacks.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Each fix is a local null check with a fallback value; output for valid data is identical.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/transaction/models/transaction_model.dart",
+          "lines": "90-100",
+          "change": "Parse billdate with DateTime.tryParse(json['billdate']?.toString() ?? '')."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/transaction/transaction_screen.dart",
+          "lines": "389-394",
+          "change": "Show '-' when dateTime is null instead of dateTime!."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/news/events_content_widget.dart",
+          "lines": "35-43",
+          "change": "Use cubit.quoteInfo?.tradeSymbol ?? cubit.quoteArguments?.tradeSymbol and skip the call when empty."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+          "lines": "174-180",
+          "change": "Replace symbolName! with symbolName ?? ''."
+        }
+      ],
+      "current": "Datum.fromJson (transaction_model.dart:92) calls DateTime.parse(json['billdate']); a null billdate throws a TypeError, which is an Error and escapes the 'on Exception' handler in fetchTransactionsData (cubit 2129-2133), so the Transactions tab stays on its loader. transaction_screen.dart:390 then force-unwraps dateTime. events_content_widget.dart:38 force-unwraps quoteArguments inside a post-frame callback. mo_get_quote_app_bar.dart:180 force-unwraps symbolName; today every branch ends in ?? '' so it cannot be null, but the type is String? and any edit to the fallbacks turns it into a crash.",
+      "steps": [
+        "transaction_model.dart: dateTime: DateTime.tryParse(json['billdate']?.toString() ?? '').",
+        "transaction_screen.dart: final DateTime? dt = transaction.dateTime; Text(dt == null ? '-' : DateFormat(...).format(dt)).",
+        "events_content_widget.dart: read the symbol null-safely and return when empty.",
+        "mo_get_quote_app_bar.dart: symbolName: symbolName ?? ''."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/transaction/models/transaction_model.dart",
+        "lines": "90-100",
+        "code": "  factory Datum.fromJson(final Map<String, dynamic> json) => Datum(\n        quantity: json[\"qty\"]?.toDouble(),\n        dateTime: DateTime.parse(json[\"billdate\"]),\n        avgPrice: json[\"transrate\"]?.toDouble(),\n        buyOrSellValue: json[\"amount\"]?.toDouble(),\n        orderType: json[\"transtype\"] as String?,\n        nseSymb: json[\"nsesymb\"] as String?,\n        scriptCode: json[\"scriptcode\"].toString(),\n        exchange: json[\"exch\"].toString(),\n        fullName: json[\"fullname\"] as String?,\n      );"
+      },
+      "after_code": {
+        "code": "  factory Datum.fromJson(final Map<String, dynamic> json) => Datum(\n        quantity: (json['qty'] as num?)?.toDouble(),\n        dateTime: DateTime.tryParse(json['billdate']?.toString() ?? ''),\n        // ... other fields unchanged\n      );\n\n// transaction_screen.dart:390\nText(\n  transaction.dateTime == null\n      ? '-'\n      : DateFormat('dd MMM yyyy | hh:mm a').format(transaction.dateTime!),\n  // ...\n)\n\n// events_content_widget.dart:35\nfinal String symbol =\n    cubit.quoteInfo?.tradeSymbol ?? cubit.quoteArguments?.tradeSymbol ?? '';\nif (symbol.isEmpty) return;\nawait cubit.loadCorporateActionsData(symbol);"
+      },
+      "safety": [
+        "Valid billdate strings parse to the same DateTime as DateTime.parse.",
+        "Rows with a bad date still render with '-' instead of blocking the whole list."
+      ],
+      "regression_checks": [
+        "Transactions tab with normal data: dates and P&L unchanged.",
+        "Mock a row with billdate null: list renders, no endless loader.",
+        "News -> Events tab from Overview corporate actions 'Show more'."
+      ],
+      "after_improvement": "Transactions tab cannot get stuck on a loader because of one malformed row; no null-check crashes from these three lines.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "I4",
+      "title": "Skip emits after the cubit is closed",
+      "summary": "Several un-awaited microtasks and timer callbacks emit after the user has left the page. Bloc 9 throws StateError on emit after close, which surfaces as an unhandled async error. Override emit to drop states once closed.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Only affects emits that happen after close(); while the page is open behaviour is identical.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "396-399, 550-553, 1165-1174, 2296-2306, 2862-2873, 3290-3295",
+          "change": "Add an emit override with an isClosed check; return early from long loops when isClosed."
+        }
+      ],
+      "current": "Background work is started with unawaited(Future.microtask(...)) at lines 396, 550, 1165, 2296 and 2862, and from 200-300 ms debounce timers (306, 1929, 1941). close() (3290-3295) cancels the timers but not work already running. If the user leaves while an Overview batch or peer-comparison call is in flight, the later emit throws 'Cannot emit new states after calling close', which is an Error, so none of the 'on Exception' handlers catch it and it reaches the zone/Crashlytics handler. The loops also keep issuing API calls for a page that is gone.",
+      "steps": [
+        "Add @override void emit(MoGetQuoteState state) { if (isClosed) return; super.emit(state); } to MoGetQuoteCubit.",
+        "Inside the foreground/background section loops (2284, 2297, 2845, 2863) add 'if (isClosed) return;' before each API call so no further requests start after close.",
+        "Keep the existing timer cancels in close()."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "1164-1174",
+        "code": "      // Non-blocking: batch load peer comparison and holdings in background\n      unawaited(Future.microtask(() async {\n        if (assetType == MoGetQuoteAssetType.cash) {\n          await loadPeerComparison(symbol: symbol);\n        }\n        if (assetType == MoGetQuoteAssetType.cash || assetType == MoGetQuoteAssetType.futures) {\n          await loadHoldings(symbol: symbol);\n        }\n        await loadFlashNews(fundisin ?? '');\n        _emitCurrentState(overviewDataManager);\n      }));"
+      },
+      "after_code": {
+        "code": "  @override\n  void emit(final MoGetQuoteState state) {\n    if (isClosed) return; // page already left; drop late results\n    super.emit(state);\n  }\n\n  // in each background loop\n  for (final String section in backgroundSections) {\n    if (isClosed) return;\n    await _loadBatchSafely(symbol, <String>[section], response);\n    _updateOverviewDataManager(response);\n  }"
+      },
+      "safety": [
+        "No state is dropped while the page is open.",
+        "Overriding emit is allowed (it is @protected, not final) and keeps every existing call site unchanged."
+      ],
+      "regression_checks": [
+        "Open a quote and press back within 300 ms, repeat 10 times: no 'Cannot emit new states' in logs.",
+        "Normal open: Overview, holdings, peers and flash news still appear."
+      ],
+      "after_improvement": "Zero 'Cannot emit new states after calling close' non-fatals from this module; fewer wasted API calls after leaving the page.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "I5",
+      "title": "Guard four throw sites on empty or unexpected data",
+      "summary": "indexWhere(...) ?? 0 never falls back (indexWhere returns -1), .first is called on a list that can be empty, and period.split(' ')[1] assumes a space. Each throws a RangeError/StateError on unusual API data.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Adds bounds checks with the same fallback the code already intended; valid data takes the same path.",
+      "effort": "S",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "735-740",
+          "change": "selectExpiry: treat -1 as 'not found' and return without changing strikes."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "808-813",
+          "change": "selectCallPut: null-check selectedExpiry and handle -1."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "567-571",
+          "change": "_loadFuturesContractsData: skip the selected-expiry lookup and emit when expiries is empty."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "2763-2764",
+          "change": "_formatYear: return the raw period when it has no space."
+        }
+      ],
+      "current": "(1) selectExpiry/selectCallPut use indexWhere(...) ?? 0; the ?? is dead (the dead_null_aware_expression lint is ignored), so a miss indexes expiries[-1]. This can happen when the user taps CE/PE while an exchange switch has replaced optionsData (1728) but selectExpiry has not yet updated selectedExpiry; selectedExpiry! can also be null. (2) _loadFuturesContractsData calls expiries.first in orElse before the isNotEmpty check at 449, so an empty futures response throws StateError. (3) _formatYear splits 'Jun 24' style periods and takes [1]; any period without a space ('FY24') throws in initializeFinancialOverview, called from FinancialOverview.initState. All three are Errors, so the 'on Exception' handlers do not catch them and the screen is left on a shimmer or an error box.",
+      "steps": [
+        "selectExpiry/selectCallPut: final int idx = indexWhere(...); if (idx < 0) return; use expiries[idx].",
+        "selectCallPut: if (selectedExpiry == null) return; before the lookup.",
+        "_loadFuturesContractsData: if (futuresResponse.expiries.isEmpty) return futuresResponse; before firstWhere (callers already check isNotEmpty).",
+        "_formatYear: final parts = period.split(' '); return parts.length < 2 ? period : '${parts[0]} 20${parts[1]}';",
+        "Add unit tests for each guard (see K4)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "734-740",
+        "code": "      if (optionsData != null) {\n        final int selectedExpiryStrikeIndex = optionsData!.expiries.indexWhere(\n              (final OptionsExpiry e) => e.expirySeconds == expiry.expirySeconds,\n            ) ??\n            0;\n        final List<OptionsStrike> expiryDataStrikesList =\n            optionsData!.expiries[selectedExpiryStrikeIndex].strikes;\n"
+      },
+      "after_code": {
+        "code": "      if (optionsData != null) {\n        final int idx = optionsData!.expiries.indexWhere(\n          (final OptionsExpiry e) => e.expirySeconds == expiry.expirySeconds,\n        );\n        if (idx < 0) return; // expiry not in current data (e.g. exchange just switched)\n        final List<OptionsStrike> expiryDataStrikesList = optionsData!.expiries[idx].strikes;\n        // ... unchanged\n      }\n\n  String _formatYear(final String period) {\n    final List<String> parts = period.split(' ');\n    return parts.length < 2 ? period : '${parts[0]} 20${parts[1]}';\n  }\n\n  // _loadFuturesContractsData\n  if (futuresResponse.expiries.isEmpty) return futuresResponse;"
+      },
+      "safety": [
+        "For data that matched before, the same index, the same expiry and the same label are produced.",
+        "_executeOptionsWithLoadingStates still emits SectionChanged after the early return, so the shimmer ends."
+      ],
+      "regression_checks": [
+        "Options: change expiry, strike, CE/PE; switch exchange NSE/BSE and tap CE/PE quickly during the switch.",
+        "Futures for a scrip with no contracts (mock empty expiries).",
+        "Fundamentals -> Financials chart for revenue, net profit, balance sheet, cash flow."
+      ],
+      "after_improvement": "No RangeError/StateError from these four lines; options and futures tabs no longer freeze on a shimmer after a fast switch.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "I6",
+      "title": "Catch all errors in top-level loaders",
+      "summary": "Top-level loaders catch only Exception, so any Error (TypeError, RangeError, StateError) leaves the state on Loading forever. Catch everything at the top level, report it, and emit the existing error state.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Low",
+      "risk_reason": "Changes only what happens after an unexpected Error: today an endless shimmer, after the change the existing error/retry widget. Normal flow unchanged.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "275-282, 350-357, 1606-1611, 1993-1998, 2129-2133",
+          "change": "Add a final 'catch (e, st)' after the 'on Exception' blocks that logs to Crashlytics and emits the same error state as the Exception branch."
+        }
+      ],
+      "current": "loadAssetTypeData, _loadAndEmitAssetData, toggleExchange, _loadSectionData and fetchTransactionsData use 'on ErrorException' and 'on Exception'. Errors such as the StateError in I5, the TypeError in I3 or a failed '!' escape, the future completes with an error that nobody awaits, and the last emitted state stays MoGetQuoteLoading / MoGetQuoteAssetTypeDataLoading / SectionChangeLoading / isLoading: true.",
+      "steps": [
+        "After each 'on Exception catch' in the five top-level methods add 'catch (e, st) { _reportUnexpected(e, st); emit(<same error state as the Exception branch>); }'.",
+        "_reportUnexpected forwards to the app's existing error reporter (FirebaseCrashlytics.recordError via an injected callback, see J3), so the bug stays visible to developers.",
+        "Keep inner per-section loops on 'on Exception' so one bad section still does not stop the others; I5 removes the known Error sources."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "350-357",
+        "code": "    } on ErrorException catch (error) {\n      emit(MoGetQuoteError(error));\n    } on Exception catch (error) {\n      emit(MoGetQuoteError(ErrorException(\n        key: 'asset_types',\n        message: error.toString(),\n      )));\n    }"
+      },
+      "after_code": {
+        "code": "    } on ErrorException catch (error) {\n      emit(MoGetQuoteError(error));\n    } on Exception catch (error) {\n      emit(MoGetQuoteError(ErrorException(key: 'asset_types', message: error.toString())));\n    } catch (error, stackTrace) {\n      // TypeError / RangeError / StateError: report, then end the loading state\n      _reportUnexpected(error, stackTrace);\n      emit(MoGetQuoteError(ErrorException.somethingWentWrong()));\n    }"
+      },
+      "safety": [
+        "Exception handling order is unchanged; the new catch only runs for Errors that currently escape.",
+        "Errors are still reported (recordError), so hiding bugs is avoided."
+      ],
+      "regression_checks": [
+        "Force a TypeError in a mocked repository for each loader: error widget with Retry appears and Retry works.",
+        "Happy-path open, tab switch, exchange switch and transactions pagination."
+      ],
+      "after_improvement": "No endless skeleton caused by an unexpected Error; each such case shows Retry and is logged once.",
+      "depends_on": [
+        "I5"
+      ],
+      "verify": false
+    },
+    {
+      "id": "I7",
+      "title": "Make error resets in data managers actually clear",
+      "summary": "copyWith(firstError: null) keeps the old error because every field uses '??'. Once a network error is stored it is never cleared, and Fundamentals/Technicals can stay in the error state after a successful reload.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes when the Fundamentals/Technicals error widget is shown (it will now clear after a good reload). Data-field copyWith semantics are left as they are to avoid wiping data.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/domain/fundamental_data_manager.dart",
+          "lines": "29-47, 92-103",
+          "change": "Keep copyWith; add clearErrors() (resetErrors already builds a fresh object and is correct)."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/domain/technical_data_manager.dart",
+          "lines": "30-50, 99-105",
+          "change": "Rewrite resetErrors() to construct a new manager with empty failedSections and null firstError."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/domain/overview_data_manager.dart",
+          "lines": "66-104",
+          "change": "Document that null means 'keep'; add explicit clear helpers only where clearing is intended."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "2256-2265, 2408-2417",
+          "change": "Replace copyWith(failedSections: const {}, firstError: null) with resetErrors(), and reset on every fresh load."
+        }
+      ],
+      "current": "loadEssentialFundamentalData (2257-2265) and loadEssentialTechnicalData (2409-2417) try to reset errors with copyWith(failedSections: const {}, firstError: null). failedSections clears, but firstError: null is ignored by 'firstError ?? this.firstError'. They also skip the reset when the stored error key contains 'internet'/'network'/'connection', and changeSection (1909-1922) carries failedSections and firstError across tab switches. Result: after one offline failure, failedSections stays at all 5 sections and _emitFundamentalState (2385-2398) keeps emitting MoGetQuoteFundamentalError even after the next load succeeds, for the life of the page. TechnicalDataManager.resetErrors (99-105) has the same no-op. The calls copyWith(newsData: null), copyWith(holdingsData: null) etc. in loadFlashNews/loadHoldings/loadPeerComparison/loadResearchReport also do nothing.",
+      "steps": [
+        "Fix TechnicalDataManager.resetErrors to return TechnicalDataManager(<all data fields>, failedSections: const {}, firstError: null, hasAttemptedLoad: hasAttemptedLoad).",
+        "In both loadEssential* methods replace the conditional copyWith with an unconditional '= manager.resetErrors();' at the start of a fresh load (the load re-adds any sections that fail again).",
+        "Leave data-field copyWith as is (null = keep). Do not change the 'copyWith(x: null)' calls in catchError handlers in this change; they keep today's behaviour (old data kept). List them for J1 so the intent is decided explicitly.",
+        "Optional later: switch copyWith to a sentinel (Object? x = _unset) only for error fields."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/domain/technical_data_manager.dart",
+        "lines": "99-105",
+        "code": "  /// Reset failed sections and error\n  TechnicalDataManager resetErrors() {\n    return copyWith(\n      failedSections: const <String>{},\n      firstError: null,\n    );\n  }"
+      },
+      "after_code": {
+        "code": "  /// Reset failed sections and error (copyWith cannot set null)\n  TechnicalDataManager resetErrors() {\n    return TechnicalDataManager(\n      movingAverageData: movingAverageData,\n      volumeData: volumeData,\n      resistanceAndSupportData: resistanceAndSupportData,\n      betaData: betaData,\n      momentumOscillatorsData: momentumOscillatorsData,\n      failedSections: const <String>{},\n      firstError: null,\n      hasAttemptedLoad: hasAttemptedLoad,\n    );\n  }\n\n// mo_get_quote_cubit.dart, start of loadEssentialFundamentalData\nfundamentalDataManager = fundamentalDataManager.resetErrors();\n// start of loadEssentialTechnicalData\ntechnicalDataManager = technicalDataManager.resetErrors();"
+      },
+      "safety": [
+        "Data fields are copied unchanged; only error bookkeeping is reset.",
+        "If the reload fails again, the same sections are re-added and the same error widget is shown, so the offline experience is unchanged."
+      ],
+      "regression_checks": [
+        "Open Fundamentals offline (Wi-Fi without internet), go online, re-open Fundamentals: data shows.",
+        "Same for Technicals.",
+        "Partial failure (1 of 5 fundamental sections fails): other sections show, failed one hidden as today."
+      ],
+      "after_improvement": "Fundamentals/Technicals recover on the next successful load instead of staying in error for the rest of the page visit.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "I8",
+      "title": "Show section errors instead of a full-page error",
+      "summary": "A failure in Technicals, Set Alert, an unavailable option strike or the Options data emits MoGetQuoteError, which replaces the whole page with an error screen. Use the existing section error state (or a snackbar for actions) behind a flag.",
+      "categories": [
+        "FE",
+        "Product"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes what the user sees on failure and which states are emitted; the page error is still used for the initial load.",
+      "effort": "M",
+      "user_visible": true,
+      "product_decision": "When one section fails (Technicals, Options chain data, Set Alert, a strike without a CE/PE contract), should the page keep the header, price and other tabs and show the error only in that section (Set Alert / strike: a snackbar)? Proposed: yes, behind Remote Config 'quote_section_errors_enabled' defaulting to false until QA signs off.",
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "2451-2471",
+          "change": "Technicals: emit MoGetQuoteTechnicalError once (with technicalDataManager) instead of MoGetQuoteError twice."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "699-710, 861-866, 904-910, 1745-1756",
+          "change": "Options: emit MoGetQuoteSectionError(selectedSection, ...) for missing data; strike without contract -> one-shot UI message."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "3165-3171",
+          "change": "setAlert failure: one-shot snackbar message instead of MoGetQuoteError."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "243-247",
+          "change": "No change to the full-page error for loadAssetTypeData failures."
+        }
+      ],
+      "current": "The body BlocConsumer (mo_get_quote_screen.dart:243-247) rebuilds on any MoGetQuoteError and replaces the whole scroll view with ErrorCaseWidget whose Retry reloads the entire page. loadEssentialTechnicalData emits MoGetQuoteError in the inner catch (2459) and again in the outer catch (2469) and rethrows, so _loadSectionData then emits SectionError and changeSection emits SectionChanged, but the body stays on the full-page error. setAlert (3167), _loadOptionsData (700-709), _loadOptionsScripData for a strike without a contract (862-866) and _loadOptionsDataForExchange (1746-1755) do the same.",
+      "steps": [
+        "Add RemoteConfig flag quote_section_errors_enabled (default false = today's behaviour).",
+        "Technicals: in the inner catch add the sections to technicalDataManager.addFailedSections and emit MoGetQuoteTechnicalError; remove the outer duplicate emit. The Technicals widget already handles MoGetQuoteTechnicalError.",
+        "Options data/strike: emit MoGetQuoteSectionError(selectedSection, error, message) so QuoteContentArea shows its inline error with Retry (quote_content_area.dart:60-73).",
+        "Set Alert: expose a one-shot message (J5 side-effect stream; until then a ValueNotifier<String?>) and show MOSnackbar in the app bar.",
+        "Update tests that expect two MoGetQuoteError (K2)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "2451-2471",
+        "code": "      } on Exception catch (e) {\n        debugPrint('Technical API failed: $e');\n        final ErrorException error = e is ErrorException\n            ? e\n            : ErrorException(\n                key: 'technical_data',\n                message: e.toString(),\n              );\n        emit(MoGetQuoteError(error));\n        rethrow;\n      }\n    } on Exception catch (e) {\n      final ErrorException error = e is ErrorException\n          ? e\n          : ErrorException(\n              key: 'technical_data',\n              message: e.toString(),\n            );\n      emit(MoGetQuoteError(error));\n      rethrow;\n    }"
+      },
+      "after_code": {
+        "code": "      } on Exception catch (e) {\n        final ErrorException error = e is ErrorException\n            ? e\n            : ErrorException(key: 'technical_data', message: e.toString());\n        if (RemoteFlags.quoteSectionErrorsEnabled) { // assumed flag accessor\n          technicalDataManager = technicalDataManager\n              .addFailedSections(apiSections, error: error)\n              .copyWith(hasAttemptedLoad: true);\n          emit(MoGetQuoteTechnicalError(error: error, dataManager: technicalDataManager));\n          return response; // header and other tabs stay usable\n        }\n        emit(MoGetQuoteError(error)); // legacy path, emitted once\n        rethrow;\n      }"
+      },
+      "safety": [
+        "Flag default keeps today's full-page error.",
+        "Initial page load (loadAssetTypeData) keeps the full-page error, since there is nothing else to show."
+      ],
+      "regression_checks": [
+        "Mock Technicals API failure: only the Technicals area shows an error; header, price, Buy/Sell remain.",
+        "Options with no data / strike without PE: inline error or snackbar, page still usable.",
+        "Set Alert failure: snackbar.",
+        "Flag off: identical to today."
+      ],
+      "after_improvement": "A single section failure no longer blanks the quote page; users keep price and order buttons.",
+      "depends_on": [
+        "I6"
+      ],
+      "verify": false
+    },
+    {
+      "id": "I9",
+      "title": "Remove the options overlay when the page goes away",
+      "summary": "The More options overlay is inserted into the Navigator overlay and removed only by its own close animation. If the quote route is popped another way (iOS, deep link, session timeout), the blurred overlay stays on top of the next screen. Close is also not idempotent.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Touches back handling and overlay lifecycle; the Android back behaviour and iOS swipe stay as they are.",
+      "effort": "S",
+      "user_visible": true,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/options_overlay.dart",
+          "lines": "17-42",
+          "change": "Guard closeOverlay against double calls; add an immediate remove() for dispose."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/quote_bottom_action_bar.dart",
+          "lines": "33-42, 212-219",
+          "change": "Add dispose() that removes the overlay entry immediately."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+          "lines": "153-164",
+          "change": "Keep canPop: Platform.isIOS; no change except typed back handler (J11)."
+        }
+      ],
+      "current": "canPop is Platform.isIOS (mo_get_quote_screen.dart:155), so on iOS the route pops directly and handleBackPress (quote_bottom_action_bar.dart:212-219) never runs. The overlay entry (options_overlay.dart:41) lives in the Navigator's overlay, and _QuoteBottomActionBarState has no dispose, so any pop that does not go through handleBackPress leaves the entry on screen. closeOverlay (20-25) can run twice (tile tap calls onTap and onClose; a second tap or Android back during the 200 ms reverse calls it again) and the second entry.remove() throws.",
+      "steps": [
+        "In OptionsOverlay.show keep a bool removed; closeOverlay returns if removed; set removed before entry.remove().",
+        "Return a small handle {close(), removeNow()} instead of a bare VoidCallback; removeNow() removes without animation.",
+        "In _QuoteBottomActionBarState.dispose() call _overlayHandle?.removeNow().",
+        "Verify on an iPhone whether the swipe-back gesture can start while the overlay is visible (the overlay's full-screen GestureDetector may block it); if it can, also close the overlay from a route observer didPop."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/options_overlay.dart",
+        "lines": "17-42",
+        "code": "    late OverlayEntry entry;\n    late AnimationController controller;\n\n    void closeOverlay() {\n      unawaited(controller.reverse().then((final void _) {\n        entry.remove();\n        onOverlayClosed?.call();\n      }));\n    }\n\n    entry = OverlayEntry(\n      builder: (final BuildContext context) => _AnimatedOverlay(\n        onClose: closeOverlay,\n        // ...\n      ),\n    );\n\n    Overlay.of(context).insert(entry);\n    return closeOverlay;"
+      },
+      "after_code": {
+        "code": "class OptionsOverlayHandle {\n  OptionsOverlayHandle(this.close, this.removeNow);\n  final VoidCallback close;     // animated\n  final VoidCallback removeNow; // for dispose\n}\n\n    bool removed = false;\n    void removeEntry() {\n      if (removed) return;\n      removed = true;\n      entry.remove();\n      onOverlayClosed?.call();\n    }\n    void closeOverlay() {\n      if (removed) return;\n      unawaited(controller.reverse().then((final void _) => removeEntry()));\n    }\n    // ...\n    return OptionsOverlayHandle(closeOverlay, removeEntry);\n\n// quote_bottom_action_bar.dart\n@override\nvoid dispose() {\n  _overlayHandle?.removeNow();\n  super.dispose();\n}"
+      },
+      "safety": [
+        "Open/close animation and menu items unchanged.",
+        "Android back still closes the overlay first via handleBackPress.",
+        "iOS swipe-back stays enabled (canPop unchanged)."
+      ],
+      "regression_checks": [
+        "Android: open More, press back -> overlay closes, page stays; press back again -> page pops.",
+        "iOS: open More, try swipe-back; trigger a deep link/notification while the overlay is open.",
+        "Tap Add to basket / Start SIP, then double-tap the backdrop quickly."
+      ],
+      "after_improvement": "No orphaned blurred overlay over other screens; no 'OverlayEntry removed twice' errors.",
+      "depends_on": [],
+      "verify": true
+    },
+    {
+      "id": "I10",
+      "title": "Move side effects out of build()",
+      "summary": "Three widgets do work inside build(): NewsContentWidget starts an API call, StickyChipsSection resets chip selection and starts scrolling, FinancialOverview disposes and recreates a TabController. Move them to listeners/initState/didUpdateWidget.",
+      "categories": [
+        "FE"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes when these actions run (listener vs build); the resulting UI must stay the same, so the News, chips and Financials areas need a regression pass.",
+      "effort": "M",
+      "user_visible": false,
+      "product_decision": null,
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/news/news_content_widget.dart",
+          "lines": "51-58",
+          "change": "Remove _loadNewsData from build; the cubit already loads news in _loadSectionData; show the empty state when newsData is empty."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/sticky_chips_section.dart",
+          "lines": "141-173",
+          "change": "Move _handleAccordionExpansion, _resetSelectionToFirst and ValueNotifier writes into a BlocListener with the same conditions."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/fundamentals/financial_overview.dart",
+          "lines": "106-109, 317-323",
+          "change": "Create the sub-tab controller when the main tab changes (BlocListener), not in _buildSubTabBar."
+        }
+      ],
+      "current": "NewsContentWidget's fallback branch (51-58) calls cubit.loadNewsData whenever overviewDataManager.newsData is empty; when the News tab opens for a stock with no news, the cubit has already loaded news once (_loadSectionData -> loadNewsData), so the widget triggers a second identical call, and repeats it on every later MoGetQuoteOverviewLoaded. StickyChipsSection.build (141-173) writes ValueNotifiers and starts an async scroll (_handleAccordionExpansion) during build, and resets the chip selection to the first chip on every SectionChanged, including the shouldScroll:false ones from exchange and option changes. FinancialOverview._buildSubTabBar (106-109) disposes and recreates the TabController in build via _updateSubTabController (317-323) while the previous TabBar still references it.",
+      "steps": [
+        "News: in the fallback branch return _buildEmptyState when newsData is empty and the last news state was NewsEmpty/NewsError; keep a one-time load in initState only when nothing has been requested yet.",
+        "Sticky chips: wrap with BlocListener<..>(listenWhen: same types) and move the three side effects there; build() only reads values.",
+        "FinancialOverview: in a BlocListener on MoGetQuoteFinancialOverviewLoaded, if sub-tab count changed, swap the controller and setState; dispose the old one after the frame.",
+        "Record the News API call count per tab open before/after (should drop from 2 to 1 for stocks without news)."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/ui/widgets/news/news_content_widget.dart",
+        "lines": "51-61",
+        "code": "        // Fallback: check overview data manager\n        final List<NewsItem>? processedNewsItems = cubit.overviewDataManager.newsData;\n\n        // If no news data available, trigger dedicated news loading\n        if (processedNewsItems == null || processedNewsItems.isEmpty) {\n          _loadNewsData(cubit);\n          return _buildLoadingState();\n        }\n\n        // Use already processed news data (clean approach)\n        return _buildNewsContent(context, processedNewsItems);"
+      },
+      "after_code": {
+        "code": "class NewsContentWidget extends StatefulWidget { /* ... */ }\n\nclass _NewsContentWidgetState extends State<NewsContentWidget> {\n  @override\n  void initState() {\n    super.initState();\n    final MoGetQuoteCubit cubit = context.read<MoGetQuoteCubit>();\n    // load once, only if the cubit has not loaded news for this section\n    if (cubit.overviewDataManager.newsData == null && !cubit.newsRequested) {\n      unawaited(cubit.loadNewsData(cubit.quoteInfo?.tradeSymbol ?? ''));\n    }\n  }\n  // build(): fallback branch\n  //   if (items == null || items.isEmpty) return _buildEmptyState(context);\n}"
+      },
+      "safety": [
+        "Same widgets and data are shown; only the trigger point moves.",
+        "Chips reset under exactly the same state conditions as today."
+      ],
+      "regression_checks": [
+        "News tab for a stock with news and one without (count API calls).",
+        "Overview chip tap scrolls to the section; accordion expand from chips.",
+        "Fundamentals -> Financials: switch Revenue/Net profit/Balance sheet/Cash flow and sub-tabs."
+      ],
+      "after_improvement": "One News call per tab open instead of two or more; no controller disposal during build.",
+      "depends_on": [],
+      "verify": false
+    },
+    {
+      "id": "I11",
+      "title": "Use one source for the selected exchange",
+      "summary": "The header price and exchange toggle follow selectedScripId, market depth follows cubit.broadcastSymbol (from the scrip-details id), and the app bar starts from quoteArguments.scripId. On open, the cash scrip id can also be replaced by dashboardData.cashScrip. This matches the benchmark's INFY switch from Rs 1,153.35 (NSE) to Rs 1,151.00 (BSE price) with NSE still shown.",
+      "categories": [
+        "FE",
+        "Product"
+      ],
+      "risk": "Medium",
+      "risk_reason": "Changes which instrument some widgets subscribe to; must be checked on cash, futures, options and index.",
+      "effort": "M",
+      "user_visible": true,
+      "product_decision": "When a stock is opened from an NSE (or BSE) entry point, should the quote page always open on that exchange, or follow the backend dashboard's cashScrip? Proposed: keep the exchange the user opened when the dashboard lists it among exchanges.",
+      "be_request": null,
+      "files": [
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "402-409",
+          "change": "_getCashScripId: prefer the opened scripId when its exchange is available."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "1683-1712",
+          "change": "Await updateSelectedScripId (line 1704) and drop stale results with a request token."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+          "lines": "1312-1330",
+          "change": "Derive broadcastSymbol from _selectedScripId for non-index scrips."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/overview/overview_main.dart",
+          "lines": "826-827",
+          "change": "Market depth reads the same symbol as the header."
+        },
+        {
+          "path": "packages/mo_get_quote/lib/ui/widgets/mo_get_quote_app_bar.dart",
+          "lines": "50-72, 230-236",
+          "change": "Use cubit.selectedScripId ?? cubit.quoteInfo?.scripId like StockInfoCard."
+        }
+      ],
+      "current": "StockInfoCard (256-263) and the exchange toggle (377-395) use cubit.selectedScripId. Market depth gets symbol: _cubit.broadcastSymbol (overview_main.dart:827), which _createBroadcastSymbols (1312-1330) builds from quoteScripDetails.id. The app bar starts streaming from quoteArguments.scripId (55-57). _loadCashData uses _getCashScripId, which returns dashboardData.cashScrip whenever its scripCode is non-zero, regardless of the exchange the user opened. On exchange toggle, updateSelectedScripId is not awaited (1704) and there is no latest-wins check, so a slower response can overwrite quoteInfo.broadcastSymbol. Which of these produced the INFY observation has not been confirmed on a device.",
+      "steps": [
+        "Reproduce: open INFY from NSE search; log quoteArguments.scripId, dashboardData.cashScrip, _selectedScripId, quoteScripDetails.id and broadcastSymbol at each emit (debug build only).",
+        "If cashScrip differs from the opened exchange: change _getCashScripId to keep the opened scripId when quoteScripDetails.exchanges lists it (behind Product decision).",
+        "Make broadcastSymbol a getter derived from _selectedScripId (plus spread code) for non-index assets so header, depth, ratios and technicals read one value.",
+        "Await updateSelectedScripId in _handleRegularExchangeChange and add an int _requestId checked after each await (latest wins).",
+        "Add a test: toggle NSE->BSE->NSE quickly with delayed mocks; final symbol for header and depth is NSE."
+      ],
+      "before_code": {
+        "path": "packages/mo_get_quote/lib/mo_get_quote_cubit.dart",
+        "lines": "402-409",
+        "code": "  /// Get correct cash scripId (dashboard vs original)\n  ScripId _getCashScripId() {\n    if (dashboardData?.cashScrip != null && dashboardData!.cashScrip.scripCode != 0) {\n      return dashboardData!.cashScrip;\n    }\n    if (quoteInfo == null) return ScripId();\n    return quoteInfo!.scripId!;\n  }"
+      },
+      "after_code": {
+        "code": "  ScripId _getCashScripId() {\n    final ScripId? opened = quoteInfo?.scripId;\n    final ScripId? dashboardCash =\n        (dashboardData?.cashScrip.scripCode ?? 0) != 0 ? dashboardData!.cashScrip : null;\n    // keep the exchange the user opened if that exchange trades in cash (Product decision)\n    if (opened != null && opened.scripCode != 0 && _isCashExchange(opened.exchange)) {\n      return opened;\n    }\n    return dashboardCash ?? opened ?? ScripId();\n  }\n\n  // one source for streaming widgets (non-index)\n  BroadcastSymbol get currentSymbol => _selectedScripId == null\n      ? broadcastSymbol\n      : _selectedScripId!.toBroadcastSymbolOrSpread(_spreadCodeOrEmpty);"
+      },
+      "safety": [
+        "Ship the exchange-preference change behind a Remote Config flag defaulting to current behaviour.",
+        "Index scrips keep BroadcastSymbol.forIndex unchanged."
+      ],
+      "regression_checks": [
+        "INFY, RELIANCE, a BSE-only stock: open from NSE and BSE entry points; header, toggle and depth show the same exchange.",
+        "Toggle NSE/BSE quickly 5 times.",
+        "Futures, options, index and spread contracts: price and depth unchanged."
+      ],
+      "after_improvement": "Header price, exchange toggle and depth always agree; no unexplained price jump a few seconds after open.",
+      "depends_on": [],
+      "verify": true
+    }
+  ]
+}

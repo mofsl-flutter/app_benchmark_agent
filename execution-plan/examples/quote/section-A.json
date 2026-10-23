@@ -1,0 +1,533 @@
+{
+ "section": "A",
+ "title": "Idle animations and background work",
+ "intro": "After market close nothing on the quote page changes, yet the app keeps redrawing, using CPU and receiving data. The main visible cause is two auto-playing carousels (Market Updates, News) that rotate forever even when they are far below the fold, plus several independent loading shimmers and spinning image placeholders. These changes keep the same features but run the animations only when someone can see them, and remove duplicated animation work. The idle network traffic is mostly caused by the live-price subscription pattern and is handled in section E.",
+ "measured": [
+  {
+   "metric": "Idle redraw after market close",
+   "current": "13.3 fps (99 % identical frames)",
+   "expected": "about 0 fps with the carousels off screen (A1, A2)"
+  },
+  {
+   "metric": "Idle CPU after market close",
+   "current": "54.3 % of one core",
+   "expected": "a large drop from A1-A3; the rest depends on E1-E3 (target 3 % or less)"
+  },
+  {
+   "metric": "Redraw while the loading skeleton shows",
+   "current": "about 30 fps",
+   "expected": "one shimmer animation instead of up to four (A4)"
+  },
+  {
+   "metric": "Idle network after market close",
+   "current": "465 KB/min",
+   "expected": "not changed by this section; see E1, E2, E11, E12 (target 10 KB/min or less)"
+  }
+ ],
+ "changes": [
+  {
+   "id": "A1",
+   "title": "Run Market Updates auto-play only while visible",
+   "summary": "The Market Updates carousel rotates every 5 s for as long as the Overview is mounted, even when it is far below the fold. Keep auto-rotation, but run it only while the carousel is on screen, its section is expanded, its route is current and the app is in the foreground, behind a Remote Config flag that defaults to today's behaviour.",
+   "categories": [
+    "FE",
+    "BE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes when an existing animation runs. With the flag off the code path is identical to today. With the flag on, the only difference is that rotation pauses while the card cannot be seen; tap, swipe and the dot indicator are unchanged.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "Market Updates keeps auto-rotating every 5 s while the user can see it. Is it acceptable that it pauses while scrolled off screen, collapsed, covered by another page or with the app in the background, and continues from the same card when it comes back?",
+   "be_request": "Create Remote Config boolean quote_carousel_visibility_gate_enabled (default false). Turn it on for internal users first, then 10 %, 50 %, 100 % after the idle benchmark is re-run.",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+     "lines": "27-48, 96-124",
+     "change": "Wrap the carousel in a VisibilityDetector, add lifecycle and route checks, and pass autoPlay: _shouldAutoPlay instead of true."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new",
+     "change": "New: read quote_carousel_visibility_gate_enabled from FirebaseRemoteConfig with try/catch; any failure reads as false (today's behaviour)."
+    },
+    {
+     "path": "packages/mo_get_quote/pubspec.yaml",
+     "lines": "12-29",
+     "change": "Declare visibility_detector and firebase_remote_config, which are only transitive today (same versions as the workspace lock)."
+    }
+   ],
+   "current": "CarouselOptions has autoPlay: true and autoPlayInterval 5 s. carousel_slider 5.1.2 starts a Timer.periodic in initState and only skips a step when ModalRoute.isCurrent is false; it does not know about scroll position, the accordion or app lifecycle. Because the Overview is one shrink-wrapped ListView inside a SliverToBoxAdapter, the carousel is mounted and painted even when it is off screen, so each 800 ms slide animation produces about 48 frames of pixels the user cannot see. With enableInfiniteScroll false it animates back to page 0 after the last card and starts again, forever.",
+   "steps": [
+    "Add QuotePerfFlags.carouselVisibilityGate (Remote Config read wrapped in try/catch, default false).",
+    "In _MarketUpdatesAccordionState mix in WidgetsBindingObserver; keep _isVisible (VisibilityDetector, visibleFraction > 0.5), _isAppResumed (didChangeAppLifecycleState) and read ModalRoute.of(context)?.isCurrent in build.",
+    "Compute bool _shouldAutoPlay = !QuotePerfFlags.carouselVisibilityGate || (_isVisible && _isAppResumed && routeIsCurrent). Collapsed state needs no extra check: MOAccordion puts collapsed children in Offstage, so VisibilityDetector reports 0.",
+    "Pass autoPlay: _shouldAutoPlay. Only call setState when the value actually flips, so the CarouselSlider is not rebuilt on every visibility callback.",
+    "Use autoPlay in the options (not CarouselSliderController.stopAutoPlay): carousel_slider's didUpdateWidget calls handleAutoPlay(), which restarts a stopped timer whenever autoPlay is still true, and onPanUp() calls resumeTimer().",
+    "Use the key ValueKey('market_updates_carousel') for the VisibilityDetector; keys must be unique on the page."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+    "lines": "96-114",
+    "code": "  Widget _buildCarousel() {\n    bool isSmallDevice = MediaQuery.of(context).size.width <= 360;\n    return Padding(\n      padding: EdgeInsets.symmetric(horizontal: MOSpacing.spacing2, vertical: MOSpacing.spacing8),\n      child: CarouselSlider.builder(\n        carouselController: _carouselController,\n        itemCount: _marketUpdates.length,\n        options: CarouselOptions(\n          height: isSmallDevice\n              ? MediaQuery.of(context).size.height * 0.48\n              : MediaQuery.of(context).size.height * 0.35,\n          autoPlay: true,\n          autoPlayInterval: Duration(seconds: 5),\n          viewportFraction: 0.95,\n          padEnds: false,\n          onPageChanged: _onPageChange,\n          enableInfiniteScroll: false,\n          enlargeCenterPage: false,\n        ),"
+   },
+   "after_code": {
+    "code": "class _MarketUpdatesAccordionState extends State<MarketUpdatesAccordion>\n    with WidgetsBindingObserver {\n  bool _isVisible = false;\n  bool _isAppResumed = true;\n  bool get _shouldAutoPlay {\n    if (!QuotePerfFlags.carouselVisibilityGate) return true; // today's behaviour\n    final bool routeIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;\n    return _isVisible && _isAppResumed && routeIsCurrent;\n  }\n  @override\n  void didChangeAppLifecycleState(AppLifecycleState state) {\n    final bool resumed = state == AppLifecycleState.resumed;\n    if (resumed != _isAppResumed) setState(() => _isAppResumed = resumed);\n  }\n  Widget _buildCarousel() {\n    return VisibilityDetector(\n      key: const ValueKey<String>('market_updates_carousel'),\n      onVisibilityChanged: (VisibilityInfo info) {\n        final bool visible = info.visibleFraction > 0.5;\n        if (mounted && visible != _isVisible) setState(() => _isVisible = visible);\n      },\n      child: CarouselSlider.builder(\n        // ...\n        options: CarouselOptions(autoPlay: _shouldAutoPlay, /* rest unchanged */),\n      ),\n    );\n  }\n}"
+   },
+   "safety": [
+    "Flag off (the default) gives exactly today's autoPlay: true.",
+    "Interval, curve, page order, tap target, swipe and dots are unchanged; only when the timer runs changes.",
+    "A failed Remote Config read reads as off.",
+    "Rollback is a Remote Config change, no release needed."
+   ],
+   "regression_checks": [
+    "Market Updates rotates every 5 s while on screen, with the flag on and with it off.",
+    "Scroll it out of view and back: rotation pauses and resumes from the same card.",
+    "Collapse and expand the section; push Flash News details and come back; background the app for 30 s and come back.",
+    "Manual swipe still works, and rotation resumes after the finger lifts.",
+    "Tapping a card still opens Flash News details.",
+    "Small devices (width <= 360) keep the 0.48 height."
+   ],
+   "after_improvement": "With the carousel off screen, it produces no frames instead of about 48 frames every 5 s. Together with A2 the idle redraw after market close should fall from 13.3 fps towards about 0 fps (to be confirmed by re-measuring).",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": true
+  },
+  {
+   "id": "A2",
+   "title": "Run News auto-play only while visible",
+   "summary": "The News carousel on Overview also auto-plays (carousel_slider default: every 4 s with an 800 ms slide) whether or not it is on screen. Apply the same visibility, route and lifecycle gate as A1, behind the same flag.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Same as A1: timing of an existing animation changes only while the card is not visible, and only with the flag on.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "Same question as A1, for the News cards (rotation every 4 s): OK to pause while not visible?",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_accordion.dart",
+     "lines": "23-35, 80-104",
+     "change": "Same gate as A1; pass autoPlay: _shouldAutoPlay; VisibilityDetector key 'news_carousel'."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/carousel_autoplay_gate.dart",
+     "lines": "new",
+     "change": "Optional: move the A1 visibility/lifecycle/route logic into one small mixin used by both carousels, so the two cannot drift apart."
+    }
+   ],
+   "current": "autoPlay is true and no interval is given, so carousel_slider uses its 4 s default and an 800 ms autoPlayAnimationDuration. Like Market Updates, it is mounted and painted below the fold. The two carousels together animate for up to about 36 % of the time (0.8/5 + 0.8/4), which is in line with the 13.3 fps of identical frames measured after market close.",
+   "steps": [
+    "Reuse the A1 gate (ideally as a shared CarouselAutoPlayGate mixin).",
+    "Pass autoPlay: _shouldAutoPlay in NewsAccordion's CarouselOptions.",
+    "Re-run the idle benchmark with both A1 and A2 on, and with each one alone, to confirm how much of the 13.3 fps each carousel causes."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_accordion.dart",
+    "lines": "80-92",
+    "code": "  Widget _buildCarousel() {\n    return CarouselSlider.builder(\n      carouselController: _carouselController,\n      itemCount: widget.newsItems.length,\n      options: CarouselOptions(\n        height: 110.0,\n        autoPlay: true,\n        viewportFraction: 1.0,\n        padEnds: true,\n        onPageChanged: _onPageChange,\n        enableInfiniteScroll: false,\n        enlargeCenterPage: false,\n      ),"
+   },
+   "after_code": {
+    "code": "class _NewsAccordionState extends State<NewsAccordion>\n    with WidgetsBindingObserver, CarouselAutoPlayGate<NewsAccordion> {\n  @override\n  String get gateKey => 'news_carousel';\n\n  Widget _buildCarousel() {\n    return wrapWithVisibilityGate( // from the mixin: VisibilityDetector + setState on flip\n      CarouselSlider.builder(\n        carouselController: _carouselController,\n        itemCount: widget.newsItems.length,\n        options: CarouselOptions(\n          height: 110.0,\n          autoPlay: shouldAutoPlay, // true when the flag is off\n          viewportFraction: 1.0,\n          padEnds: true,\n          onPageChanged: _onPageChange,\n          enableInfiniteScroll: false,\n          enlargeCenterPage: false,\n        ),\n        itemBuilder: _buildItem,\n      ),\n    );\n  }\n}"
+   },
+   "safety": [
+    "Same flag as A1, default off, so today's behaviour is kept.",
+    "Card content, tap to open the News tab and Read more are unchanged."
+   ],
+   "regression_checks": [
+    "News rotates while visible, with the flag on and off.",
+    "It pauses off screen, collapsed, under another route and in the background.",
+    "Tap on a card and on Read more opens the News tab.",
+    "Stocks with 0 news (empty state) and 1 news item still render."
+   ],
+   "after_improvement": "With the News carousel off screen, it produces no frames instead of about 48 frames every 4 s. A1 and A2 together are expected to remove most of the 13.3 fps idle redraw and a large part of the 54.3 % idle CPU.",
+   "depends_on": [
+    "A1"
+   ],
+   "verify": true
+  },
+  {
+   "id": "A3",
+   "title": "Keep carousel page index in a ValueNotifier",
+   "summary": "Each page change calls setState on the whole accordion, which rebuilds CarouselSlider. carousel_slider's didUpdateWidget then creates a new PageController every time. Keep the index in a ValueNotifier so only the dots rebuild, and put each carousel and its dots in a RepaintBoundary.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Internal to two widgets. Same cards, same dots, same animation; only fewer widgets are rebuilt.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+     "lines": "28-48, 56-67, 127-146",
+     "change": "Replace int _currentIndex + setState with ValueNotifier<int>; dots built in a ValueListenableBuilder; RepaintBoundary around the carousel and the dots; dispose the notifier."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_accordion.dart",
+     "lines": "24-35, 42-53, 106-125",
+     "change": "Same change."
+    }
+   ],
+   "current": "_onPageChange calls setState(() => _currentIndex = index). This rebuilds the Column with CarouselSlider. In carousel_slider 5.1.2, CarouselSliderState.didUpdateWidget (lines 90-104) always runs pageController = PageController(...) without disposing the old one, so the PageView re-attaches to a new scroll position on every rotation. The dot row's AnimatedContainer then runs a 300 ms animation inside the same repaint area as the carousel.",
+   "steps": [
+    "Add final ValueNotifier<int> _pageIndex = ValueNotifier<int>(0); dispose it in dispose().",
+    "_onPageChange: _pageIndex.value = index (no setState).",
+    "Build the dots inside ValueListenableBuilder<int>(valueListenable: _pageIndex, ...).",
+    "Wrap the CarouselSlider in one RepaintBoundary and the dots in another.",
+    "Leave the per-tick rebuild of MarketUpdatesAccordion (overview_main.dart:683-694) to E3; it also triggers didUpdateWidget today."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+    "lines": "45-67",
+    "code": "  // Handle page change in carousel\n  void _onPageChange(final int index, final CarouselPageChangedReason changeReason) {\n    setState(() => _currentIndex = index);\n  }\n\n  @override\n  Widget build(BuildContext context) {\n    return _buildMarketUpdatesContent();\n  }\n\n  // Main content builder - shows carousel with progress indicator\n  Widget _buildMarketUpdatesContent() {\n    if (_marketUpdates.isEmpty) return _buildEmptyState();\n\n    return Column(\n      mainAxisSize: MainAxisSize.min,\n      children: <Widget>[\n        _buildCarousel(),\n        MOSpacing.verticalSpace12,\n        _buildProgressIndicator(),\n      ],\n    );\n  }"
+   },
+   "after_code": {
+    "code": "final ValueNotifier<int> _pageIndex = ValueNotifier<int>(0);\n\nvoid _onPageChange(final int index, final CarouselPageChangedReason reason) {\n  _pageIndex.value = index; // no setState: CarouselSlider is not rebuilt\n}\n\nWidget _buildMarketUpdatesContent() {\n  if (_marketUpdates.isEmpty) return _buildEmptyState();\n  return Column(\n    mainAxisSize: MainAxisSize.min,\n    children: <Widget>[\n      RepaintBoundary(child: _buildCarousel()),\n      MOSpacing.verticalSpace12,\n      RepaintBoundary(\n        child: ValueListenableBuilder<int>(\n          valueListenable: _pageIndex,\n          builder: (_, int current, __) => _buildProgressIndicator(current),\n        ),\n      ),\n    ],\n  );\n}\n\n@override\nvoid dispose() {\n  _pageIndex.dispose();\n  super.dispose();\n}"
+   },
+   "safety": [
+    "Same visual output: same cards, same dot widths and colours, same 300 ms dot animation.",
+    "No API change; both widgets keep their constructor parameters."
+   ],
+   "regression_checks": [
+    "Dots follow auto-rotation and manual swipes in both carousels.",
+    "Carousel position is kept while the overview receives new data (MoGetQuoteOverviewLoaded).",
+    "Dark and light theme dot colours."
+   ],
+   "after_improvement": "One PageController per carousel instead of a new one per rotation. Each rotation rebuilds only the dot row, and the slide repaints inside its own layer.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "A4",
+   "title": "Use one shimmer for the loading skeleton",
+   "summary": "While the quote page loads, up to four separate Shimmer widgets run at once (details, sticky tabs, overview chips, content area). Each has its own 1.5 s AnimationController and a ShaderMask layer. Safe first step: put each one in a RepaintBoundary and drop the duplicate chip shimmer. Full fix: one Shimmer over the whole page skeleton.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "The first step changes no visible pixels. The full step changes how the loading state is laid out (one skeleton instead of per-section skeletons), so the loading-to-loaded switch needs a regression pass on every asset type.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_details_section.dart",
+     "lines": "29-38",
+     "change": "Step 1: RepaintBoundary(child: QuoteDetailsShimmer()). Step 2: pass shimmer: false when the page-level shimmer is active."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/sticky_tab_section.dart",
+     "lines": "28-36",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/sticky_chips_section.dart",
+     "lines": "189, 268",
+     "change": "While MoGetQuoteLoading (when StickyTabSection already shows a shimmer), show a static placeholder of the same height instead of a second StickyTabsShimmer."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+     "lines": "54-58",
+     "change": "Same as quote_details_section."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/shimmers/quote_details_shimmer.dart",
+     "lines": "9-29",
+     "change": "Add a bool shimmer = true parameter; when false, return the grey blocks without Shimmer.fromColors."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/shimmers/sticky_tabs_shimmer.dart",
+     "lines": "9-30",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/shimmers/quote_content_area_shimmer.dart",
+     "lines": "9-29",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/mo_get_quote_screen.dart",
+     "lines": "266-286",
+     "change": "Step 2 only: while the cubit is in MoGetQuoteLoading, wrap the CustomScrollView in one Shimmer.fromColors, keyed with a GlobalKey so the scroll view is not remounted when the wrapper is removed."
+    }
+   ],
+   "current": "On MoGetQuoteLoading, QuoteDetailsSection returns QuoteDetailsShimmer, StickyTabSection returns StickyTabsShimmer, QuoteContentArea returns QuoteContentAreaShimmer, and StickyChipsSection can return a second StickyTabsShimmer while isOverviewLoading. shimmer 3.0.0 gives every instance its own repeating AnimationController and pushes a ShaderMaskLayer each frame. That is about 30 fps of redraw for as long as the skeleton is shown, which on a slow open is 1.3 to 2.5 s.",
+   "steps": [
+    "Step 1 (Low risk): wrap each of the four skeleton returns in a RepaintBoundary, so their repaint does not spread to the app bar or bottom bar.",
+    "Step 1: in sticky_chips_section.dart, while the page-level loading shimmer is on screen, replace the chip StickyTabsShimmer with a static SizedBox of the same height. Keep the chip shimmer for the later isOverviewLoading-only case.",
+    "Step 2: add shimmer: bool to the three skeleton widgets. In the screen, when state is MoGetQuoteLoading, wrap the scroll view in a single Shimmer.fromColors and build the skeletons with shimmer: false.",
+    "Step 2: give the CustomScrollView a GlobalKey so adding and removing the Shimmer wrapper reparents it instead of rebuilding it.",
+    "Measure the frame rate while loading (Performance overlay) before and after each step."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/quote_content_area.dart",
+    "lines": "44-58",
+    "code": "  Widget build(final BuildContext context) {\n    return BlocBuilder<MoGetQuoteCubit, MoGetQuoteState>(\n      buildWhen: (final MoGetQuoteState prev, final MoGetQuoteState curr) =>\n          curr is MoGetQuoteLoading ||\n          curr is MoGetQuoteAssetTypeDataLoading ||\n          curr is MoGetQuoteSectionChangeLoading ||\n          curr is MoGetQuoteSectionChanged ||\n          curr is MoGetQuoteAssetTypeDataLoaded ||\n          curr is MoGetQuoteSectionError,\n      builder: (final BuildContext context, final MoGetQuoteState state) {\n        if (state is MoGetQuoteLoading ||\n            state is MoGetQuoteAssetTypeDataLoading ||\n            state is MoGetQuoteSectionChangeLoading) {\n          return const QuoteContentAreaShimmer();\n        }"
+   },
+   "after_code": {
+    "code": "// Step 1 - same pixels, isolated repaint\nif (state is MoGetQuoteLoading ||\n    state is MoGetQuoteAssetTypeDataLoading ||\n    state is MoGetQuoteSectionChangeLoading) {\n  return const RepaintBoundary(child: QuoteContentAreaShimmer());\n}\n\n// Step 2 - one shimmer for the whole page while MoGetQuoteLoading\nclass QuoteContentAreaShimmer extends StatelessWidget {\n  const QuoteContentAreaShimmer({super.key, this.shimmer = true});\n  final bool shimmer;\n\n  @override\n  Widget build(BuildContext context) {\n    final Widget blocks = _blocks(context); // the existing Column\n    if (!shimmer) return blocks;\n    return Shimmer.fromColors(\n      baseColor: context.surfaceBackgroundShimmerBase,\n      highlightColor: context.surfaceBackgroundShimmerHighlight,\n      child: blocks,\n    );\n  }\n}"
+   },
+   "safety": [
+    "Step 1 is pixel-identical and can ship alone.",
+    "shimmer defaults to true, so other uses of these widgets (Fundamentals tab section change, sticky chips) are unchanged.",
+    "Step 2 can sit behind the same QuotePerfFlags class as A1 if the team wants a remote rollback."
+   ],
+   "regression_checks": [
+    "First open and repeat open of a stock, an index, a future and an option: the skeleton looks the same and switches to content without a flash.",
+    "Section change loading on Fundamentals (QuoteContentAreaShimmer) still shimmers.",
+    "Overview chips while the overview is loading after an asset switch.",
+    "Pull the network during loading: the error state replaces the skeleton."
+   ],
+   "after_improvement": "One animation controller and one shader layer instead of up to four. Expected skeleton redraw cost drops by roughly the number of removed shimmers; the redraw rate itself stays at the display rate only inside the skeleton.",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": true
+  },
+  {
+   "id": "A5",
+   "title": "Replace spinning image placeholders with static ones",
+   "summary": "Logos on the quote page show an indeterminate CircularProgressIndicator (trader_widgets getCachedNetworkImage) or LinearProgressIndicator (peer table) while the image loads. These animate at the display rate for as long as the request is pending, and a hung request never ends. Show a static placeholder (the initials circle that is already used as the error widget) instead.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Low",
+   "risk_reason": "Only the loading placeholder of logos inside this module changes. trader_widgets is not edited, so other modules keep their spinner.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "While a stock logo is loading, can we show the initials circle (the same widget shown when a logo fails) instead of a spinner?",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/common/quote_logo_image.dart",
+     "lines": "new",
+     "change": "New module-local logo widget: CachedNetworkImage / CachedNetworkSVGImage with a static placeholder; same sizes and error widget as getCachedNetworkImage."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stock_info_card.dart",
+     "lines": "172-177",
+     "change": "Use QuoteLogoImage instead of getCachedNetworkImage."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/stocks/stocks_main.dart",
+     "lines": "233-240",
+     "change": "Same (one logo per index constituent row)."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_depth/widgets/header/market_depth_header_widget.dart",
+     "lines": "84-89",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/peer_comparision/peer_comparison_table.dart",
+     "lines": "616-623",
+     "change": "placeholder returns _errorWidget(name, width, height) instead of LinearProgressIndicator."
+    }
+   ],
+   "current": "getCachedNetworkImage in packages/trader_widgets/lib/custom_network_image_utility.dart:18-34 uses CircularProgressIndicator for both SVG and bitmap placeholders. peer_comparison_table.dart:616-623 uses LinearProgressIndicator. Both are indeterminate animations; on a slow or stalled logo request they keep the page redrawing even when nothing else changes. On the Index Stocks tab there is one such logo per constituent.",
+   "steps": [
+    "Create QuoteLogoImage(imageUrl, name, {width, height, initIconFontSize}) inside mo_get_quote, copying the getCachedNetworkImage layout but using a static placeholder.",
+    "Switch the three getCachedNetworkImage call sites in this module to QuoteLogoImage.",
+    "In peer_comparison_table.dart, use _errorWidget for the placeholder.",
+    "Leave trader_widgets unchanged. A later, optional FE-Shared change could add a placeholder parameter there for other modules."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/peer_comparision/peer_comparison_table.dart",
+    "lines": "610-626",
+    "code": "    return ClipOval(\n      child: CachedNetworkImage(\n        fit: BoxFit.cover,\n        height: height,\n        width: width,\n        imageUrl: imageUrl,\n        placeholder: (final BuildContext context, final String url) => SizedBox(\n          height: height,\n          width: width,\n          child: LinearProgressIndicator(\n            color: Colors.grey.shade200,\n            backgroundColor: Colors.grey.shade100,\n          ),\n        ),\n        errorWidget: (final BuildContext context, final String url, final Object error) =>\n            _errorWidget(name, width, height),\n      ),\n    );"
+   },
+   "after_code": {
+    "code": "return ClipOval(\n  child: CachedNetworkImage(\n    fit: BoxFit.cover,\n    height: height,\n    width: width,\n    imageUrl: imageUrl,\n    // Static placeholder: nothing animates while the logo loads.\n    placeholder: (final BuildContext context, final String url) =>\n        _errorWidget(name, width, height),\n    errorWidget: (final BuildContext context, final String url, final Object error) =>\n        _errorWidget(name, width, height),\n  ),\n);"
+   },
+   "safety": [
+    "Same image source, cache, size and error widget; only the placeholder changes.",
+    "No shared package is edited."
+   ],
+   "regression_checks": [
+    "Logos in the header card, Market Depth header, Index Stocks rows and Peer Comparison load, show initials while loading, and show initials on failure.",
+    "SVG logos still render.",
+    "Dark theme placeholder colours."
+   ],
+   "after_improvement": "No animation runs while logos are loading. On slow networks the page no longer redraws continuously because of a stalled logo.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "A6",
+   "title": "Delete unused shimmer and indicator widgets",
+   "summary": "MarketUpdatesAccordionShimmerWidget (seven Shimmer.fromColors call sites) and NewsIndicator are not referenced anywhere in apps/ or packages/. Delete them to remove dead code that could be wired in later and bring its own animations.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Both classes have no references repo-wide (checked in apps/ and packages/, including tests) and are not exported from mo_get_quote.dart. No runtime effect.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion_shimmer_widget.dart",
+     "lines": "1-135",
+     "change": "Delete the file."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_indicator.dart",
+     "lines": "1-33",
+     "change": "Delete the file (the dots are built inline in news_accordion.dart)."
+    }
+   ],
+   "current": "Both files compile into the package but nothing imports them. This change does not affect the measured fps, because the widgets never run; it only removes clutter.",
+   "steps": [
+    "Re-run the search just before deleting: grep -rn 'MarketUpdatesAccordionShimmerWidget\\|NewsIndicator\\|market_updates_accordion_shimmer\\|news_indicator' apps packages --include=*.dart.",
+    "Delete both files.",
+    "Run dart run melos run analyze and the mo_get_quote tests."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion_shimmer_widget.dart",
+    "lines": "6-12, 31-35",
+    "code": "class MarketUpdatesAccordionShimmerWidget extends StatelessWidget {\n  const MarketUpdatesAccordionShimmerWidget({super.key});\n\n  @override\n  Widget build(final BuildContext context) {\n    return Column(\n      mainAxisSize: MainAxisSize.min,\n// ...\n                Shimmer.fromColors(\n                  baseColor: shimmerBaseColor(context),\n                  highlightColor: shimmerHighLightColor(context),\n                  child: Container(\n                    height: 12,"
+   },
+   "after_code": {
+    "code": "// File removed. No call sites to update.\n// Verify: grep -rn \"MarketUpdatesAccordionShimmerWidget\" apps packages --include=*.dart -> no results"
+   },
+   "safety": [
+    "Only unreferenced code is deleted; the analyzer fails the build if anything still imports it."
+   ],
+   "regression_checks": [
+    "melos analyze passes; mo_get_quote builds; Overview Market Updates and News render as before."
+   ],
+   "after_improvement": "Two unused widgets fewer (about 170 lines). No runtime change.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "A7",
+   "title": "Add idle-cost counters to confirm root causes",
+   "summary": "The idle numbers (13.3 fps, 54.3 % CPU, 465 KB/min) were measured without attributing them to code. Add debug/profile-only counters for carousel slides, Shimmer instances and quote subscribe calls per minute, so each change in sections A and E can be checked against the cause it targets.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Only runs when kReleaseMode is false; release builds compile it out. No behaviour change.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_idle_probe.dart",
+     "lines": "new",
+     "change": "New: static counters (carouselSlides, subscribeCalls, symbolsSentPerCall) printed once a minute with debugPrint when !kReleaseMode."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+     "lines": "46-48",
+     "change": "QuoteIdleProbe.carouselSlide('market_updates') in _onPageChange."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_accordion.dart",
+     "lines": "33-35",
+     "change": "QuoteIdleProbe.carouselSlide('news') in _onPageChange."
+    }
+   ],
+   "current": "The only signal today is the broadcaster's own 'Subscribe Quote: ...' file log (broadcast_controller.dart:249-250), which is not per page and not counted. The report's causes A3 and A6 are inferred.",
+   "steps": [
+    "Add QuoteIdleProbe with a Timer.periodic(1 min) started from the Overview initState and stopped in dispose, only when !kReleaseMode.",
+    "Count carousel slides, and (until E1 lands) count calls to startQuoteStreaming from the module by wrapping them in one helper.",
+    "Baseline: after market close, open a stock, wait 2 minutes, read the counters; repeat with A1/A2 on and record the fps from the Performance overlay.",
+    "Remove the probe, or keep it behind kDebugMode, once sections A and E are verified."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_accordion.dart",
+    "lines": "33-35",
+    "code": "  void _onPageChange(final int index, final CarouselPageChangedReason changeReason) {\n    setState(() => _currentIndex = index);\n  }"
+   },
+   "after_code": {
+    "code": "class QuoteIdleProbe {\n  static final Map<String, int> _counts = <String, int>{};\n  static Timer? _timer;\n\n  static void start() {\n    if (kReleaseMode) return;\n    _timer ??= Timer.periodic(const Duration(minutes: 1), (_) {\n      debugPrint('[QuoteIdleProbe] per minute: $_counts');\n      _counts.clear();\n    });\n  }\n\n  static void stop() { _timer?.cancel(); _timer = null; }\n\n  static void hit(String name) {\n    if (kReleaseMode) return;\n    _counts[name] = (_counts[name] ?? 0) + 1;\n  }\n}\n\n// news_accordion.dart\nvoid _onPageChange(final int index, final CarouselPageChangedReason reason) {\n  QuoteIdleProbe.hit('carousel_slide_news');\n  _pageIndex.value = index; // after A3\n}"
+   },
+   "safety": [
+    "Release builds return before doing anything.",
+    "No change to widget output."
+   ],
+   "regression_checks": [
+    "Release build has no [QuoteIdleProbe] log lines.",
+    "Debug build prints counts once per minute and stops when the quote page is closed."
+   ],
+   "after_improvement": "Every idle metric has a counter that maps to a code path, so A1-A6 and E1-E11 can be confirmed one at a time.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "A8",
+   "title": "Decide what auto-play does after the last card",
+   "summary": "With enableInfiniteScroll: false and pauseAutoPlayInFiniteScroll left at false, both carousels animate from the last card back to the first and start again, forever. Offer Product the option to stop after one full pass (pauseAutoPlayInFiniteScroll: true), behind its own flag that defaults to today's behaviour.",
+   "categories": [
+    "FE",
+    "BE",
+    "Product"
+   ],
+   "risk": "Low",
+   "risk_reason": "A single CarouselOptions value, behind a flag that defaults to the current looping behaviour.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "After showing the last Market Updates / News card, should the carousel jump back to the first card and keep rotating (today), or stop on the last card until the user swipes?",
+   "be_request": "If Product chooses to stop: create Remote Config boolean quote_carousel_stop_after_last (default false).",
+   "files": [
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/market_updates/market_updates_accordion.dart",
+     "lines": "103-114",
+     "change": "Add pauseAutoPlayInFiniteScroll: QuotePerfFlags.carouselStopAfterLast."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_accordion.dart",
+     "lines": "84-92",
+     "change": "Same."
+    },
+    {
+     "path": "packages/mo_get_quote/lib/helper/quote_perf_flags.dart",
+     "lines": "new (from A1)",
+     "change": "Add the carouselStopAfterLast getter (default false)."
+    }
+   ],
+   "current": "In carousel_slider 5.1.2 getTimer() (carousel_slider.dart:129-163) sets nextPage = 0 when the last page is reached and pauseAutoPlayInFiniteScroll is false. The jump back animates across every card. Even with A1/A2, a user who leaves Market Updates on screen gets an endless loop.",
+   "steps": [
+    "Wait for the Product answer; implement only if the answer is 'stop'.",
+    "Add the flag getter and pass it as pauseAutoPlayInFiniteScroll in both carousels.",
+    "A manual swipe after the stop does not restart the timer (clearTimer was called); confirm this matches the Product answer."
+   ],
+   "before_code": {
+    "path": "packages/mo_get_quote/lib/ui/widgets/overview/news/news_accordion.dart",
+    "lines": "84-92",
+    "code": "      options: CarouselOptions(\n        height: 110.0,\n        autoPlay: true,\n        viewportFraction: 1.0,\n        padEnds: true,\n        onPageChanged: _onPageChange,\n        enableInfiniteScroll: false,\n        enlargeCenterPage: false,\n      ),"
+   },
+   "after_code": {
+    "code": "options: CarouselOptions(\n  height: 110.0,\n  autoPlay: shouldAutoPlay,                 // A2\n  viewportFraction: 1.0,\n  padEnds: true,\n  onPageChanged: _onPageChange,\n  enableInfiniteScroll: false,\n  enlargeCenterPage: false,\n  // false (default) = today's loop back to the first card\n  pauseAutoPlayInFiniteScroll: QuotePerfFlags.carouselStopAfterLast,\n),"
+   },
+   "safety": [
+    "Default flag value keeps today's loop.",
+    "Rollback is a Remote Config change."
+   ],
+   "regression_checks": [
+    "Flag off: carousels loop as today.",
+    "Flag on: rotation stops on the last card; manual swipe still works."
+   ],
+   "after_improvement": "If Product picks 'stop', a visible carousel stops producing frames after one pass (5 s x cards for Market Updates, 4 s x cards for News).",
+   "depends_on": [
+    "C1",
+    "A1",
+    "A2"
+   ],
+   "verify": false
+  }
+ ]
+}
