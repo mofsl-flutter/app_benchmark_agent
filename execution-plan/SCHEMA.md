@@ -14,6 +14,13 @@ python3 execution-plan/tools/build_plan.py <data_dir> <out_dir>
 | `summary.json` | no | `summary.html` (one-page summary and a 2–4 day package) |
 | `optimized.json` | no | `optimized-plan.html` (smallest FE-only set) |
 | `preferred.json` | no | `most-preferred-plan.html` (biggest contributors per factor, FE only) |
+| `snapshot.json` | no | none: the per-app numbers `rank_impact.py` scores, when they do not come from a results folder |
+| `impact.json` | no | none: levers (groups of changes) and the measurements they move |
+| `rank.json` | no | written by `rank_impact.py plan`, never by hand |
+| `roadmap.json` | no | `roadmap.html` (management roadmap), together with `rank.json` |
+
+The last four are the **management layer**. Ranks and other apps' names are allowed there and
+nowhere else.
 
 A complete worked example (RISE stock quote page, 117 changes) is in
 `execution-plan/examples/quote/`. Check every file with
@@ -38,7 +45,9 @@ A complete worked example (RISE stock quote page, 117 changes) is in
 }
 ```
 
-`module_path` is the module folder relative to the code repository root. Files under it count as
+`module_path` is the module folder relative to the code repository root. Optional `code_root`
+(the repository root as given, for example `~/StudioProjects/mosl-riseapp-repo`) turns absolute
+file paths under it into repository paths on the pages. Files under it count as
 "this module" and every other file as a shared package. Optional: `footer`, which replaces the
 generated footer text.
 
@@ -179,11 +188,88 @@ them. Front-end changes only; the page shows no effort or time estimates.
 
 Cause levels are `Largest`, `Large`, `Medium` and `Small`.
 
+## snapshot.json
+
+The per-app numbers to score. `rank_impact.py snapshot` writes it from a results folder; for any
+other benchmark file, copy each app's median per metric id (METRICS.md) from the file.
+
+```json
+{
+  "source": "reports/combined/scorecard_2026-10-22.md",
+  "module": "portfolio",
+  "ranked": ["RISE", "Groww", "Kite", "Angel One"],
+  "medians": {"RISE": {"L3": 633, "R2": 1044.6}, "Groww": {"L3": 683, "R2": 391}},
+  "runs":    {"RISE": {"L3": [600, 633, 700]}},
+  "facts":   {"RISE": {"pull_to_refresh": false, "pin_on_resume": false}}
+}
+```
+
+`runs` (the run values per timing) feeds the user-feel reliability score and `facts` the
+friction score; leave out what the file does not have.
+
+## impact.json
+
+```json
+{
+  "goal": {"technical_rank": 3, "user_rank": 3},
+  "partial": 0.75,
+  "levers": [
+    {"id": "memory", "title": "Cut graphics memory on the portfolio",
+     "changes": ["E1", "E2", "E4"],
+     "effects": [ {"metric": "R2", "after": 360}, {"metric": "R1", "after": 330} ],
+     "facts": {},
+     "chance": "Medium",
+     "basis": "E1 creates the chart WebView at launch (about 600 MB of graphics memory); E2 and E4 cap the image cache. Size from the WebView's share in the R2 trace."}
+  ]
+}
+```
+
+- **goal**: the rank to reach on each scorecard; either key may be left out.
+- **partial**: the share of each lever's improvement the robust set must survive (default 0.75).
+- **levers**: one per outcome a re-measurement can see. `changes` are section ids; a change
+  belongs to one lever. `effects` set the target app's metric to `after` (estimates, never better
+  than the code supports). `facts` add or remove a feature (`pull_to_refresh`, `pin_on_resume`).
+  `chance` is High, Medium or Low. `basis` says why the `after` values are believable.
+
+## rank.json
+
+Written by `rank_impact.py plan <data>`; the checker rejects it when it is older than
+`impact.json`, `roadmap.json` or the sections. It holds `today`, the `minimum`, `robust` and
+`everything` sets (levers, scores, ranks, engineer-days, the margin to the first app outside the
+goal), `recommended` (which of those to follow), per lever its gain alone, the ranks without it
+(or with it added), its break-even share and notes, and the scores after each roadmap phase.
+
+## roadmap.json
+
+```json
+{
+  "title": "Portfolio: plan to reach the top 3",
+  "goal_text": "Top 3 on both scorecards at the final re-benchmark",
+  "team": "2 FE developers and QA (to confirm)",
+  "developers": 2,
+  "scope_intro": "optional",
+  "scope_in": ["Portfolio tab of the RISE Android app"],
+  "scope_out": ["Other modules", "iOS"],
+  "phases": [
+    {"title": "Phase 1 · Quick wins", "start": "2026-10-26", "end": "2026-11-06",
+     "levers": ["ptr", "keep"],
+     "gate": {"date": "2026-11-09", "pass": "User feel top 3 on re-test"}}
+  ],
+  "risks": [ {"risk": "Memory cut reaches 75 % of its target", "effect": "Technical #4", "fallback": "Pull the idle-redraw lever into phase 2"} ],
+  "open_questions": ["Who owns the squad?"]
+}
+```
+
+Dates are `YYYY-MM-DD`. Every lever of the recommended set must be in a phase; every phase needs a
+gate with a pass mark. With `developers`, the checker warns when a phase holds more engineer-days
+than its working days allow.
+
 ## Writing rules for every file
 
 - Plain, specific English. No marketing words.
-- In plan files, talk only about **today vs after improvement**. No competitor names, no ranks and
-  no "top N" language (the benchmark is the input, not the subject).
+- In the engineering files, talk only about **today vs after improvement**. No competitor names,
+  no ranks and no "top N" language (the benchmark is the input, not the subject). The management
+  layer (`impact.json`, `rank.json`, `roadmap.json`) is where ranks belong.
 - Every claim must be checked against the code you read. If you cannot confirm it, drop it or set
   `verify: true` and say what to check.
 - Prefer the smallest change that fixes the problem without changing behaviour.

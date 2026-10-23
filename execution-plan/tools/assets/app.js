@@ -1,6 +1,6 @@
 (function () {
   var root = document.documentElement;
-  try { var saved = localStorage.getItem('quote-plan-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  try { var saved = localStorage.getItem('execution-plan-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
   function isDark() {
     var t = root.getAttribute('data-theme');
     if (t) return t === 'dark';
@@ -13,7 +13,7 @@
     b.addEventListener('click', function () {
       var next = isDark() ? 'light' : 'dark';
       root.setAttribute('data-theme', next);
-      try { localStorage.setItem('quote-plan-theme', next); } catch (e) {}
+      try { localStorage.setItem('execution-plan-theme', next); } catch (e) {}
       label();
     });
   });

@@ -9,7 +9,7 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 | File | What |
 |---|---|
 | `.claude/agents/benchmark-runner.md` | The agent. `/benchmark <module>`, `/benchmark-report`, `/benchmark-module <name>` |
-| `.claude/agents/benchmark-execution-plan.md` | The optional planning agent. `/benchmark-execution-plan <benchmark-file> <module-folder or RISE-repo> [mode]` turns a benchmark into an issues report and a multi-page fix plan for the module's code |
+| `.claude/agents/benchmark-execution-plan.md` | The optional planning agent. `/benchmark-execution-plan <benchmark-file> <module-folder or RISE-repo> [mode]` turns a benchmark into an issues report, a multi-page fix plan for the module's code, and a management roadmap: which fixes reach a rank goal (default top 3 on both scorecards), the robust set, break-even per fix, phases, gates and risks (`execution-plan/tools/rank_impact.py`) |
 | `.claude/agents/benchmark-verifier.md` | The RISE re-check agent. `/benchmark-verify <module> [report.xlsx]` measures only RISE again on the report's phone, compares with the existing report, writes the new RISE values into it and says what improved |
 | `execution-plan/` | Everything for the planner: data format (`SCHEMA.md`), `tools/` (checker, HTML generator), `examples/quote/`, and `plans/`, where generated plans go (git-ignored) |
 | `PROTOCOL.md` | How every run is done (pre-flight, order, run counts, market hours, safety) |

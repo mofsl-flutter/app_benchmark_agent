@@ -43,6 +43,7 @@ EFFORT = {"S": "≤ 1 day", "M": "2–4 days", "L": "1 week +"}
 RISK_RANK = {"Low": 0, "Medium": 1, "High": 2}
 
 DATE = META.get("date", "")
+CODE_ROOTS = [r.rstrip("/") + "/" for r in {META.get("code_root", ""), os.path.expanduser(META.get("code_root", ""))} if r]
 
 
 def esc(s):
@@ -112,9 +113,11 @@ FOOTER = META.get("footer") or (
         MODULE_PATH or "the module", (" (branch %s)" % META["branch"]) if META.get("branch") else "",
         META.get("benchmark_source", "results"), (" measured on %s" % META["measured_on"]) if META.get("measured_on") else ""))
 EXTRA_PAGES = [(f, t) for f, t, src in (
+    ("roadmap.html", "Roadmap and rank impact", "roadmap.json"),
     ("summary.html", "Summary and 2–4 day plan", "summary.json"),
     ("optimized-plan.html", "Optimized FE plan", "optimized.json"),
-    ("most-preferred-plan.html", "Most preferred plan", "preferred.json")) if os.path.exists(os.path.join(SRC, src))]
+    ("most-preferred-plan.html", "Most preferred plan", "preferred.json")) if os.path.exists(os.path.join(SRC, src))
+    and (src != "roadmap.json" or os.path.exists(os.path.join(SRC, "rank.json")))]
 BY_ID = {c["id"]: c for c in ALL}
 
 
@@ -140,7 +143,10 @@ def effort_html(e):
 
 def norm_path(p):
     p = (p or "").strip()
-    p = p.replace("/Users/pramodpatil/StudioProjects/mosl-riseapp-repo/", "")
+    for root in CODE_ROOTS:  # absolute paths under the analysed repository become repository-relative
+        if p.startswith(root):
+            p = p[len(root):]
+            break
     m = re.match(r"^(?:~|/Users/[^/]+)/\.pub-cache/git/([a-z_]+)-[0-9a-f]+/(.*)$", p)
     if m:
         p = "%s: %s" % (m.group(1), m.group(2))
@@ -574,4 +580,5 @@ for s in sections:
 page("full-report.html", "Full report", body, "All changes in the change plan on one page.")
 
 exec(open(os.path.join(HERE, "plan_pages.py"), encoding="utf-8").read())
+exec(open(os.path.join(HERE, "roadmap_page.py"), encoding="utf-8").read())
 print("built %d sections, %d changes, %d files -> %s" % (len(sections), len(ALL), len(files), OUT))

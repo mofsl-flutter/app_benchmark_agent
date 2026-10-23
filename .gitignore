@@ -18,3 +18,9 @@ __pycache__/
 *.pyc
 .DS_Store
 .venv/
+
+# Execution plans hold copied app code: they stay on the developer's machine (share the site/ folder)
+execution-plan/plans/
+
+# IDE
+.idea/
