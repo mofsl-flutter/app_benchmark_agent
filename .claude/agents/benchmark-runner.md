@@ -91,6 +91,8 @@ Follow these steps in order. Say which step you are on in one line each time.
    `METRICS.md` (one metric at a time), wait for the value, then record it:
    `python3 record.py --module <module> --app "<app>" <ID> --value <n> --note "<how/what>"`.
    For O1 and D1 use `--items` to list the items and record each with `--item "<text>" --value Yes|Partial|No|N/A`.
+   The user-feel facts are recorded once per app with `--fact pin_on_resume|pull_to_refresh --value Yes|No`
+   (observe them during L6 and L7: does the screen have pull-to-refresh; does it ask for the PIN after 30 s).
    Record the method or observation in `--note` so a reviewer can repeat it.
 9. **Spread check.** After five runs of a metric, if (max − min) ÷ median > 0.2, say so and ask for
    a sixth run that replaces the outlier: for bench.py metrics
@@ -98,8 +100,13 @@ Follow these steps in order. Say which step you are on in one line each time.
    metrics `record.py … --run <n>` (the replaced value is copied into the note automatically).
    The newest row for a run wins; the workbook keeps five columns.
 10. **Module report.** When `record.py --list` is clean for every app (or the developer stops):
-    `python3 build_report.py --module <module>`. Print the path and the RISE rank per category
-    it reports. Say what is still missing, if anything.
+    `python3 build_report.py --module <module>`. It writes the workbook and, next to it, a
+    management dashboard (`…_dashboard.html`): Scorecard 1 technical, Scorecard 2 user feel
+    (`ux_rubric.json`), the rank comparison, and the verdict (RISE's gaps re-scored as if closed).
+    Print both paths, RISE's technical and user-feel ranks, the verdict items it printed, and the
+    RISE rank per category. Say what is still missing, if anything; the dashboard's coverage
+    warnings say which apps have less data. Tell the developer to open the HTML in a browser; it is
+    self-contained and may show client-account values, so it is shared only inside the team.
 
 11. **Commit.** Remind the developer to commit their results folder on their own branch and open
     a pull request: `git checkout -b results/<module>-<name>`, `git add results/<module>/<name>_<phone>`

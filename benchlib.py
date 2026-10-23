@@ -171,6 +171,12 @@ BENCH_GROUPS = {  # which bench.py group produces which metric IDs
 }
 AUTOMATED = sorted({mid for ids in BENCH_GROUPS.values() for mid in ids} | {"R3"})
 
+# Yes/No facts for the user-feel scorecard (record.py --fact), recorded once per app and module as F.<key>.
+UX_FACTS = {
+    "pin_on_resume": "Asks for the PIN again after 30 s in the background on {screen}",
+    "pull_to_refresh": "{screen} has pull-to-refresh",
+}
+
 GENERIC_WORDS = {"screen": "the screen", "list": "the list", "detail": "the detail screen"}
 
 
@@ -534,6 +540,9 @@ def expected(module, app=None):
                 out[f"D1.{slug(it)}"] = 1
         else:
             out[m["id"]] = m["runs"]
+    if module["name"] != APP_SCOPE:
+        for k in UX_FACTS:
+            out[f"F.{k}"] = 1
     return out
 
 

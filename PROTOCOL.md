@@ -59,7 +59,7 @@ done") and the Portfolio decisions in `archive/CONTEXT.md`.
 |---|---|---|
 | Timing, scroll, RAM, screen-update, network per open (L*, S*, U1–U3, R2, R3, L15) | 5 | The workbook reports the median; one bad run does not skew it |
 | Idle redraw (U4, U5) and live session (C1–C4) | 3 | Market-hours time is scarce; live sessions run 10 min and are scaled to 15 |
-| Storage, SDK, Play Store facts, leak check, crashes (R4–R8, X1–X3, A1–A4, R9, O1/D1 items) | 1 | Facts, not samples |
+| Storage, SDK, Play Store facts, leak check, crashes (R4–R8, X1–X3, A1–A4, R9, O1/D1 items, user-feel facts F.pin_on_resume and F.pull_to_refresh) | 1 | Facts, not samples |
 | Start-up contention (X4) | 5 | Taken with each cold start under `_app` |
 
 If five runs spread more than 20 % ((max − min) ÷ median), take a sixth and replace the outlier

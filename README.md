@@ -13,12 +13,14 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 | `METRICS.md` | The 50 metrics: method, tool, unit, expected runs. Generated from `benchlib.py` |
 | `modules/<name>.json` | One file per module: RISE screen, list, detail, competitor screens, scroll/gesture scripts, offline and data items |
 | `apps.json` | App registry (package names, ranked or not). `RISE UAT` is never ranked |
-| `weights.json` | Scorecard category weights (lead's sign-off) |
+| `weights.json` | Scorecard 1 (technical) category weights (lead's sign-off) |
+| `ux_rubric.json` | Scorecard 2 (user feel): criteria, fixed limits, weights and sources (lead's sign-off) |
 | `bench.py` | adb collector: cold start, lock contention, RAM, bytes per open, Perfetto scroll/gesture/idle, leak check, live session |
 | `preflight.py` | Pre-run checks; writes `env.csv` |
 | `record.py` | Records a manual metric or an offline/data item |
 | `build_report.py` | Per-module workbook, combined workbook + scorecard, `METRICS.md` |
 | `build_benchmark.py` | Workbook layout (imported by `build_report.py`) |
+| `build_dashboard.py` | Management dashboard written next to each module workbook (imported by `build_report.py`) |
 | `results/<module>/<developer>_<device>/` | `runs.csv`, `env.csv`, `state.json` — your folder only |
 | `reports/` | Generated workbooks and scorecards, dated |
 | `docs/` | The benchmark plan, the design, and example reports |
@@ -118,8 +120,28 @@ python3 bench.py run RISE --module fno --group idle --with-video --runs 3   # ma
 python3 bench.py run RISE --module fno --group live --runs 3 --live-minutes 10
 python3 record.py --module fno --app RISE --list     # manual metrics still missing
 python3 record.py --module fno --app RISE L14 --value 310 --note "Overview → Technicals"
-python3 build_report.py --module fno
+python3 record.py --module fno --app RISE --fact pull_to_refresh --value No   # user-feel facts
+python3 build_report.py --module fno                 # workbook + _dashboard.html
 ```
+
+### The dashboard
+
+`build_report.py --module <m>` also writes `reports/<m>/<m>_<dev>_<phone>_<date>_dashboard.html`,
+one self-contained page for management:
+
+- **Scorecard 1, technical:** the workbook score (each metric 0–100 among the apps, weighted by
+  `weights.json`), with coverage per app.
+- **Scorecard 2, user feel:** the same measurements against fixed limits a person notices
+  (0.4 s / 1 s / 10 s response times, 60 fps, offline checklist, PIN on resume, pull-to-refresh,
+  battery, hangs), from `ux_rubric.json`. An app that is a little slower than the fastest but
+  under every limit scores well here.
+- **Why the two rankings differ:** a rank-to-rank chart.
+- **Verdict:** RISE's gaps, each re-scored as if RISE reached the other apps' median (or the best
+  of them), sorted by how much both scores move, plus "all of the above" and where RISE is
+  already best.
+- **Measurements:** medians with a confidence dot per value (High / Medium / Low / One).
+
+It may show client-account values: share it inside the team only, never commit it.
 
 `/benchmark-report` (or `python3 build_report.py --combined`) rebuilds the combined workbook and
 scorecard from every developer's results.

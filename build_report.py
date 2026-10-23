@@ -4,6 +4,7 @@
   python3 build_report.py --module fno [--developer NAME] [--device-model MODEL]
         One module's workbook, filled from results/fno/<developer>_<device>/runs.csv (+ the same
         developer's _app folder for phone-scoped metrics). -> reports/fno/fno_<dev>_<device>_<date>.xlsx
+        and a management dashboard next to it (…_dashboard.html: technical and user-feel scorecards, verdict).
 
   python3 build_report.py --combined
         Every module, every developer -> reports/combined/combined_<date>.xlsx and scorecard_<date>.md
@@ -63,6 +64,8 @@ def medians(rows, module, apps):
             else:
                 out[app][mid] = round(statistics.median(v for _, v in lst), 2)
         for base, answers in items[app].items():
+            if base not in B.METRICS:  # F.<fact> rows are read by the dashboard, not scored here
+                continue
             score = item_score(base, answers.values())
             if score is not None:
                 out[app][base] = score
@@ -310,6 +313,13 @@ def module_report(a):
     out = out_dir / f"{module['name']}_{B.safe_name(developer)}_{B.safe_name(model)}_{date}.xlsx"
     apps = fill_module_workbook(module, folder, rows, app_rows, out, developer, model)
     print(f"  Workbook: {out}")
+    import build_dashboard
+    dash = out.with_name(out.stem + "_dashboard.html")
+    d = build_dashboard.build(module, folder, rows, app_rows, apps, developer, model, dash)
+    print(f"  Dashboard: {dash}")
+    if d["tech_rank"]:
+        print(f"  RISE: technical #{d['tech_rank']} ({d['tech']}), user feel #{d['ux_rank']} ({d['ux']}) of {d['n']}"
+              + (f"; with the {len(d['actions'])} verdict items: #{d['combined']['tech_rank']} / #{d['combined']['ux_rank']}" if d["combined"] else ""))
 
     ranked = [x for x in apps if B.load_apps().get(x, {}).get("ranked", True)]
     app_rows = [r for r in app_rows if r["app"] in apps]
