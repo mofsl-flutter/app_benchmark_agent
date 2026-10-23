@@ -2,36 +2,36 @@
   "name": "watchlist",
   "title": "Watchlist",
   "rise": {
-    "screen": "Watchlist tab",
-    "list": "watchlist symbols",
+    "screen": "Watchlist tab > Bench 20",
+    "list": "Bench 20 symbols (20 stocks, A–Z)",
     "detail": "stock quote page",
     "live_ticks": true,
     "account_sensitive": true
   },
   "apps": {
     "Kite": {
-      "screen": "Watchlist"
+      "screen": "Watchlist tab > Bench 20"
     },
     "Coin": {
       "screen": null
     },
     "Groww": {
-      "screen": "Watchlist"
+      "screen": "Watchlist tab > Bench 20"
     },
     "Angel One": {
-      "screen": "Watchlist"
+      "screen": "Watchlist tab > Bench 20"
     },
     "INDmoney": {
-      "screen": "Watchlist"
+      "screen": "Watchlist tab > Bench 20"
     },
     "Kotak Neo": {
-      "screen": "Watchlist"
+      "screen": "Watchlist tab > Bench 20"
     },
     "SAHI": {
-      "screen": "Watchlist"
+      "screen": "Watchlist tab > Bench 20"
     },
     "Dhan": {
-      "screen": "Watchlist"
+      "screen": "Watchlist tab > Bench 20"
     }
   },
   "scroll": {
@@ -46,7 +46,9 @@
   "open_tap": {
     "per_app": {}
   },
-  "test_subjects": [],
+  "test_subjects": [
+    "RELIANCE"
+  ],
   "skip": [],
   "offline_items": [
     "Cold launch in airplane mode → Watchlist tab shows cached data",
@@ -70,6 +72,5 @@
     "Quick buy / sell",
     "Dark mode"
   ],
-  "notes": "Use the same 50-scrip watchlist on every app for S1–S5; Large account = max watchlist.",
-  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+  "notes": "Bench 20 = the same 20 stocks in every app (ASIANPAINT, AXISBANK, BAJFINANCE, BHARTIARTL, HCLTECH, HDFCBANK, HINDUNILVR, ICICIBANK, INFY, ITC, KOTAKBANK, LT, MARUTI, NTPC, RELIANCE, SBIN, SUNPHARMA, TCS, TITAN, ULTRACEMCO), used for S1–S5. Small account (L9) = first 10 of Bench 20; Large account (L10, S6) = the app's maximum watchlist size. L14 = switch between watchlist tabs. U1–U3 on RELIANCE."
 }
