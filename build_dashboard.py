@@ -476,6 +476,11 @@ def build(module, folder, rows, app_rows, apps, developer, model, out_path):
         low = [a for a in ranked if sc["tech_cov"][a] is not None and sc["tech_cov"][a] < max(covs) - 10]
         warnings.append(f"{', '.join(low)} have less data than the others (coverage {min(covs)}% vs {max(covs)}%); "
                         f"their technical scores leave out the missing categories, so compare their ranks with care.")
+    if module.get("runs") or module.get("skip"):
+        dev = [f"{k} {v} run(s)" for k, v in sorted(module.get("runs", {}).items())]
+        warnings.append("Protocol deviations set in the module file: "
+                        + "; ".join(x for x in (", ".join(dev), "not measured: " + ", ".join(module["skip"]) if module.get("skip") else "") if x)
+                        + (f". {module['deviation_note']}" if module.get("deviation_note") else ""))
     empty = [a for a, n in holdings.items() if n == 0 and a in ranked]
     if empty:
         warnings.append(f"{', '.join(empty)} had an empty account during the test (*).")

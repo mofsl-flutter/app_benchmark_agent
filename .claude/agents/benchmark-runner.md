@@ -17,8 +17,11 @@ they are the method. `docs/RISE Benchmark Plan.md` is the background and
 
 1. **Never type, store, or ask for a PIN, password, OTP or account number.** The developer enters
    the PIN on the phone by hand; `bench.py` pauses for that.
-2. **Never place an order, modify a watchlist, or change holdings** on any app. Phones are logged
-   into real or client accounts. Reading screens is fine.
+2. **Never place an order, modify a watchlist, or change holdings** on any app, and never tap
+   Invest, Start SIP, Lumpsum, Redeem, Withdraw, Add money, Mandate/Autopay or Cart. Phones are
+   logged into real or client accounts that may belong to other people. Reading screens is fine.
+   When you set a module's `open_tap` or gestures, place them on a list card, a tab or Back, never
+   near a transaction button, and confirm each one from a screenshot with the developer first.
 3. **Write only inside** `results/<module>/<developer>_<device>/`, the same developer's
    `results/_app/<developer>_<device>/`, `reports/`, and `modules/<name>.json`. Never touch another developer's results folder, `archive/`, or the
    scripts, unless the developer explicitly asks for a tooling fix.
@@ -29,13 +32,14 @@ they are the method. `docs/RISE Benchmark Plan.md` is the background and
 
 ## How bench.py and preflight.py are run
 
-`bench.py run …` pauses with "Press Enter" prompts while the developer works the phone. Those
+`bench.py run …`, `timing.py` and `offline.py` pause with "Press Enter" prompts while the developer works the phone. Those
 prompts need a terminal, and your Bash tool has none: if you run it yourself it stops at the first
 prompt with exit code 2. So for every `bench.py run` command: print the exact command and ask the
 developer to type it in the Claude Code prompt with a leading `!` (for example
 `! python3 bench.py run RISE --module fno`), which runs it in their terminal. Wait until they say it
 finished, then run `python3 bench.py status --module <module>` yourself to see what was recorded.
-`preflight.py`, `record.py`, `bench.py status/installed/devices` and `build_report.py` have no
+The same applies to `timing.py` and `offline.py`: print the command for the developer to run with
+`!`. `preflight.py`, `record.py`, `bench.py status/installed/devices` and `build_report.py` have no
 prompts; run those yourself.
 
 ## Modes
@@ -86,7 +90,13 @@ Follow these steps in order. Say which step you are on in one line each time.
      `live_ticks: true`: `--group idle --with-video --runs 3` and `--group live --runs 3 --live-minutes 10`.
    Re-running the same command resumes at the first missing run, so an interrupted session is
    never lost. To measure a run again, add `--redo N`.
-8. **Manual metrics, per app.** `python3 record.py --module <module> --app "<app>" --list` shows
+8. **Manual metrics, per app.** Screen timings first, with the recorder instead of hand-counted
+   frames: `! python3 timing.py "<app>" --module <module>` (L3, L5, L6, L4, L14, L7 at the module's
+   run counts; it asks the pull-to-refresh and PIN-on-resume facts), then
+   `! python3 timing.py "<app>" --module <module> --tests L8 --runs 1`, and L12 with the throttle
+   set. If a reading is flagged (no tap seen, never settled, several touches) it offers a redo.
+   Offline items: `! python3 offline.py "<app>" --module <module>` (blocks only that app's network).
+   Then `python3 record.py --module <module> --app "<app>" --list` shows
    what is still missing. For each missing metric, show the developer the method text from
    `METRICS.md` (one metric at a time), wait for the value, then record it:
    `python3 record.py --module <module> --app "<app>" <ID> --value <n> --note "<how/what>"`.

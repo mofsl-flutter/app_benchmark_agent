@@ -18,6 +18,8 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 | `bench.py` | adb collector: cold start, lock contention, RAM, bytes per open, Perfetto scroll/gesture/idle, leak check, live session |
 | `preflight.py` | Pre-run checks; writes `env.csv` |
 | `record.py` | Records a manual metric or an offline/data item |
+| `timing.py` | Screen timings (L3–L8, L12, L14) from a screen recording + tap detection; you tap, it measures |
+| `offline.py` | Offline items (O1) with only the tested app's network blocked |
 | `build_report.py` | Per-module workbook, combined workbook + scorecard, `METRICS.md` |
 | `build_benchmark.py` | Workbook layout (imported by `build_report.py`) |
 | `build_dashboard.py` | Management dashboard written next to each module workbook (imported by `build_report.py`) |
@@ -32,7 +34,7 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 
 ```bash
 brew install android-platform-tools scrcpy ffmpeg
-pip3 install --user openpyxl perfetto
+pip3 install --user openpyxl perfetto numpy
 adb devices            # your phone must show as "device"
 ```
 

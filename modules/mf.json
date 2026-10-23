@@ -22,7 +22,7 @@
       "screen": "Mutual Funds tab"
     },
     "INDmoney": {
-      "screen": null
+      "screen": "Mutual Funds (confirm)"
     },
     "Kotak Neo": {
       "screen": "Mutual Funds tab"
@@ -47,7 +47,9 @@
     "per_app": {}
   },
   "test_subjects": [],
-  "skip": [],
+  "skip": [
+    "L13"
+  ],
   "offline_items": [
     "Cold launch in airplane mode → Explore > MF tab shows cached data",
     "Cached data shows a 'last updated' time or stale indicator",
@@ -71,6 +73,18 @@
     "Search entry point",
     "Dark mode"
   ],
-  "notes": "",
-  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
+  "notes": "READ-ONLY: accounts belong to other people. Browse only: open the MF screen, scroll the list, open and close a fund. Never tap Invest, Start SIP, Lumpsum, Redeem, Withdraw, Add money, Mandate/Autopay or Cart. Data items such as 'SIP entry point' are checked by sight, never tapped. open_tap for the leak check must land on a fund card or Back.",
+  "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run.",
+  "runs": {
+    "L3": 3,
+    "L4": 3,
+    "L5": 3,
+    "L6": 3,
+    "L7": 3,
+    "L12": 3,
+    "L14": 3,
+    "L8": 1,
+    "L11": 1
+  },
+  "deviation_note": "Timings taken with timing.py (screen recording + tap detection) instead of frame counting; 3 runs for screen timings and 1 for L8/L11 to fit one day; L13 not measured (no tap to time from). In scope on 2026-10-23: RISE, INDmoney, Groww, Kotak Neo."
 }

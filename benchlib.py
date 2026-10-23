@@ -279,6 +279,8 @@ def list_modules():
 
 def module_version(module):
     payload = {k: module.get(k) for k in VERSIONED_KEYS}
+    if module.get("runs"):  # per-module run counts (a protocol deviation the lead signs off); absent = catalogue counts
+        payload["runs"] = module["runs"]
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:8]
 
@@ -539,7 +541,7 @@ def expected(module, app=None):
             for it in module.get("data_items", []):
                 out[f"D1.{slug(it)}"] = 1
         else:
-            out[m["id"]] = m["runs"]
+            out[m["id"]] = module.get("runs", {}).get(m["id"], m["runs"])
     if module["name"] != APP_SCOPE:
         for k in UX_FACTS:
             out[f"F.{k}"] = 1

@@ -62,7 +62,8 @@ done") and the Portfolio decisions in `archive/CONTEXT.md`.
 | Storage, SDK, Play Store facts, leak check, crashes (R4–R8, X1–X3, A1–A4, R9, O1/D1 items, user-feel facts F.pin_on_resume and F.pull_to_refresh) | 1 | Facts, not samples |
 | Start-up contention (X4) | 5 | Taken with each cold start under `_app` |
 
-If five runs spread more than 20 % ((max − min) ÷ median), take a sixth and replace the outlier
+A module may lower run counts in its `runs` field (with a `deviation_note`) when the lead agrees;
+the dashboard lists such deviations. If five runs spread more than 20 % ((max − min) ÷ median), take a sixth and replace the outlier
 (`bench.py … --redo N`, or `record.py … --run N`); the replaced value goes in the note and the
 newest row for a run wins. The workbook keeps five Run columns. R3 (5-minute soak) is one run
 per app.
@@ -87,8 +88,9 @@ modules may use the evening session to 23:30 IST. `bench.py` warns outside these
 
 ## Offline tests
 
-Airplane mode on for 30 s on the module screen, then off; cold relaunch in airplane mode for the
-O1 items. Score Yes / Partial / No / N/A per item; N/A never counts as zero.
+`offline.py` blocks only the tested app's network (`cmd connectivity
+set-package-networking-enabled`), so adb and Wi-Fi stay up: network lost on the screen, the detail
+screen offline, a cold relaunch offline, then reconnect. Airplane mode is the manual fallback. Score Yes / Partial / No / N/A per item; N/A never counts as zero.
 
 ## Safety
 
