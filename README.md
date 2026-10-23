@@ -10,6 +10,7 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 |---|---|
 | `.claude/agents/benchmark-runner.md` | The agent. `/benchmark <module>`, `/benchmark-report`, `/benchmark-module <name>` |
 | `.claude/agents/benchmark-execution-plan.md` | The optional planning agent. `/benchmark-execution-plan <benchmark-file> <module-folder or RISE-repo> [mode]` turns a benchmark into an issues report and a multi-page fix plan for the module's code |
+| `.claude/agents/benchmark-verifier.md` | The RISE re-check agent. `/benchmark-verify <module> [report.xlsx]` measures only RISE again on the report's phone, compares with the existing report, writes the new RISE values into it and says what improved |
 | `execution-plan/` | Everything for the planner: data format (`SCHEMA.md`), `tools/` (checker, HTML generator), `examples/quote/`, and `plans/`, where generated plans go (git-ignored) |
 | `PROTOCOL.md` | How every run is done (pre-flight, order, run counts, market hours, safety) |
 | `METRICS.md` | The 50 metrics: method, tool, unit, expected runs. Generated from `benchlib.py` |
@@ -20,6 +21,7 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 | `preflight.py` | Pre-run checks; writes `env.csv` |
 | `record.py` | Records a manual metric or an offline/data item |
 | `build_report.py` | Per-module workbook, combined workbook + scorecard, `METRICS.md` |
+| `verify.py` | RISE re-check: compares new RISE runs with an existing module workbook, updates its RISE cells, writes `reports/<module>/verify_*.md` |
 | `build_benchmark.py` | Workbook layout (imported by `build_report.py`) |
 | `results/<module>/<developer>_<device>/` | `runs.csv`, `env.csv`, `state.json` — your folder only |
 | `reports/` | Generated workbooks and scorecards, dated |
@@ -128,6 +130,27 @@ python3 build_report.py --module fno
 
 `/benchmark-report` (or `python3 build_report.py --combined`) rebuilds the combined workbook and
 scorecard from every developer's results.
+
+## After a RISE change: re-check RISE only
+
+When RISE has a new build or a fix, you do not need to benchmark every app again. Type
+`/benchmark-verify <module>` (optionally with the report, e.g.
+`/benchmark-verify quote reports/quote/quote_Pramod-Patil_samsung-SM-E146B_2026-10-22.xlsx`). The
+`benchmark-verifier` agent:
+
+1. reads the RISE values in the existing module workbook (`python3 verify.py baseline --report …`);
+2. checks that the connected phone is the report's phone (raw values from different phones are not
+   comparable) and shows the installed RISE version next to the report's;
+3. has you run `bench.py` (and, if you want, `record.py`) for **RISE only**, into
+   `results/_verify/<date>/`, so the original results stay untouched;
+4. compares (`python3 verify.py compare …`): per metric before → after, change %, better / worse /
+   no change (±5 % noise band), RISE rank per metric, category scores, overall score and rank;
+5. asks before writing the new RISE values into the same workbook (`--update`; a
+   `*.backup-<time>.xlsx` copy is kept, competitor values are not touched, and a `RISE Verification`
+   sheet is added);
+6. tells you what improved, what regressed and what was not measured again.
+
+Competitor values stay those of the report date, so ranks are against those values.
 
 ## After the benchmark: execution plan (optional)
 
