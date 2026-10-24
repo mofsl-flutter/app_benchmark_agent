@@ -21,3 +21,6 @@ __pycache__/
 
 # PCAPdroid captures from the net pass (kept under ~/.riise-benchmark/artifacts/)
 *.pcap
+
+# IDE settings
+.idea/
