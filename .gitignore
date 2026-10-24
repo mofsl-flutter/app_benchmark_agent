@@ -31,3 +31,9 @@ execution-plan/plans/
 
 # IDE
 .idea/
+
+# PCAPdroid captures from the net pass (kept under ~/.riise-benchmark/artifacts/)
+*.pcap
+
+# IDE settings
+.idea/

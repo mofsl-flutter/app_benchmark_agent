@@ -15,7 +15,7 @@ Placeholders `{screen}`, `{list}` and `{detail}` are filled from each module's d
 | L8 | Loading Time | Resume after 5 min in background (on {screen}) | ms | Lower | 5 | scrcpy | module |
 | L9 | User-wise | {screen} load – Small account | ms | Lower | 5 | scrcpy | if account_sensitive |
 | L10 | User-wise | {screen} load – Large account | ms | Lower | 5 | scrcpy | if account_sensitive |
-| L11 | API / Network | Network connections during {screen} load | count | Lower | 5 | PCAPdroid | module |
+| L11 | API / Network | Network connections during {screen} load | count | Lower | 5 | PCAPdroid (bench.py --group net) | module |
 | L12 | API / Network | {screen} load on throttled network (~1 Mbps) | ms | Lower | 5 | Developer options | module |
 | L13 | Offline | Recovery after reconnect → fresh data shown on {screen} | ms | Lower | 5 | scrcpy | module |
 | L14 | Loading Time | In-screen tab / sub-section switch on {screen}, tap to content | ms | Lower | 5 | scrcpy | module |
@@ -37,7 +37,7 @@ Placeholders `{screen}`, `{list}` and `{detail}` are filled from each module's d
 | D1 | Data Pointers | Data pointer / feature coverage | % | Higher | 1 | Manual (record.py --item) | module |
 | X1 | External SDKs | Trackers detected (Exodus) | count | Lower | 1 | Exodus Privacy | phone |
 | X2 | External SDKs | Permissions requested (Exodus) | count | Lower | 1 | Exodus Privacy | phone |
-| X3 | External SDKs | Third-party domains contacted on {screen} | count | Lower | 1 | PCAPdroid | module |
+| X3 | External SDKs | Third-party domains contacted on {screen} | count | Lower | 1 | PCAPdroid (bench.py --group net) | module |
 | X4 | External SDKs | Start-up lock contention: 'Long monitor contention' events before home | count | Lower | 5 | ADB logcat (bench.py) | phone |
 | R1 | RAM | RAM (Total PSS) after cold start | MB | Lower | 5 | ADB meminfo (bench.py) | phone |
 | R2 | RAM | RAM (Total PSS) on {screen} | MB | Lower | 5 | ADB meminfo (bench.py) | module |
@@ -121,9 +121,9 @@ L3 method on the Large test account.
 
 ### L11 — Network connections during {screen} load
 
-*API / Network · count · Lower is better · 5 run(s) · manual, recorded with record.py*
+*API / Network · count · Lower is better · 5 run(s) · automated by bench.py*
 
-In PCAPdroid, filter to the app and start capture. Open {screen} cold and count the connections opened in the first 10 s.
+bench.py --group net starts a PCAPdroid capture filtered to the app over adb (needs the PCAPdroid API key: record.py --pcapdroid-key), opens {screen} and counts the connections opened (TCP SYN + QUIC) in the first 10 s. Hosts, bytes and first-response times per connection go to net_calls.csv. Runs alone, after every other group, because the VPN adds overhead.
 
 ### L12 — {screen} load on throttled network (~1 Mbps)
 
@@ -159,13 +159,13 @@ On {screen}, tap the entry for {detail2} and measure until it is fully drawn (ti
 
 *Scroll & Gesture · % · Lower is better · 5 run(s) · automated by bench.py*
 
-bench.py --group scroll records a Perfetto FrameTimeline trace during 10 identical scripted flings on {list}. Janky = frames with a jank type other than None / Buffer Stuffing. Same for Native and Flutter apps.
+bench.py --group scroll records a Perfetto FrameTimeline trace during 10 identical scripted flings on {list}. Janky = frames with a jank type other than None / Buffer Stuffing. Fallback: some apps (Flutter on Android 16) report no FrameTimeline frames at all; bench.py then scores SurfaceFlinger's display frames from the same trace and the row note says so: janky = a present-to-present interval over 1.5x the median (a dropped frame), a stricter measure than jank types, so compare such rows with care.
 
 ### S2 — Frame duration – 50th percentile
 
 *Scroll & Gesture · ms · Lower is better · 5 run(s) · automated by bench.py*
 
-Same trace: time from the app starting a frame to that frame being on screen.
+Same trace: time from the app starting a frame to that frame being on screen. Under the SurfaceFlinger fallback (see S1) S2–S4 are present-to-present intervals instead; the row note says so.
 
 ### S3 — Frame duration – 90th percentile
 
@@ -255,7 +255,7 @@ Same Exodus report: permissions count.
 
 *External SDKs · count · Lower is better · 1 run(s) · manual, recorded with record.py*
 
-PCAPdroid capture for 60 s on {screen}. Count unique domains that don't belong to the app's own company.
+Same capture as L11, 60 s on {screen} in run 1: unique hosts not under the app's own_domains in apps.json. Manual (count the hosts listed in the L11 note) when own_domains is missing for the app.
 
 ### X4 — Start-up lock contention: 'Long monitor contention' events before home
 
@@ -375,5 +375,6 @@ Size shown on the Play Store install button or in 'About this app' on the test d
 - `--group idle`: U4, U5
 - `--group leak`: R9
 - `--group live`: C1, C2, C3, C4
+- `--group net`: L11
 
 Added on 22 Oct 2026 from the Groww Quote-page report: L14, L15, S7, U4, U5, R9, X4.

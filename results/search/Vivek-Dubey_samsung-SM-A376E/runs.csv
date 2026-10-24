@@ -1,0 +1,328 @@
+timestamp,module,module_version,developer,app,device_model,device_ram_gb,android,package,version,metric,run,value,unit,source,artifact,note
+2026-10-23T13:34:21,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L15,1,388.2,KB,bench.py,,open + 8 s
+2026-10-23T13:34:26,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R2,1,944.2,MB,bench.py,,java=19.6;native=98.1;code=87.0;gfx=638.2;webviews=1
+2026-10-23T13:34:44,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S1,1,6.54,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/RISE_S1_run1_20261023-133426.pftrace,"(1070 frames, layer TX - com.mosl.mobile/com.mosl.mobile.MainActivity$_13070#194)"
+2026-10-23T13:34:44,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S2,1,2.8,ms,bench.py,,
+2026-10-23T13:34:44,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S3,1,3.8,ms,bench.py,,
+2026-10-23T13:34:44,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S4,1,7.1,ms,bench.py,,
+2026-10-23T13:34:44,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S5,1,77.7,fps,bench.py,,
+2026-10-23T13:36:33,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L15,1,47.8,KB,bench.py,,open + 8 s
+2026-10-23T13:36:39,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R2,1,310.1,MB,bench.py,,java=7.9;native=43.8;code=42.7;gfx=100.0;webviews=0
+2026-10-23T13:36:56,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S1,1,,%,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:36:56,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S2,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:36:56,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S3,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:36:56,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S4,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:36:56,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S5,1,,fps,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:41:21,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L15,1,240.3,KB,bench.py,,open + 8 s
+2026-10-23T13:41:26,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R2,1,310.2,MB,bench.py,,java=80.8;native=63.2;code=58.3;gfx=57.2;webviews=1
+2026-10-23T13:41:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S1,1,6.77,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Angel-One_S1_run1_20261023-134126.pftrace,"(1536 frames, layer TX - com.msf.angelmobile/com.angelbroking.spark.common.MainA)"
+2026-10-23T13:41:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S2,1,11.9,ms,bench.py,,
+2026-10-23T13:41:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S3,1,13.8,ms,bench.py,,
+2026-10-23T13:41:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S4,1,15.8,ms,bench.py,,
+2026-10-23T13:41:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S5,1,116.2,fps,bench.py,,
+2026-10-23T13:43:30,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L15,1,1408.8,KB,bench.py,,open + 8 s
+2026-10-23T13:43:35,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R2,1,343.6,MB,bench.py,,java=78.9;native=91.0;code=60.8;gfx=51.9;webviews=1
+2026-10-23T13:43:53,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S1,1,14.24,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/INDmoney_S1_run1_20261023-134335.pftrace,"(1292 frames, layer TX - in.indwealth/globalsearch.ui.GlobalSearchActivity$_1803)"
+2026-10-23T13:43:53,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S2,1,7.4,ms,bench.py,,
+2026-10-23T13:43:53,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S3,1,12.2,ms,bench.py,,
+2026-10-23T13:43:53,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S4,1,16.9,ms,bench.py,,
+2026-10-23T13:43:53,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S5,1,81.4,fps,bench.py,,
+2026-10-23T13:45:07,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L15,1,152.3,KB,bench.py,,open + 8 s
+2026-10-23T13:45:12,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R2,1,492.9,MB,bench.py,,java=25.9;native=63.3;code=95.0;gfx=224.8;webviews=0
+2026-10-23T13:45:30,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S1,1,,%,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:45:30,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S2,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:45:30,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S3,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:45:30,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S4,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:45:30,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S5,1,,fps,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:47:34,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L15,1,253.2,KB,bench.py,,open + 8 s
+2026-10-23T13:47:40,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R2,1,370.3,MB,bench.py,,java=19.8;native=64.6;code=107.2;gfx=61.2;webviews=0
+2026-10-23T13:47:57,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S1,1,,%,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:47:57,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S2,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:47:57,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S3,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:47:57,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S4,1,,ms,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:47:57,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S5,1,,fps,bench.py,,no frames from the app; was search results list on screen?
+2026-10-23T13:57:52,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S1,1,6.34,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kite_S1_run1_20261023-135735.pftrace,"(750 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T13:57:52,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S2,1,8.3,ms,bench.py,,
+2026-10-23T13:57:52,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S3,1,8.9,ms,bench.py,,
+2026-10-23T13:57:52,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S4,1,75.0,ms,bench.py,,
+2026-10-23T13:57:52,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S5,1,95.6,fps,bench.py,,
+2026-10-23T13:59:08,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S1,1,16.41,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kotak-Neo_S1_run1_20261023-135850.pftrace,"(855 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T13:59:08,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S2,1,8.4,ms,bench.py,,
+2026-10-23T13:59:08,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S3,1,50.1,ms,bench.py,,
+2026-10-23T13:59:08,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S4,1,91.6,ms,bench.py,,
+2026-10-23T13:59:08,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S5,1,62.3,fps,bench.py,,
+2026-10-23T14:01:04,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S1,1,2.05,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/SAHI_S1_run1_20261023-140047.pftrace,"(648 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:01:04,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S2,1,8.3,ms,bench.py,,
+2026-10-23T14:01:04,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S3,1,8.5,ms,bench.py,,
+2026-10-23T14:01:04,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S4,1,16.7,ms,bench.py,,
+2026-10-23T14:01:04,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S5,1,117.1,fps,bench.py,,
+2026-10-23T14:03:05,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L15,2,48.5,KB,bench.py,,open + 8 s
+2026-10-23T14:03:10,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R2,2,296.5,MB,bench.py,,java=7.8;native=43.9;code=31.1;gfx=100.4;webviews=0
+2026-10-23T14:03:28,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S1,2,5.35,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kite_S1_run2_20261023-140310.pftrace,"(741 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:03:28,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S2,2,8.4,ms,bench.py,,
+2026-10-23T14:03:28,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S3,2,8.8,ms,bench.py,,
+2026-10-23T14:03:28,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S4,2,71.3,ms,bench.py,,
+2026-10-23T14:03:28,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S5,2,101.4,fps,bench.py,,
+2026-10-23T14:05:21,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L15,2,195.9,KB,bench.py,,open + 8 s
+2026-10-23T14:05:26,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R2,2,320.8,MB,bench.py,,java=74.9;native=62.4;code=72.6;gfx=56.0;webviews=1
+2026-10-23T14:05:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S1,2,1.47,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Angel-One_S1_run2_20261023-140526.pftrace,"(1501 frames, layer TX - com.msf.angelmobile/com.angelbroking.spark.common.MainA)"
+2026-10-23T14:05:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S2,2,11.8,ms,bench.py,,
+2026-10-23T14:05:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S3,2,13.9,ms,bench.py,,
+2026-10-23T14:05:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S4,2,16.7,ms,bench.py,,
+2026-10-23T14:05:44,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S5,2,114.9,fps,bench.py,,
+2026-10-23T14:07:17,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L15,2,745.0,KB,bench.py,,open + 8 s
+2026-10-23T14:07:22,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R2,2,340.1,MB,bench.py,,java=75.8;native=89.6;code=61.4;gfx=52.2;webviews=1
+2026-10-23T14:07:40,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S1,2,9.72,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/INDmoney_S1_run2_20261023-140722.pftrace,"(1307 frames, layer TX - in.indwealth/globalsearch.ui.GlobalSearchActivity$_1427)"
+2026-10-23T14:07:40,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S2,2,7.4,ms,bench.py,,
+2026-10-23T14:07:40,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S3,2,11.6,ms,bench.py,,
+2026-10-23T14:07:40,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S4,2,17.8,ms,bench.py,,
+2026-10-23T14:07:40,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S5,2,81.8,fps,bench.py,,
+2026-10-23T14:08:45,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L15,2,117.5,KB,bench.py,,open + 8 s
+2026-10-23T14:08:51,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R2,2,475.3,MB,bench.py,,java=17.1;native=63.2;code=90.6;gfx=225.8;webviews=0
+2026-10-23T14:09:09,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S1,2,15.49,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kotak-Neo_S1_run2_20261023-140851.pftrace,"(864 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:09:09,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S2,2,8.4,ms,bench.py,,
+2026-10-23T14:09:09,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S3,2,41.8,ms,bench.py,,
+2026-10-23T14:09:09,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S4,2,91.6,ms,bench.py,,
+2026-10-23T14:09:09,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S5,2,66.3,fps,bench.py,,
+2026-10-23T14:10:59,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L15,2,228.1,KB,bench.py,,open + 8 s
+2026-10-23T14:11:04,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R2,2,366.3,MB,bench.py,,java=18.4;native=64.8;code=107.9;gfx=60.8;webviews=0
+2026-10-23T14:11:22,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S1,2,1.1,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/SAHI_S1_run2_20261023-141104.pftrace,"(653 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:11:22,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S2,2,8.3,ms,bench.py,,
+2026-10-23T14:11:22,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S3,2,8.5,ms,bench.py,,
+2026-10-23T14:11:22,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S4,2,15.4,ms,bench.py,,
+2026-10-23T14:11:22,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S5,2,116.8,fps,bench.py,,
+2026-10-23T14:13:14,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L15,2,356.2,KB,bench.py,,open + 8 s
+2026-10-23T14:13:19,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R2,2,976.1,MB,bench.py,,java=28.7;native=109.1;code=87.3;gfx=646.9;webviews=1
+2026-10-23T14:13:37,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S1,2,6.71,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/RISE_S1_run2_20261023-141319.pftrace,"(1043 frames, layer TX - com.mosl.mobile/com.mosl.mobile.MainActivity$_6647#2023)"
+2026-10-23T14:13:37,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S2,2,2.9,ms,bench.py,,
+2026-10-23T14:13:37,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S3,2,4.0,ms,bench.py,,
+2026-10-23T14:13:37,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S4,2,7.4,ms,bench.py,,
+2026-10-23T14:13:37,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S5,2,83.2,fps,bench.py,,
+2026-10-23T14:17:04,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L15,3,182.5,KB,bench.py,,open + 8 s
+2026-10-23T14:17:09,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R2,3,294.9,MB,bench.py,,java=49.6;native=59.1;code=74.0;gfx=56.9;webviews=1
+2026-10-23T14:17:27,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S1,3,5.61,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Angel-One_S1_run3_20261023-141709.pftrace,"(1532 frames, layer TX - com.msf.angelmobile/com.angelbroking.spark.common.MainA)"
+2026-10-23T14:17:27,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S2,3,11.8,ms,bench.py,,
+2026-10-23T14:17:27,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S3,3,13.8,ms,bench.py,,
+2026-10-23T14:17:27,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S4,3,16.3,ms,bench.py,,
+2026-10-23T14:17:27,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S5,3,117.3,fps,bench.py,,
+2026-10-23T14:18:59,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L15,3,709.6,KB,bench.py,,open + 8 s
+2026-10-23T14:19:05,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R2,3,315.1,MB,bench.py,,java=64.7;native=89.3;code=52.1;gfx=51.5;webviews=1
+2026-10-23T14:19:23,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S1,3,7.76,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/INDmoney_S1_run3_20261023-141905.pftrace,"(1366 frames, layer TX - in.indwealth/globalsearch.ui.GlobalSearchActivity$_1008)"
+2026-10-23T14:19:23,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S2,3,7.5,ms,bench.py,,
+2026-10-23T14:19:23,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S3,3,11.7,ms,bench.py,,
+2026-10-23T14:19:23,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S4,3,16.6,ms,bench.py,,
+2026-10-23T14:19:23,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S5,3,85.6,fps,bench.py,,
+2026-10-23T14:20:32,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L15,3,125.2,KB,bench.py,,open + 8 s
+2026-10-23T14:20:37,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R2,3,473.5,MB,bench.py,,java=18.1;native=63.0;code=83.5;gfx=228.9;webviews=0
+2026-10-23T14:20:55,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S1,3,8.62,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kotak-Neo_S1_run3_20261023-142037.pftrace,"(790 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:20:55,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S2,3,8.4,ms,bench.py,,
+2026-10-23T14:20:55,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S3,3,9.1,ms,bench.py,,
+2026-10-23T14:20:55,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S4,3,83.2,ms,bench.py,,
+2026-10-23T14:20:55,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S5,3,85.6,fps,bench.py,,
+2026-10-23T14:23:03,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L15,3,222.6,KB,bench.py,,open + 8 s
+2026-10-23T14:23:08,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R2,3,365.9,MB,bench.py,,java=17.4;native=65.3;code=105.6;gfx=61.1;webviews=0
+2026-10-23T14:23:26,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S1,3,2.52,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/SAHI_S1_run3_20261023-142308.pftrace,"(692 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:23:26,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S2,3,8.3,ms,bench.py,,
+2026-10-23T14:23:26,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S3,3,8.6,ms,bench.py,,
+2026-10-23T14:23:26,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S4,3,16.7,ms,bench.py,,
+2026-10-23T14:23:26,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S5,3,116.3,fps,bench.py,,
+2026-10-23T14:25:17,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L15,3,338.8,KB,bench.py,,open + 8 s
+2026-10-23T14:25:22,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R2,3,1055.1,MB,bench.py,,java=114.2;native=106.1;code=93.7;gfx=637.9;webviews=1
+2026-10-23T14:25:40,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S1,3,5.94,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/RISE_S1_run3_20261023-142522.pftrace,"(1112 frames, layer TX - com.mosl.mobile/com.mosl.mobile.MainActivity$_15414#205)"
+2026-10-23T14:25:40,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S2,3,2.5,ms,bench.py,,
+2026-10-23T14:25:40,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S3,3,3.5,ms,bench.py,,
+2026-10-23T14:25:40,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S4,3,7.5,ms,bench.py,,
+2026-10-23T14:25:40,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S5,3,82.7,fps,bench.py,,
+2026-10-23T14:27:30,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L15,3,44.5,KB,bench.py,,open + 8 s
+2026-10-23T14:27:36,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R2,3,224.5,MB,bench.py,,java=6.3;native=41.9;code=15.4;gfx=63.8;webviews=0
+2026-10-23T14:27:53,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S1,3,2.2,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kite_S1_run3_20261023-142736.pftrace,"(1074 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:27:53,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S2,3,8.3,ms,bench.py,,
+2026-10-23T14:27:53,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S3,3,8.5,ms,bench.py,,
+2026-10-23T14:27:53,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S4,3,25.0,ms,bench.py,,
+2026-10-23T14:27:53,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S5,3,113.5,fps,bench.py,,
+2026-10-23T14:29:48,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L15,3,49.7,KB,bench.py,,open + 8 s
+2026-10-23T14:29:54,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R2,3,296.9,MB,bench.py,,java=7.6;native=44.2;code=34.5;gfx=94.4;webviews=0
+2026-10-23T14:30:12,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S1,3,8.12,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kite_S1_run3_20261023-142954.pftrace,"(728 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:30:12,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S2,3,8.3,ms,bench.py,,
+2026-10-23T14:30:12,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S3,3,9.0,ms,bench.py,,
+2026-10-23T14:30:12,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S4,3,75.1,ms,bench.py,,
+2026-10-23T14:30:12,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S5,3,93.8,fps,bench.py,,
+2026-10-23T14:32:08,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L15,4,757.9,KB,bench.py,,open + 8 s
+2026-10-23T14:32:13,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R2,4,334.7,MB,bench.py,,java=74.5;native=90.5;code=56.7;gfx=51.0;webviews=1
+2026-10-23T14:32:31,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S1,4,6.97,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/INDmoney_S1_run4_20261023-143213.pftrace,"(1319 frames, layer TX - in.indwealth/globalsearch.ui.GlobalSearchActivity$_2342)"
+2026-10-23T14:32:31,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S2,4,7.2,ms,bench.py,,
+2026-10-23T14:32:31,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S3,4,11.2,ms,bench.py,,
+2026-10-23T14:32:31,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S4,4,16.1,ms,bench.py,,
+2026-10-23T14:32:31,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S5,4,82.6,fps,bench.py,,
+2026-10-23T14:33:40,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L15,4,157.4,KB,bench.py,,open + 8 s
+2026-10-23T14:33:45,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R2,4,487.4,MB,bench.py,,java=25.1;native=62.2;code=91.0;gfx=228.8;webviews=0
+2026-10-23T14:34:03,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S1,4,17.06,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kotak-Neo_S1_run4_20261023-143345.pftrace,"(868 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:34:03,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S2,4,8.3,ms,bench.py,,
+2026-10-23T14:34:03,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S3,4,50.0,ms,bench.py,,
+2026-10-23T14:34:03,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S4,4,91.7,ms,bench.py,,
+2026-10-23T14:34:03,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S5,4,62.9,fps,bench.py,,
+2026-10-23T14:36:00,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L15,4,371.7,KB,bench.py,,open + 8 s
+2026-10-23T14:36:05,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R2,4,259.4,MB,bench.py,,java=0.0;native=0.0;code=61.6;gfx=17.1;webviews=0
+2026-10-23T14:36:23,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S1,4,0.68,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/SAHI_S1_run4_20261023-143605.pftrace,"(897 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:36:23,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S2,4,8.3,ms,bench.py,,
+2026-10-23T14:36:23,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S3,4,8.5,ms,bench.py,,
+2026-10-23T14:36:23,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S4,4,9.9,ms,bench.py,,
+2026-10-23T14:36:23,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S5,4,117.9,fps,bench.py,,
+2026-10-23T14:38:27,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L15,4,242.0,KB,bench.py,,open + 8 s
+2026-10-23T14:38:33,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R2,4,372.4,MB,bench.py,,java=18.4;native=64.6;code=104.5;gfx=57.5;webviews=0
+2026-10-23T14:38:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S1,4,0.94,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/SAHI_S1_run4_20261023-143833.pftrace,"(656 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:38:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S2,4,8.3,ms,bench.py,,
+2026-10-23T14:38:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S3,4,8.5,ms,bench.py,,
+2026-10-23T14:38:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S4,4,10.2,ms,bench.py,,
+2026-10-23T14:38:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S5,4,118.2,fps,bench.py,,
+2026-10-23T14:40:42,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L15,4,371.8,KB,bench.py,,open + 8 s
+2026-10-23T14:40:47,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R2,4,1015.4,MB,bench.py,,java=89.4;native=101.1;code=79.2;gfx=634.9;webviews=1
+2026-10-23T14:41:05,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S1,4,6.37,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/RISE_S1_run4_20261023-144047.pftrace,"(1084 frames, layer TX - com.mosl.mobile/com.mosl.mobile.MainActivity$_31425#210)"
+2026-10-23T14:41:05,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S2,4,2.8,ms,bench.py,,
+2026-10-23T14:41:05,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S3,4,3.9,ms,bench.py,,
+2026-10-23T14:41:05,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S4,4,7.2,ms,bench.py,,
+2026-10-23T14:41:05,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S5,4,80.7,fps,bench.py,,
+2026-10-23T14:42:56,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L15,4,40.3,KB,bench.py,,open + 8 s
+2026-10-23T14:43:01,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R2,4,296.7,MB,bench.py,,java=7.6;native=46.5;code=26.7;gfx=99.7;webviews=0
+2026-10-23T14:43:19,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S1,4,7.1,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kite_S1_run4_20261023-144301.pftrace,"(746 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:43:19,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S2,4,8.3,ms,bench.py,,
+2026-10-23T14:43:19,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S3,4,8.9,ms,bench.py,,
+2026-10-23T14:43:19,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S4,4,75.3,ms,bench.py,,
+2026-10-23T14:43:19,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S5,4,94.4,fps,bench.py,,
+2026-10-23T14:45:42,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L15,4,210.0,KB,bench.py,,open + 8 s
+2026-10-23T14:45:48,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R2,4,301.9,MB,bench.py,,java=60.2;native=60.4;code=72.0;gfx=56.0;webviews=1
+2026-10-23T14:46:06,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S1,4,7.73,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Angel-One_S1_run4_20261023-144548.pftrace,"(1500 frames, layer TX - com.msf.angelmobile/com.angelbroking.spark.common.MainA)"
+2026-10-23T14:46:06,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S2,4,11.9,ms,bench.py,,
+2026-10-23T14:46:06,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S3,4,14.0,ms,bench.py,,
+2026-10-23T14:46:06,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S4,4,15.8,ms,bench.py,,
+2026-10-23T14:46:06,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S5,4,116.4,fps,bench.py,,
+2026-10-23T14:47:14,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L15,5,157.9,KB,bench.py,,open + 8 s
+2026-10-23T14:47:20,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R2,5,515.0,MB,bench.py,,java=54.4;native=63.3;code=93.8;gfx=228.2;webviews=0
+2026-10-23T14:47:38,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S1,5,15.07,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kotak-Neo_S1_run5_20261023-144720.pftrace,"(870 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:47:38,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S2,5,8.4,ms,bench.py,,
+2026-10-23T14:47:38,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S3,5,42.0,ms,bench.py,,
+2026-10-23T14:47:38,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S4,5,91.7,ms,bench.py,,
+2026-10-23T14:47:38,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S5,5,65.6,fps,bench.py,,
+2026-10-23T14:49:28,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L15,5,243.5,KB,bench.py,,open + 8 s
+2026-10-23T14:49:33,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R2,5,367.6,MB,bench.py,,java=19.0;native=65.0;code=107.3;gfx=60.8;webviews=0
+2026-10-23T14:49:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S1,5,2.88,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/SAHI_S1_run5_20261023-144933.pftrace,"(640 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:49:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S2,5,8.3,ms,bench.py,,
+2026-10-23T14:49:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S3,5,8.6,ms,bench.py,,
+2026-10-23T14:49:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S4,5,16.9,ms,bench.py,,
+2026-10-23T14:49:51,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,S5,5,114.5,fps,bench.py,,
+2026-10-23T14:51:34,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L15,5,428.5,KB,bench.py,,open + 8 s
+2026-10-23T14:51:39,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R2,5,1074.9,MB,bench.py,,java=119.2;native=123.8;code=93.0;gfx=631.9;webviews=1
+2026-10-23T14:51:57,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S1,5,11.64,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/RISE_S1_run5_20261023-145139.pftrace,"(971 frames, layer TX - com.mosl.mobile/com.mosl.mobile.MainActivity$_6191#2125)"
+2026-10-23T14:51:57,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S2,5,3.1,ms,bench.py,,
+2026-10-23T14:51:57,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S3,5,5.5,ms,bench.py,,
+2026-10-23T14:51:57,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S4,5,21.6,ms,bench.py,,
+2026-10-23T14:51:57,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S5,5,66.3,fps,bench.py,,
+2026-10-23T14:54:18,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L15,5,41.3,KB,bench.py,,open + 8 s
+2026-10-23T14:54:23,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R2,5,279.8,MB,bench.py,,java=8.6;native=45.3;code=23.4;gfx=100.4;webviews=0
+2026-10-23T14:54:41,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S1,5,6.9,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kite_S1_run5_20261023-145423.pftrace,"(741 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T14:54:41,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S2,5,8.3,ms,bench.py,,
+2026-10-23T14:54:41,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S3,5,8.8,ms,bench.py,,
+2026-10-23T14:54:41,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S4,5,67.0,ms,bench.py,,
+2026-10-23T14:54:41,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,S5,5,95.8,fps,bench.py,,
+2026-10-23T14:56:38,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L15,5,199.9,KB,bench.py,,open + 8 s
+2026-10-23T14:56:43,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R2,5,293.5,MB,bench.py,,java=55.1;native=58.8;code=70.7;gfx=56.5;webviews=1
+2026-10-23T14:57:01,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S1,5,1.84,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Angel-One_S1_run5_20261023-145643.pftrace,"(1522 frames, layer TX - com.msf.angelmobile/com.angelbroking.spark.common.MainA)"
+2026-10-23T14:57:01,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S2,5,10.9,ms,bench.py,,
+2026-10-23T14:57:01,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S3,5,13.0,ms,bench.py,,
+2026-10-23T14:57:01,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S4,5,17.6,ms,bench.py,,
+2026-10-23T14:57:01,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,S5,5,117.3,fps,bench.py,,
+2026-10-23T14:59:06,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L15,5,647.3,KB,bench.py,,open + 8 s
+2026-10-23T14:59:12,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R2,5,352.7,MB,bench.py,,java=80.3;native=90.5;code=70.8;gfx=51.5;webviews=1
+2026-10-23T14:59:29,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S1,5,7.99,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/INDmoney_S1_run5_20261023-145912.pftrace,"(1327 frames, layer TX - in.indwealth/globalsearch.ui.GlobalSearchActivity$_1161)"
+2026-10-23T14:59:29,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S2,5,7.4,ms,bench.py,,
+2026-10-23T14:59:29,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S3,5,12.1,ms,bench.py,,
+2026-10-23T14:59:29,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S4,5,16.3,ms,bench.py,,
+2026-10-23T14:59:29,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S5,5,83.2,fps,bench.py,,
+2026-10-23T15:08:36,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R3,1,950.2,MB,bench.py,,java=41.9;native=101.6;code=46.7;gfx=639.1;webviews=1
+2026-10-23T15:28:46,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R3,1,293.4,MB,bench.py,,java=6.2;native=49.0;code=29.2;gfx=103.7;webviews=0
+2026-10-23T15:35:24,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R3,1,292.2,MB,bench.py,,java=67.0;native=61.8;code=55.1;gfx=55.9;webviews=1
+2026-10-23T15:42:10,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R3,1,316.6,MB,bench.py,,java=65.8;native=75.4;code=38.0;gfx=59.9;webviews=1
+2026-10-23T15:48:20,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R3,1,430.6,MB,bench.py,,java=16.6;native=55.0;code=54.7;gfx=220.0;webviews=0
+2026-10-23T15:54:29,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R3,1,307.9,MB,bench.py,,java=3.4;native=56.6;code=59.3;gfx=62.4;webviews=0
+2026-10-23T16:00:13,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R9,1,28.9,MB,bench.py,,"10 cycles, manual; before=1047.4 after=1076.3; java=42.9;native=98.9;code=40.9;gfx=666.8;webviews=1"
+2026-10-23T16:05:59,search,a547903a,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R9,1,20.6,MB,bench.py,,"10 cycles, manual; before=317.4 after=338.0; java=25.5;native=25.3;code=36.2;gfx=115.7;webviews=0"
+2026-10-23T16:12:00,search,a547903a,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R9,1,0.2,MB,bench.py,,"10 cycles, manual; before=322.4 after=322.6; java=74.7;native=67.2;code=71.4;gfx=50.0;webviews=1"
+2026-10-23T16:32:27,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R9,1,-106.3,MB,bench.py,,"10 cycles, manual; before=275.0 after=168.7; java=32.9;native=34.1;code=49.3;gfx=0.0;webviews=0"
+2026-10-23T16:38:13,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R9,1,-113.3,MB,bench.py,,"10 cycles, manual; before=570.0 after=456.7; java=21.0;native=69.0;code=67.5;gfx=213.7;webviews=0"
+2026-10-23T16:43:38,search,a547903a,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R9,1,-20.2,MB,bench.py,,"10 cycles, manual; before=390.9 after=370.7; java=13.7;native=70.1;code=76.0;gfx=84.4;webviews=0"
+2026-10-23T16:54:25,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R9,1,-30.8,MB,bench.py,,"10 cycles, manual; before=377.4 after=346.6; java=85.3;native=89.5;code=35.1;gfx=58.9;webviews=1"
+2026-10-23T16:58:45,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,A1,1,0.0,count,manual,,adb logcat -b crash kept running 12:48-16:45 on 2026-10-23 (~/.riise-benchmark/artifacts/crash-search.log): no FATAL EXCEPTION for this package; the only two were UiAutomationService (test tooling)
+2026-10-23T16:58:46,search,a547903a,Vivek-Dubey,Kite,samsung-SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,A1,1,0.0,count,manual,,adb logcat -b crash kept running 12:48-16:45 on 2026-10-23 (~/.riise-benchmark/artifacts/crash-search.log): no FATAL EXCEPTION for this package; the only two were UiAutomationService (test tooling)
+2026-10-23T16:58:47,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,A1,1,0.0,count,manual,,adb logcat -b crash kept running 12:48-16:45 on 2026-10-23 (~/.riise-benchmark/artifacts/crash-search.log): no FATAL EXCEPTION for this package; the only two were UiAutomationService (test tooling)
+2026-10-23T16:58:48,search,a547903a,Vivek-Dubey,INDmoney,samsung-SM-A376E,7.2,16,in.indwealth,9.9.86,A1,1,0.0,count,manual,,adb logcat -b crash kept running 12:48-16:45 on 2026-10-23 (~/.riise-benchmark/artifacts/crash-search.log): no FATAL EXCEPTION for this package; the only two were UiAutomationService (test tooling)
+2026-10-23T16:58:49,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,A1,1,0.0,count,manual,,adb logcat -b crash kept running 12:48-16:45 on 2026-10-23 (~/.riise-benchmark/artifacts/crash-search.log): no FATAL EXCEPTION for this package; the only two were UiAutomationService (test tooling)
+2026-10-23T16:58:50,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,A1,1,0.0,count,manual,,adb logcat -b crash kept running 12:48-16:45 on 2026-10-23 (~/.riise-benchmark/artifacts/crash-search.log): no FATAL EXCEPTION for this package; the only two were UiAutomationService (test tooling)
+2026-10-23T16:59:38,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R9,2,20.3,MB,bench.py,,"10 cycles, manual; before=248.4 after=268.7; java=88.9;native=71.7;code=45.3;gfx=26.9;webviews=0"
+2026-10-23T17:00:14,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,D1.filters-by-segment,1,Yes,%,manual,,Segment tabs/chips on the results screen (screenshot 2026-10-23)
+2026-10-23T17:00:15,search,a547903a,Vivek-Dubey,Kite,samsung-SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,D1.filters-by-segment,1,Yes,%,manual,,Segment tabs/chips on the results screen (screenshot 2026-10-23)
+2026-10-23T17:00:15,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,D1.filters-by-segment,1,Yes,%,manual,,Segment tabs/chips on the results screen (screenshot 2026-10-23)
+2026-10-23T17:00:16,search,a547903a,Vivek-Dubey,INDmoney,samsung-SM-A376E,7.2,16,in.indwealth,9.9.86,D1.filters-by-segment,1,Yes,%,manual,,Segment tabs/chips on the results screen (screenshot 2026-10-23)
+2026-10-23T17:00:17,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,D1.filters-by-segment,1,Yes,%,manual,,Segment tabs/chips on the results screen (screenshot 2026-10-23)
+2026-10-23T17:00:17,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,D1.filters-by-segment,1,Yes,%,manual,,Segment tabs/chips on the results screen (screenshot 2026-10-23)
+2026-10-23T17:00:18,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,D1.results-across-stocks-mf-f-o,1,Partial,%,manual,,Tabs All/Stocks/Options/Futures/US Stocks; no MF results (screenshot 2026-10-23)
+2026-10-23T17:00:18,search,a547903a,Vivek-Dubey,Kite,samsung-SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,D1.results-across-stocks-mf-f-o,1,Yes,%,manual,,"Tabs #/MF/IPO/Events/Brands/ETF; NSE, BSE and NFO rows for RELIANCE (screenshot 2026-10-23)"
+2026-10-23T17:00:19,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,D1.results-across-stocks-mf-f-o,1,Yes,%,manual,,Tabs All/IPO/Stock/F&O/Mutual (screenshot 2026-10-23)
+2026-10-23T17:00:19,search,a547903a,Vivek-Dubey,INDmoney,samsung-SM-A376E,7.2,16,in.indwealth,9.9.86,D1.results-across-stocks-mf-f-o,1,Yes,%,manual,,Tabs All/INDstocks/F&O/US Stocks/Mutual (screenshot 2026-10-23)
+2026-10-23T17:00:20,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,D1.results-across-stocks-mf-f-o,1,Yes,%,manual,,"Chips All/Stocks/F&O/Mutual Funds/Commodities; stock, option and future rows for RELIANCE (screenshot 2026-10-23)"
+2026-10-23T17:00:20,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,D1.results-across-stocks-mf-f-o,1,Partial,%,manual,,Tabs Stocks/F&O/ETFs; no MF (screenshot 2026-10-23)
+2026-10-23T17:00:21,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,D1.trending-searches,1,Yes,%,manual,,'Trending searches' list on the search screen (screenshot 2026-10-23)
+2026-10-23T17:00:22,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,D1.recent-searches,1,Yes,%,manual,,'Recent searches' chips on the empty search screen (screenshot 2026-10-23)
+2026-10-23T17:00:22,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,D1.recent-searches,1,Yes,%,manual,,'Recently Searched' row with symbols on Home below the search entry (screenshot 2026-10-23)
+2026-10-23T17:03:35,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,A2,1,0.0,count,manual,,"No ANR for this package on 2026-10-23: dumpsys dropbox has no data_app_anr entry today and no 'ANR in' line in the crash logcat kept 12:48-16:45 (bench.py clears the main/system logcat buffers between runs, so dropbox is the continuous record)"
+2026-10-23T17:03:36,search,a547903a,Vivek-Dubey,Kite,samsung-SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,A2,1,0.0,count,manual,,"No ANR for this package on 2026-10-23: dumpsys dropbox has no data_app_anr entry today and no 'ANR in' line in the crash logcat kept 12:48-16:45 (bench.py clears the main/system logcat buffers between runs, so dropbox is the continuous record)"
+2026-10-23T17:03:37,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,A2,1,0.0,count,manual,,"No ANR for this package on 2026-10-23: dumpsys dropbox has no data_app_anr entry today and no 'ANR in' line in the crash logcat kept 12:48-16:45 (bench.py clears the main/system logcat buffers between runs, so dropbox is the continuous record)"
+2026-10-23T17:03:37,search,a547903a,Vivek-Dubey,INDmoney,samsung-SM-A376E,7.2,16,in.indwealth,9.9.86,A2,1,0.0,count,manual,,"No ANR for this package on 2026-10-23: dumpsys dropbox has no data_app_anr entry today and no 'ANR in' line in the crash logcat kept 12:48-16:45 (bench.py clears the main/system logcat buffers between runs, so dropbox is the continuous record)"
+2026-10-23T17:03:38,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,A2,1,0.0,count,manual,,"No ANR for this package on 2026-10-23: dumpsys dropbox has no data_app_anr entry today and no 'ANR in' line in the crash logcat kept 12:48-16:45 (bench.py clears the main/system logcat buffers between runs, so dropbox is the continuous record)"
+2026-10-23T17:03:38,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,A2,1,0.0,count,manual,,"No ANR for this package on 2026-10-23: dumpsys dropbox has no data_app_anr entry today and no 'ANR in' line in the crash logcat kept 12:48-16:45 (bench.py clears the main/system logcat buffers between runs, so dropbox is the continuous record)"
+2026-10-23T17:10:54,search,a547903a,Vivek-Dubey,Kite,samsung-SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,D1.trending-searches,1,No,%,manual,,"Empty search screen shows only segment tabs (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:10:55,search,a547903a,Vivek-Dubey,Kite,samsung-SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,D1.recent-searches,1,No,%,manual,,"Empty search screen shows only segment tabs (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:10:55,search,a547903a,Vivek-Dubey,Kite,samsung-SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,D1.typo-tolerance,1,No,%,manual,,"'RELAINCE' returns only RELAXO, not Reliance (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:10:56,search,a547903a,Vivek-Dubey,Kite,samsung-SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,D1.search-by-isin-symbol,1,Partial,%,manual,,"Symbol RELIANCE works; ISIN INE002A01018 returns an unrelated alphabetical list (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:10:57,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,D1.trending-searches,1,Yes,%,manual,,"'Trending stocks' list on the empty search screen (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:10:57,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,D1.recent-searches,1,Yes,%,manual,,"'Recent searches' list on the empty search screen (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:10:58,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,D1.typo-tolerance,1,Yes,%,manual,,"'RELAINCE' returns Reliance Industries first (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:10:59,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,D1.search-by-isin-symbol,1,Yes,%,manual,,"Symbol works; ISIN INE002A01018 returns RELIANCE NSE/BSE (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:10:59,search,a547903a,Vivek-Dubey,INDmoney,samsung-SM-A376E,7.2,16,in.indwealth,9.9.86,D1.trending-searches,1,Yes,%,manual,,"'Trending Searches' row on the empty search screen (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:11:00,search,a547903a,Vivek-Dubey,INDmoney,samsung-SM-A376E,7.2,16,in.indwealth,9.9.86,D1.recent-searches,1,Yes,%,manual,,"'Recent Searches' row on the empty search screen (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:11:01,search,a547903a,Vivek-Dubey,INDmoney,samsung-SM-A376E,7.2,16,in.indwealth,9.9.86,D1.typo-tolerance,1,Yes,%,manual,,"'RELAINCE' returns Reliance Industries first (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:11:01,search,a547903a,Vivek-Dubey,INDmoney,samsung-SM-A376E,7.2,16,in.indwealth,9.9.86,D1.search-by-isin-symbol,1,Partial,%,manual,,"Symbol works; ISIN INE002A01018 returns unrelated 'Related Searches' funds (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:11:02,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,D1.search-by-isin-symbol,1,Partial,%,manual,,"Symbol works; ISIN INE002A01018 -> 'No results found' (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:11:03,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,D1.trending-searches,1,No,%,manual,,"Empty search screen shows Recent searches and Option Chain shortcuts, no trending (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:11:04,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,D1.typo-tolerance,1,Yes,%,manual,,"'RELAINCE' returns Reliance Industries first (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:11:04,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,D1.search-by-isin-symbol,1,Partial,%,manual,,"Symbol works; ISIN INE002A01018 returns Bhartiya International only (probe 2026-10-23 17:05-17:08, screenshots)"
+2026-10-23T17:13:48,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,D1.recent-searches,1,Yes,%,manual,,"'Recent Searches' list on the empty search screen, also 'Recently Searched' on Home (probe 2026-10-23 17:11, screenshots)"
+2026-10-23T17:13:49,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,D1.trending-searches,1,Yes,%,manual,,"'Trending Searches' shown below Quick Links when a query has no results (probe 2026-10-23 17:11, screenshots)"
+2026-10-23T17:13:50,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,D1.typo-tolerance,1,Yes,%,manual,,"'RELAINCE' returns RELIANCE NSE/BSE first (probe 2026-10-23 17:11, screenshots)"
+2026-10-23T17:13:51,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,D1.search-by-isin-symbol,1,Partial,%,manual,,"Symbol works; ISIN INE002A01018 -> 'No results found' (probe 2026-10-23 17:11, screenshots)"
+2026-10-23T17:13:52,search,a547903a,Vivek-Dubey,RISE,samsung-SM-A376E,7.2,16,com.mosl.mobile,6.2.09,D1.results-across-stocks-mf-f-o,1,Yes,%,manual,,"Empty-state tabs All/Stocks/F&O/Commodity/ETFs/Mutual Funds; RELIANCE results carry Stocks/Options/Futures/US Stocks tabs (probe 2026-10-23 17:11, screenshots; supersedes earlier Partial)"
+2026-10-23T17:13:53,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,D1.recent-searches,1,No,%,manual,,"Empty search screen shows Trending searches only, no recent list (probe 2026-10-23 17:11, screenshots)"
+2026-10-23T17:16:02,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,D1.typo-tolerance,1,Yes,%,manual,,"'RELAINCE' on the All chip returns Reliance Industries first (probe 2026-10-23 17:15, screenshot)"
+2026-10-23T17:16:52,search,a547903a,Vivek-Dubey,Angel One,samsung-SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,D1.dark-mode,1,Yes,%,manual,,"Renders a dark theme with system Night mode on (cmd uimode night = yes), screenshots 2026-10-23"
+2026-10-23T17:16:53,search,a547903a,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,7.2,16,com.kotak.neo,2.2.86,D1.dark-mode,1,Yes,%,manual,,"Renders a dark theme with system Night mode on (cmd uimode night = yes), screenshots 2026-10-23"
+2026-10-23T17:16:53,search,a547903a,Vivek-Dubey,SAHI,samsung-SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,D1.dark-mode,1,Yes,%,manual,,"Renders a dark theme with system Night mode on (cmd uimode night = yes), screenshots 2026-10-23"
+2026-10-23T17:16:59,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L15,5,198.8,KB,bench.py,,open + 8 s
+2026-10-23T17:17:04,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R2,5,1010.1,MB,bench.py,,java=97.9;native=104.6;code=87.9;gfx=616.3;webviews=1
+2026-10-23T17:17:22,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S1,5,4.41,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/RISE_S1_run5_20261023-171704.pftrace,"(1020 frames, layer TX - com.mosl.mobile/com.mosl.mobile.MainActivity$_22202#245)"
+2026-10-23T17:17:22,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S2,5,2.7,ms,bench.py,,
+2026-10-23T17:17:22,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S3,5,3.7,ms,bench.py,,
+2026-10-23T17:17:22,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S4,5,6.2,ms,bench.py,,
+2026-10-23T17:17:22,search,a547903a,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,S5,5,98.6,fps,bench.py,,
+2026-10-23T17:18:18,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L15,3,45.0,KB,bench.py,,open + 8 s
+2026-10-23T17:18:23,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R2,3,492.8,MB,bench.py,,java=30.0;native=64.0;code=82.9;gfx=237.2;webviews=0
+2026-10-23T17:18:41,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S1,3,5.12,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/Kotak-Neo_S1_run3_20261023-171823.pftrace,"(1205 display frames) SurfaceFlinger fallback: the app reported no FrameTimeline frames (seen with Flutter on Android 16); S2–S4 are present-to-present intervals, S1 = intervals over 1.5x the median"
+2026-10-23T17:18:41,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S2,3,8.3,ms,bench.py,,
+2026-10-23T17:18:41,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S3,3,8.7,ms,bench.py,,
+2026-10-23T17:18:41,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S4,3,16.8,ms,bench.py,,
+2026-10-23T17:18:41,search,a547903a,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,S5,3,111.1,fps,bench.py,,
+2026-10-23T17:19:29,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L15,1,126.7,KB,bench.py,,open + 8 s
+2026-10-23T17:19:34,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R2,1,296.2,MB,bench.py,,java=106.1;native=57.3;code=55.0;gfx=46.3;webviews=0
+2026-10-23T17:19:52,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S1,1,6.03,%,bench.py,/Users/vivekdubey/.riise-benchmark/artifacts/search/INDmoney_S1_run1_20261023-171934.pftrace,"(1393 frames, layer TX - in.indwealth/globalsearch.ui.GlobalSearchActivity$_2749)"
+2026-10-23T17:19:52,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S2,1,6.9,ms,bench.py,,
+2026-10-23T17:19:52,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S3,1,11.2,ms,bench.py,,
+2026-10-23T17:19:52,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S4,1,14.1,ms,bench.py,,
+2026-10-23T17:19:52,search,a547903a,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,S5,1,87.3,fps,bench.py,,

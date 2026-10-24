@@ -16,16 +16,13 @@ they are the method. `docs/RISE Benchmark Plan.md` is the background and
 ## Hard rules
 
 1. **Never type, store, or ask for a PIN, password, OTP or account number.** The developer enters
-   the PIN on the phone by hand; `bench.py` pauses for that.
-2. **Never place an order, modify a watchlist, or change holdings** on any app, and never tap
-   Invest, Start SIP, Lumpsum, Redeem, Withdraw, Add money, Mandate/Autopay or Cart. Phones are
-   logged into real or client accounts that may belong to other people. Reading screens is fine.
-   Exception for modules whose screens are those pages (e.g. `funds`): the Add funds and Withdraw
-   pages may be opened and closed with Back, but never enter an amount, pick a payment method,
-   or submit anything.
-   When you set a module's `open_tap` or gestures, place them on a list card, a tab or Back, never
-   near a transaction button, and confirm each one from a screenshot with the developer first.
-3. **Write only inside** `results/<module>/<developer>_<device>/`, the same developer's
+   the PIN on the phone by hand; `bench.py` pauses for that. The PCAPdroid API key is not a secret
+   of that kind: it is stored once with `python3 record.py --pcapdroid-key <key>` in
+   `~/.riise-benchmark/me.json`, outside the repo, and never goes into notes, logs or results.
+2. **Never place an order, modify a watchlist, or change holdings** on any app. Phones are logged
+   into real or client accounts. Reading screens is fine.
+3. **Write only inside** `results/<module>/<developer>_<device>/` (`runs.csv`, `env.csv`,
+   `state.json`, and the side tables `api_calls.csv` / `net_calls.csv` that bench.py writes), the same developer's
    `results/_app/<developer>_<device>/`, `reports/`, and `modules/<name>.json`. Never touch another developer's results folder, `archive/`, or the
    scripts, unless the developer explicitly asks for a tooling fix.
 4. **Never fabricate or estimate a value.** A metric without a measurement stays missing. If a
@@ -35,18 +32,36 @@ they are the method. `docs/RISE Benchmark Plan.md` is the background and
 
 ## How bench.py and preflight.py are run
 
-`bench.py run …`, `timing.py` and `offline.py` pause with "Press Enter" prompts while the developer works the phone. Those
-prompts need a terminal, and your Bash tool has none: if you run it yourself it stops at the first
-prompt with exit code 2. So for every `bench.py run` command: print the exact command and ask the
-developer to type it in the Claude Code prompt with a leading `!` (for example
-`! python3 bench.py run RISE --module fno`), which runs it in their terminal. Wait until they say it
-finished, then run `python3 bench.py status --module <module>` yourself to see what was recorded.
-The same applies to `timing.py` and `offline.py`: print the command for the developer to run with
-`!`. In some Claude Code sessions `!` gives the command no keyboard input, and the script exits
-at its first prompt ("needs your terminal"). Then give the developer the full line for a separate
-Terminal window instead: `cd <repo> && python3 bench.py run …`. Nothing from an interrupted run is
-saved, and re-running resumes at the first missing run. `preflight.py`, `record.py`, `bench.py status/installed/devices` and `build_report.py` have no
-prompts; run those yourself.
+`bench.py run …` pauses with "Press Enter" prompts while someone works the phone. Those prompts
+need a terminal, and your Bash tool has none, so **never call `bench.py run` directly**. Run it
+through the driver instead, with the same arguments:
+
+    python3 drive.py run "<app>" --module <module> --runs k [--group …] [--with-r3] [--redo N]
+
+`drive.py` runs bench.py in a pseudo-terminal, and at each prompt works the phone over adb and
+presses Enter: it waits for the app's home screen, opens the module screen with the module's
+`auto_open` steps (default: tap the UI node named like the screen, type the first `test_subjects`
+symbol, hide the keyboard), and plays the back steps for the leak cycles. It never types a PIN,
+password or OTP: on a login / PIN screen it waits up to five minutes for the developer and then
+stops the run with `q`, saving nothing for that run. Its log goes to
+`~/.riise-benchmark/artifacts/drive-<module>-<app>-<stamp>.log`; the tail of the output tells you
+what it did at each prompt. Run one driver at a time (the phone is shared), in the background
+with a 10-minute timeout, and read `python3 bench.py status --module <module>` after it exits.
+
+Before the first `drive.py run` of a module, check the open steps really reach the screen:
+`python3 drive.py open "<app>" --module <module>` launches the app, runs the steps and prints
+the focused window, the keyboard state and the texts on screen. If it fails or lands elsewhere,
+`python3 drive.py find "<text>"` lists the UI nodes matching a text on the current screen with
+their fractions; write per-app steps into `modules/<module>.json` under
+`auto_open.per_app["<app>"]` (forms: `find:<text>`, `tap:X Y`, `swipe:X1 Y1 X2 Y2 [ms]`,
+`text:<string>`, `key:<KEYCODE>`, `sleep:<s>`, `hide_keyboard`; fractions 0..1). `auto_open` is
+not part of the module version, so adding it does not flag earlier results.
+
+If the driver stops with `q` or cannot open the screen after you fixed the steps, fall back to the
+developer: print the exact `bench.py run` command and ask them to run it in a separate Terminal
+window (`cd` to the repo first; the Claude Code `!` prefix has no TTY either), then read the
+status when they say it finished. `preflight.py`, `record.py`, `bench.py status/installed/devices`
+and `build_report.py` have no prompts; run those yourself.
 
 ## Modes
 
@@ -63,6 +78,11 @@ Follow these steps in order. Say which step you are on in one line each time.
    `perfetto` blocks the scroll, gesture and idle groups; missing `ffmpeg` blocks U5; missing
    `scrcpy` only affects manual timing metrics. Say what is missing and what it blocks, with the
    install line from `README.md`. Continue with what works.
+   Also `python3 -c "import benchlib as B; print('pcapdroid key:', 'saved' if B.pcapdroid_key() else 'MISSING')"`.
+   If missing, tell the developer once: open PCAPdroid on the phone → Settings → Control
+   permissions → ⋮ → API key, then run `python3 record.py --pcapdroid-key <key>` (paste the key only
+   into that command). Without it the network pass (step 7, last bullet) needs a tap on Allow for
+   every run; without PCAPdroid installed that pass is skipped and L11 / X3 stay manual.
 3. **Module.** `python3 -c "import benchlib as B; import json; print(json.dumps(B.load_module('<module>'), indent=1))"`.
    If it fails because the file does not exist, switch to mode `module <name>` (below) to create
    it, then come back. If the module has `_todo`, show its screens, list and data items and ask
@@ -98,17 +118,33 @@ Follow these steps in order. Say which step you are on in one line each time.
      module; do not repeat them per module.
 7. **Automated groups, per app, rotating the order.** `--runs k` means "runs 1..k, skipping the
    ones already recorded", so rotation is done by repeat number: for k = 1 to 5, go through the
-   installed apps in an order rotated by k (k=1: A B C, k=2: B C A, k=3: C A B, …) and have the
-   developer run `! python3 bench.py run "<app>" --module <module> --runs k` (default groups
-   `ram,open,scroll`). After the five repeats, per app:
-   - `! python3 bench.py run "<app>" --module <module> --group ram --with-r3 --runs 1` (R3, a
+   installed apps in an order rotated by k (k=1: A B C, k=2: B C A, k=3: C A B, …) and run
+   `python3 drive.py run "<app>" --module <module> --runs k` (default groups
+   `ram,open,scroll`). Before the first one, verify the open steps per app with
+   `python3 drive.py open "<app>" --module <module>` (see "How bench.py … are run"). After the
+   five repeats, per app:
+   - `python3 drive.py run "<app>" --module <module> --group ram --with-r3 --runs 1` (R3, a
      5-minute soak; one per app).
-   - `! python3 bench.py run "<app>" --module <module> --group gesture --runs 5` if the module
+   - `python3 drive.py run "<app>" --module <module> --group gesture --runs 5` if the module
      defines gestures for the app (bench.py prints them and asks before playing); otherwise tell
      the developer S7 is recorded by hand.
-   - `! python3 bench.py run "<app>" --module <module> --group leak --runs 1`.
+   - `python3 drive.py run "<app>" --module <module> --group leak --runs 1` (the driver plays
+     the ten open/back cycles with the module's open and back steps).
    - During market hours (09:15–15:30 IST, Mon–Fri) and only when the module has
      `live_ticks: true`: `--group idle --with-video --runs 3` and `--group live --runs 3 --live-minutes 10`.
+   - **Network pass, last and alone:** `python3 drive.py run "<app>" --module <module> --group net --runs 5`
+     per app, after every other group (PCAPdroid's VPN adds overhead, so bench.py refuses to combine
+     `net` with other groups). It starts a PCAPdroid capture filtered to the app, launches it, opens
+     the screen and records L11 (connections in the open window), `net_calls.csv` (one row per
+     connection: host, bytes, first-response time) and, on run 1 after 60 s on the screen, X3 when
+     `apps.json` has `own_domains` for the app (otherwise it prints the hosts and X3 stays manual).
+     The first capture on a phone shows Android's VPN request: the developer taps OK (drive.py waits
+     up to five minutes). Run 1 takes about 2 min, later runs under a minute.
+   The `open` runs (and the `_app` cold starts) also read the app's own API log from logcat. RISE
+   logs every call, so for RISE `api_calls.csv` gets one row per call (method, path, status,
+   duration, CDN cache; no query strings, no bodies) and the L15 / R1 note carries a summary such as
+   `api: 12 calls, 9 endpoints, 3 repeats, net 1.42 s, longest GET … 520 ms`. Competitor apps log
+   nothing: "no API lines" for them is expected, not an error.
    Re-running the same command resumes at the first missing run, so an interrupted session is
    never lost. To measure a run again, add `--redo N`.
 8. **Manual metrics, per app.** Screen timings first, with the recorder instead of hand-counted
@@ -176,7 +212,7 @@ that `state.json` already has.
    `scorecard_<date>.md`.
 2. Print the scorecard tables from the markdown file and the Completeness summary: modules with
    fewer runs than expected, manual metrics missing, and rows whose `module_version` differs
-   from the current module file.
+   from the current module file. Also its "API and network calls" section when present.
 3. Remind the reader: ranks and 0–100 scores compare across modules; raw milliseconds do not,
    because each module was measured on a different phone.
 4. Ask, as in step 12 of mode `run`, whether the developer wants an execution plan for one of the
@@ -198,10 +234,18 @@ Create or edit `modules/<name>.json`. Ask these, one at a time, in plain words:
    forms are allowed, with screen **fractions** 0..1 so they land on the same spot on any phone:
    `input tap X Y`, `input swipe X1 Y1 X2 Y2 [ms]`, `input keyevent KEYCODE_BACK`. Example:
    `{"label": "chart 1W", "cmd": "input tap 0.42 0.55"}`. Get fractions from a screenshot
-   (pixel ÷ width or height). `test_subjects` (symbols) for quote-style modules.
+   (pixel ÷ width or height) or from `python3 drive.py find "<text>"`. `test_subjects` (symbols)
+   for quote- and search-style modules.
+   Also `auto_open` (how `drive.py` reaches the screen at each prompt): `default` steps, `back`
+   steps and `per_app` overrides, in the step forms listed under "How bench.py … are run". Leave
+   it out when the default (tap the node named like the screen, type the first test subject,
+   hide the keyboard) works; it is not part of the module version.
 6. Offline items and data items if the seeded lists do not fit.
 7. Should cold start (L1, X4) be measured and counted for this module? → `"coldstart": true|false`.
    Mode `run` asks this again at step 6 of every session.
+8. If the network pass left X3 manual for an app, add that company's domains under
+      `own_domains` for the app in `apps.json` (not in the module file) so the next run computes it.
+
 
 Write the JSON with the schema used by `modules/portfolio.json`. Never overwrite an existing
 module silently: show the diff, and show the version hash before and after

@@ -3,6 +3,7 @@
 
 Usage:
   python3 record.py --me "Vivek Dubey"                                  # store your name once
+  python3 record.py --pcapdroid-key <key>                                # once per developer, for bench.py --group net
   python3 record.py --module fno --app Groww L14 --run 2 --value 1840 --note "Overview → Technicals"
   python3 record.py --module fno --app Groww O1 --item "Stale-data label" --value Partial
   python3 record.py --module fno --app Groww D1 --item "Indices strip" --value Yes
@@ -35,6 +36,8 @@ def main():
     p.add_argument("metric", nargs="?", help="metric ID, e.g. L14, or O1 / D1 with --item")
     p.add_argument("-s", "--serial")
     p.add_argument("--me", help="store your developer name in ~/.riise-benchmark/me.json and exit")
+    p.add_argument("--pcapdroid-key", metavar="KEY",
+                   help="store the PCAPdroid API key (Settings → Control permissions → ⋮ → API key) in me.json for bench.py --group net")
     p.add_argument("--module")
     p.add_argument("--app")
     p.add_argument("--developer")
@@ -50,9 +53,12 @@ def main():
     p.add_argument("--items", action="store_true", help="show the module's O1 and D1 items")
     a = p.parse_args()
 
+    if a.me or a.pcapdroid_key:
+        B.write_me(a.me, pcapdroid_api_key=a.pcapdroid_key)
     if a.me:
-        B.write_me(a.me)
         print(f"  Saved developer = {B.safe_name(a.me)} in {B.ME_FILE}")
+        if a.pcapdroid_key:
+            print(f"  Saved the PCAPdroid API key in {B.ME_FILE} (kept out of the repo)")
         return
     if not a.module:
         sys.exit("--module is required")

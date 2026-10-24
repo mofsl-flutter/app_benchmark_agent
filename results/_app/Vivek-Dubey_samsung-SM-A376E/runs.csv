@@ -1,0 +1,130 @@
+timestamp,module,module_version,developer,app,device_model,device_ram_gb,android,package,version,metric,run,value,unit,source,artifact,note
+2026-10-23T12:35:24,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L1,1,1084,ms,bench.py,,
+2026-10-23T12:35:30,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,X4,1,11,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:36:03,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R1,1,961.8,MB,bench.py,,java=20.6;native=100.6;code=83.1;gfx=657.9;webviews=1
+2026-10-23T12:36:07,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L1,2,536,ms,bench.py,,
+2026-10-23T12:36:13,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,X4,2,11,count,bench.py,,longest=737ms; 5 s after launch
+2026-10-23T12:36:25,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R1,2,1110.5,MB,bench.py,,java=100.9;native=101.2;code=82.1;gfx=719.8;webviews=1
+2026-10-23T12:36:30,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L1,3,544,ms,bench.py,,
+2026-10-23T12:36:35,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,X4,3,8,count,bench.py,,longest=841ms; 5 s after launch
+2026-10-23T12:36:43,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R1,3,1112.6,MB,bench.py,,java=109.3;native=100.2;code=92.2;gfx=713.6;webviews=1
+2026-10-23T12:36:47,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L1,4,596,ms,bench.py,,
+2026-10-23T12:36:53,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,X4,4,5,count,bench.py,,longest=749ms; 5 s after launch
+2026-10-23T12:37:02,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R1,4,1103.8,MB,bench.py,,java=107.8;native=101.3;code=92.0;gfx=710.1;webviews=1
+2026-10-23T12:37:06,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,L1,5,618,ms,bench.py,,
+2026-10-23T12:37:12,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,X4,5,10,count,bench.py,,longest=986ms; 5 s after launch
+2026-10-23T12:37:20,_app,9b7658d3,Vivek-Dubey,RISE,samsung SM-A376E,7.2,16,com.mosl.mobile,6.2.09,R1,5,1037.4,MB,bench.py,,java=36.7;native=101.2;code=91.8;gfx=709.3;webviews=1
+2026-10-23T12:38:43,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L1,1,727,ms,bench.py,,
+2026-10-23T12:38:49,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,X4,1,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:39:20,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R1,1,244.5,MB,bench.py,,java=4.4;native=61.0;code=28.7;gfx=57.7;webviews=0
+2026-10-23T12:39:25,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L1,2,515,ms,bench.py,,
+2026-10-23T12:39:30,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,X4,2,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:39:39,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R1,2,262.5,MB,bench.py,,java=9.4;native=47.6;code=30.5;gfx=63.8;webviews=0
+2026-10-23T12:39:44,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L1,3,516,ms,bench.py,,
+2026-10-23T12:39:50,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,X4,3,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:39:57,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R1,3,280.2,MB,bench.py,,java=9.4;native=59.4;code=30.5;gfx=69.2;webviews=0
+2026-10-23T12:40:01,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L1,4,535,ms,bench.py,,
+2026-10-23T12:40:06,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,X4,4,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:40:14,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R1,4,284.4,MB,bench.py,,java=9.4;native=55.3;code=30.6;gfx=78.4;webviews=0
+2026-10-23T12:40:18,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,L1,5,536,ms,bench.py,,
+2026-10-23T12:40:23,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,X4,5,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:40:30,_app,9b7658d3,Vivek-Dubey,Kite,samsung SM-A376E,7.2,16,com.zerodha.kite3,3.11.11,R1,5,273.0,MB,bench.py,,java=9.4;native=47.8;code=30.6;gfx=78.3;webviews=0
+2026-10-23T12:41:25,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L1,1,747,ms,bench.py,,
+2026-10-23T12:41:30,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,X4,1,1,count,bench.py,,longest=162ms; 5 s after launch
+2026-10-23T12:41:39,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R1,1,295.6,MB,bench.py,,java=64.7;native=53.8;code=59.3;gfx=66.4;webviews=1
+2026-10-23T12:41:44,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L1,2,487,ms,bench.py,,
+2026-10-23T12:41:49,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,X4,2,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:41:55,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R1,2,289.8,MB,bench.py,,java=54.1;native=51.5;code=64.7;gfx=68.9;webviews=1
+2026-10-23T12:42:00,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L1,3,502,ms,bench.py,,
+2026-10-23T12:42:05,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,X4,3,1,count,bench.py,,longest=120ms; 5 s after launch
+2026-10-23T12:42:12,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R1,3,291.2,MB,bench.py,,java=51.7;native=52.3;code=64.9;gfx=68.9;webviews=1
+2026-10-23T12:42:17,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L1,4,513,ms,bench.py,,
+2026-10-23T12:42:22,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,X4,4,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:42:29,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R1,4,305.9,MB,bench.py,,java=70.2;native=52.0;code=65.1;gfx=68.9;webviews=1
+2026-10-23T12:42:34,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,L1,5,564,ms,bench.py,,
+2026-10-23T12:42:39,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,X4,5,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:42:46,_app,9b7658d3,Vivek-Dubey,Angel One,samsung SM-A376E,7.2,16,com.msf.angelmobile,126.9.1,R1,5,294.9,MB,bench.py,,java=59.9;native=51.3;code=64.1;gfx=69.2;webviews=1
+2026-10-23T12:43:27,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L1,1,1030,ms,bench.py,,
+2026-10-23T12:43:33,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,X4,1,4,count,bench.py,,longest=354ms; 5 s after launch
+2026-10-23T12:43:50,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R1,1,310.9,MB,bench.py,,java=72.1;native=66.1;code=58.5;gfx=61.2;webviews=1
+2026-10-23T12:43:54,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L1,2,743,ms,bench.py,,
+2026-10-23T12:44:00,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,X4,2,1,count,bench.py,,longest=163ms; 5 s after launch
+2026-10-23T12:44:07,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R1,2,418.2,MB,bench.py,,java=112.7;native=63.8;code=61.8;gfx=125.7;webviews=1
+2026-10-23T12:44:11,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L1,3,721,ms,bench.py,,
+2026-10-23T12:44:17,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,X4,3,1,count,bench.py,,longest=149ms; 5 s after launch
+2026-10-23T12:44:23,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R1,3,421.5,MB,bench.py,,java=101.6;native=65.7;code=62.3;gfx=138.4;webviews=1
+2026-10-23T12:44:28,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L1,4,707,ms,bench.py,,
+2026-10-23T12:44:34,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,X4,4,1,count,bench.py,,longest=152ms; 5 s after launch
+2026-10-23T12:44:42,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R1,4,335.5,MB,bench.py,,java=96.2;native=65.4;code=61.3;gfx=58.9;webviews=1
+2026-10-23T12:44:47,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,L1,5,688,ms,bench.py,,
+2026-10-23T12:44:53,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,X4,5,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:45:00,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung SM-A376E,7.2,16,in.indwealth,9.9.86,R1,5,380.6,MB,bench.py,,java=105.7;native=69.4;code=62.4;gfx=84.2;webviews=1
+2026-10-23T12:48:22,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L1,1,1699,ms,bench.py,,
+2026-10-23T12:48:28,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,X4,1,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:48:46,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R1,1,423.5,MB,bench.py,,java=16.3;native=59.8;code=56.1;gfx=213.8;webviews=0
+2026-10-23T12:48:51,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L1,2,715,ms,bench.py,,
+2026-10-23T12:48:56,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,X4,2,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:49:14,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R1,2,444.8,MB,bench.py,,java=14.2;native=60.3;code=68.0;gfx=222.0;webviews=0
+2026-10-23T12:49:19,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L1,3,730,ms,bench.py,,
+2026-10-23T12:49:24,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,X4,3,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:49:42,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R1,3,431.9,MB,bench.py,,java=15.1;native=59.2;code=69.1;gfx=212.3;webviews=0
+2026-10-23T12:49:46,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L1,4,742,ms,bench.py,,
+2026-10-23T12:49:52,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,X4,4,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:50:10,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R1,4,460.0,MB,bench.py,,java=41.1;native=58.5;code=69.4;gfx=217.0;webviews=0
+2026-10-23T12:50:14,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,L1,5,721,ms,bench.py,,
+2026-10-23T12:50:20,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,X4,5,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:50:38,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung SM-A376E,7.2,16,com.kotak.neo,2.2.86,R1,5,463.7,MB,bench.py,,java=48.3;native=59.9;code=68.8;gfx=213.3;webviews=0
+2026-10-23T12:51:40,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L1,1,1174,ms,bench.py,,
+2026-10-23T12:51:46,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,X4,1,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:52:13,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R1,1,337.0,MB,bench.py,,java=9.9;native=58.9;code=80.0;gfx=74.9;webviews=0
+2026-10-23T12:52:18,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L1,2,639,ms,bench.py,,
+2026-10-23T12:52:23,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,X4,2,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:52:54,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R1,2,343.3,MB,bench.py,,java=9.4;native=58.8;code=81.2;gfx=75.0;webviews=0
+2026-10-23T12:52:58,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L1,3,631,ms,bench.py,,
+2026-10-23T12:53:03,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,X4,3,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:53:31,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R1,3,348.5,MB,bench.py,,java=9.6;native=58.2;code=81.3;gfx=84.0;webviews=0
+2026-10-23T12:53:35,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L1,4,640,ms,bench.py,,
+2026-10-23T12:53:41,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,X4,4,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:54:08,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R1,4,335.9,MB,bench.py,,java=10.5;native=59.9;code=73.6;gfx=79.0;webviews=0
+2026-10-23T12:54:12,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,L1,5,679,ms,bench.py,,
+2026-10-23T12:54:18,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,X4,5,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:54:45,_app,9b7658d3,Vivek-Dubey,SAHI,samsung SM-A376E,7.2,16,com.aaritya.sahi_trade_app,1.0,R1,5,332.9,MB,bench.py,,java=9.5;native=58.2;code=73.0;gfx=79.0;webviews=0
+2026-10-23T12:56:08,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,L1,1,705,ms,bench.py,,
+2026-10-23T12:56:13,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,X4,1,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:56:38,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,R1,1,189.8,MB,bench.py,,java=34.6;native=61.9;code=33.8;gfx=41.9;webviews=0
+2026-10-23T12:56:43,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,L1,2,474,ms,bench.py,,
+2026-10-23T12:56:48,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,X4,2,1,count,bench.py,,longest=280ms; 5 s after launch
+2026-10-23T12:57:14,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,R1,2,168.1,MB,bench.py,,java=28.1;native=45.6;code=34.9;gfx=42.3;webviews=0
+2026-10-23T12:57:18,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,L1,3,429,ms,bench.py,,
+2026-10-23T12:57:23,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,X4,3,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:57:49,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,R1,3,170.6,MB,bench.py,,java=28.2;native=45.4;code=36.0;gfx=42.3;webviews=0
+2026-10-23T12:57:53,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,L1,4,452,ms,bench.py,,
+2026-10-23T12:57:58,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,X4,4,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:58:25,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,R1,4,174.2,MB,bench.py,,java=29.0;native=47.9;code=36.5;gfx=42.3;webviews=0
+2026-10-23T12:58:29,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,L1,5,515,ms,bench.py,,
+2026-10-23T12:58:35,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,X4,5,0,count,bench.py,,longest=0ms; 5 s after launch
+2026-10-23T12:59:00,_app,9b7658d3,Vivek-Dubey,Groww,samsung SM-A376E,7.2,16,com.nextbillion.groww,18.21.1,R1,5,172.5,MB,bench.py,,java=28.4;native=47.5;code=35.8;gfx=42.3;webviews=0
+2026-10-23T16:58:40,_app,9b7658d3,Vivek-Dubey,RISE,samsung-SM-A376E,,,com.mosl.mobile,,A3,1,4.0,★,manual,,"Play Store listing (en_IN, web) on 2026-10-23: 'Rated 4.0 stars out of five stars'"
+2026-10-23T16:58:41,_app,9b7658d3,Vivek-Dubey,Kite,samsung-SM-A376E,,,com.zerodha.kite3,,A3,1,4.4,★,manual,,"Play Store listing (en_IN, web) on 2026-10-23: 'Rated 4.4 stars out of five stars'"
+2026-10-23T16:58:42,_app,9b7658d3,Vivek-Dubey,Angel One,samsung-SM-A376E,,,com.msf.angelmobile,,A3,1,4.4,★,manual,,"Play Store listing (en_IN, web) on 2026-10-23: 'Rated 4.4 stars out of five stars'"
+2026-10-23T16:58:43,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung-SM-A376E,,,in.indwealth,,A3,1,4.6,★,manual,,"Play Store listing (en_IN, web) on 2026-10-23: 'Rated 4.6 stars out of five stars'"
+2026-10-23T16:58:44,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,,,com.kotak.neo,,A3,1,4.5,★,manual,,"Play Store listing (en_IN, web) on 2026-10-23: 'Rated 4.5 stars out of five stars'"
+2026-10-23T16:58:44,_app,9b7658d3,Vivek-Dubey,SAHI,samsung-SM-A376E,,,com.aaritya.sahi_trade_app,,A3,1,4.5,★,manual,,"Play Store listing (en_IN, web) on 2026-10-23: 'Rated 4.5 stars out of five stars'"
+2026-10-23T16:59:10,_app,9b7658d3,Vivek-Dubey,RISE,samsung-SM-A376E,,,com.mosl.mobile,,X1,1,5.0,count,manual,,"Exodus latest report: version 5.1.37, July 15, 2024 (stale: installed 6.2.09) (installed today differs; see env). Fetched 2026-10-23"
+2026-10-23T16:59:11,_app,9b7658d3,Vivek-Dubey,RISE,samsung-SM-A376E,,,com.mosl.mobile,,X2,1,34.0,count,manual,,"Exodus latest report: version 5.1.37, July 15, 2024 (stale: installed 6.2.09). Fetched 2026-10-23"
+2026-10-23T16:59:11,_app,9b7658d3,Vivek-Dubey,Kite,samsung-SM-A376E,,,com.zerodha.kite3,,X1,1,2.0,count,manual,,"Exodus latest report: version 3.11.8, July 27, 2026 (installed today differs; see env). Fetched 2026-10-23"
+2026-10-23T16:59:12,_app,9b7658d3,Vivek-Dubey,Kite,samsung-SM-A376E,,,com.zerodha.kite3,,X2,1,14.0,count,manual,,"Exodus latest report: version 3.11.8, July 27, 2026. Fetched 2026-10-23"
+2026-10-23T16:59:12,_app,9b7658d3,Vivek-Dubey,Angel One,samsung-SM-A376E,,,com.msf.angelmobile,,X1,1,8.0,count,manual,,"Exodus latest report: version 126.2.2, March 6, 2026 (installed today differs; see env). Fetched 2026-10-23"
+2026-10-23T16:59:13,_app,9b7658d3,Vivek-Dubey,Angel One,samsung-SM-A376E,,,com.msf.angelmobile,,X2,1,38.0,count,manual,,"Exodus latest report: version 126.2.2, March 6, 2026. Fetched 2026-10-23"
+2026-10-23T16:59:13,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung-SM-A376E,,,in.indwealth,,X1,1,7.0,count,manual,,"Exodus latest report: version 9.6.3, June 9, 2026 (installed today differs; see env). Fetched 2026-10-23"
+2026-10-23T16:59:14,_app,9b7658d3,Vivek-Dubey,INDmoney,samsung-SM-A376E,,,in.indwealth,,X2,1,35.0,count,manual,,"Exodus latest report: version 9.6.3, June 9, 2026. Fetched 2026-10-23"
+2026-10-23T16:59:14,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,,,com.kotak.neo,,X1,1,5.0,count,manual,,"Exodus latest report: version 2.2.73, April 14, 2026 (installed today differs; see env). Fetched 2026-10-23"
+2026-10-23T16:59:15,_app,9b7658d3,Vivek-Dubey,Kotak Neo,samsung-SM-A376E,,,com.kotak.neo,,X2,1,34.0,count,manual,,"Exodus latest report: version 2.2.73, April 14, 2026. Fetched 2026-10-23"
+2026-10-23T16:59:15,_app,9b7658d3,Vivek-Dubey,SAHI,samsung-SM-A376E,,,com.aaritya.sahi_trade_app,,X1,1,6.0,count,manual,,"Exodus latest report: version 1.0, July 27, 2026 (installed today differs; see env). Fetched 2026-10-23"
+2026-10-23T16:59:16,_app,9b7658d3,Vivek-Dubey,SAHI,samsung-SM-A376E,,,com.aaritya.sahi_trade_app,,X2,1,26.0,count,manual,,"Exodus latest report: version 1.0, July 27, 2026. Fetched 2026-10-23"
+2026-10-23T17:03:39,_app,9b7658d3,Vivek-Dubey,RISE,samsung-SM-A376E,,,com.mosl.mobile,,R4,1,215.9,MB,manual,,"adb shell dumpsys diskstats App Sizes, 2026-10-23 17:05"
+2026-10-23T17:03:40,_app,9b7658d3,Vivek-Dubey,RISE,samsung-SM-A376E,,,com.mosl.mobile,,R6,1,28.2,MB,manual,,"dumpsys diskstats App Data Sizes after login and Search opened, 2026-10-23 17:05"
+2026-10-23T17:03:41,_app,9b7658d3,Vivek-Dubey,RISE,samsung-SM-A376E,,,com.mosl.mobile,,R7,1,13.5,MB,manual,,"dumpsys diskstats Cache Sizes after login and Search opened, 2026-10-23 17:05"
+2026-10-23T17:03:42,_app,9b7658d3,Vivek-Dubey,SAHI,samsung-SM-A376E,,,com.aaritya.sahi_trade_app,,R4,1,161.6,MB,manual,,"adb shell dumpsys diskstats App Sizes, 2026-10-23 17:05"
+2026-10-23T17:03:43,_app,9b7658d3,Vivek-Dubey,SAHI,samsung-SM-A376E,,,com.aaritya.sahi_trade_app,,R6,1,32.2,MB,manual,,"dumpsys diskstats App Data Sizes after login and Search opened, 2026-10-23 17:05"
+2026-10-23T17:03:43,_app,9b7658d3,Vivek-Dubey,SAHI,samsung-SM-A376E,,,com.aaritya.sahi_trade_app,,R7,1,2.1,MB,manual,,"dumpsys diskstats Cache Sizes after login and Search opened, 2026-10-23 17:05"

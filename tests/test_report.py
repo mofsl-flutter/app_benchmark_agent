@@ -143,3 +143,71 @@ class BenchFixTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CallsTablesReportTests(unittest.TestCase):
+    """api_summary / net_summary / calls_lines over synthetic side tables (build_report.py)."""
+
+    def setUp(self):
+        import tempfile
+        import apilog
+        import netcap
+        sys.path.insert(0, str(HERE / "tests"))
+        from test_apilog import LOG
+        from test_netcap import pcap, sample_packets, T0
+        self.folder = Path(tempfile.mkdtemp())
+        module = {"name": "search", "version": "v1"}
+        meta = {"app": "Riise", "developer": "Dev", "pkg": "com.mosl.mobile", "version": "6.2.09", "model": "phone"}
+        calls = apilog.parse_api_log(LOG)
+        for run in (1, 2):
+            B.append_calls(self.folder, apilog.to_rows(calls, "open", run), meta, module, "api_calls.csv")
+        B.append_calls(self.folder, apilog.to_rows(calls[:2], "launch", 1), meta, module, "api_calls.csv")
+        res = netcap.analyse(pcap(12, sample_packets()), {"open": (T0, T0 + 10)}, ["example.com"])
+        for app in ("Riise", "Kite"):
+            B.append_calls(self.folder, netcap.to_rows(res, 1, phases=["open"]), dict(meta, app=app), module, "net_calls.csv")
+
+    def test_api_summary(self):
+        s = R.api_summary(self.folder)
+        self.assertEqual([(x["app"], x["phase"], x["run"]) for x in s], [("RISE", "launch", 1), ("RISE", "open", 1), ("RISE", "open", 2)])
+        self.assertEqual((s[1]["calls"], s[1]["endpoints"], s[1]["repeats"], s[1]["errors"], s[1]["wall_ms"]), (4, 3, 1, 1, 1850))
+        self.assertEqual(s[1]["cache"], "1/2")
+        self.assertEqual(s[0]["calls"], 2)
+
+    def test_net_summary_and_lines(self):
+        n = R.net_summary(self.folder)
+        self.assertEqual([(x["app"], x["run"], x["phase"]) for x in n], [("Kite", 1, "open"), ("RISE", 1, "open")])
+        self.assertEqual((n[0]["connections"], n[0]["hosts"], n[0]["third_party"]), (2, 2, ["api.example.com", "cdn.example.net"]))  # Kite owns zerodha.com only
+        self.assertEqual(n[0]["median_first_response_ms"], 130)
+        lines = R.calls_lines(self.folder)
+        self.assertEqual(len(lines), 2)
+        self.assertIn("API calls (RISE): median 4 per open, 1 repeats, network wall 1850.0 ms over 2 run(s)", lines[0])
+        self.assertIn("Kite 2 conn / 2 hosts / 2 third-party", lines[1])
+        self.assertEqual(R.calls_lines(Path(tempfile_empty())), [])
+
+    def test_pointers(self):
+        pts = dict(R.api_pointers(self.folder))
+        self.assertIn("Repeated requests on one screen open", pts)
+        self.assertIn("1 of 4 calls", pts["Repeated requests on one screen open"])
+        self.assertTrue(any(k.startswith("Slow call: GET /cmsapi/v2/api/Explore/Home") for k in pts))
+        kite = R.api_pointers(self.folder, app="Kite")  # no API log for Kite: only network rules can fire
+        self.assertEqual([t for t, _ in kite], ["Analytics on the critical path of the screen open"])
+
+    def test_compare_and_html(self):
+        apps, rows = R.calls_compare(self.folder)
+        self.assertEqual(apps[0], "RISE")
+        labels = [l for l, _ in rows]
+        self.assertIn("Connections opened on screen open (L11 window)", labels)
+        self.assertIn("API calls per screen open (from the app's log)", labels)
+        api_row = dict(rows)["API calls per screen open (from the app's log)"]
+        self.assertEqual(api_row.get("RISE"), 4)
+        self.assertNotIn("Kite", api_row)
+        out = R.calls_html(self.folder, {"name": "search", "title": "Search"}, "Dev", "phone", self.folder / "x.html")
+        html = Path(out).read_text()
+        self.assertIn("<title>API &amp; network calls — Search</title>", html)
+        self.assertIn("cdn.example.net", html)
+        self.assertIn("prefers-color-scheme: dark", html)
+
+
+def tempfile_empty():
+    import tempfile
+    return tempfile.mkdtemp()
