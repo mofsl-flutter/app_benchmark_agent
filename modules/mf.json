@@ -22,7 +22,7 @@
       "screen": "Mutual Funds tab"
     },
     "INDmoney": {
-      "screen": null
+      "screen": "Mutual Funds (confirm)"
     },
     "Kotak Neo": {
       "screen": "Mutual Funds tab"
@@ -71,6 +71,6 @@
     "Search entry point",
     "Dark mode"
   ],
-  "notes": "",
+  "notes": "READ-ONLY: browse only. Never tap Invest, Start SIP, Lumpsum, Redeem, Withdraw, Add money, Mandate/Autopay or Cart.",
   "_todo": "Seeded skeleton: confirm screens, list, gestures and data_items with /benchmark-module before the first run."
 }

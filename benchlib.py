@@ -81,6 +81,9 @@ METRIC_CATALOGUE = [
        "On {screen}, tap a sibling tab or sub-section (e.g. Overview → Technicals). Frame-count from the tap to the new content fully drawn. Note which tab in the note."),
     _m("L15", "API / Network", "Data per {screen} open (received + sent, open + 8 s)", "KB", "Lower", ("runs", LOAD), "ADB netstats (bench.py)",
        "bench.py --group open: the app's UID byte counter from dumpsys netstats before the tap that opens {screen} and 8 s after it is loaded."),
+    _m("L16", "Loading Time", "{detail2} open from {screen}", "ms", "Lower", ("runs", LOAD), "timing.py",
+       "On {screen}, tap the entry for {detail2} and measure until it is fully drawn (timing.py --tests L16). Open and go Back only; submit nothing.",
+       applies="detail2"),
     # ---- Scroll / gestures
     _m("S1", "Scroll & Gesture", "Janky frames while scrolling {list} (Medium account)", "%", "Lower", ("runs", SCROLL), "Perfetto (bench.py)",
        "bench.py --group scroll records a Perfetto FrameTimeline trace during 10 identical scripted flings on {list}. Janky = frames with a jank type other than None / Buffer Stuffing. Same for Native and Flutter apps."),
@@ -172,14 +175,20 @@ BENCH_GROUPS = {  # which bench.py group produces which metric IDs
 AUTOMATED = sorted({mid for ids in BENCH_GROUPS.values() for mid in ids} | {"R3"})
 COLDSTART_METRICS = BENCH_GROUPS["coldstart"]  # optional per module: "coldstart": false leaves them out
 
-GENERIC_WORDS = {"screen": "the screen", "list": "the list", "detail": "the detail screen"}
+# Yes/No facts for the user-feel scorecard (record.py --fact), recorded once per app and module as F.<key>.
+UX_FACTS = {
+    "pin_on_resume": "Asks for the PIN again after 30 s in the background on {screen}",
+    "pull_to_refresh": "{screen} has pull-to-refresh",
+}
+
+GENERIC_WORDS = {"screen": "the screen", "list": "the list", "detail": "the detail screen", "detail2": "a second detail screen"}
 
 
 def render(text, module=None):
     """Fill {screen} {list} {detail} from a module definition (generic words for _app or None)."""
     words = dict(GENERIC_WORDS)
     if module and module.get("rise"):
-        for k in ("screen", "list", "detail"):
+        for k in ("screen", "list", "detail", "detail2"):
             if module["rise"].get(k):
                 words[k] = module["rise"][k]
     return text.format(**words)
@@ -279,6 +288,8 @@ def list_modules():
 
 def module_version(module):
     payload = {k: module.get(k) for k in VERSIONED_KEYS}
+    if module.get("runs"):  # per-module run counts (a protocol deviation the lead signs off); absent = catalogue counts
+        payload["runs"] = module["runs"]
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:8]
 
@@ -539,7 +550,12 @@ def expected(module, app=None):
             for it in module.get("data_items", []):
                 out[f"D1.{slug(it)}"] = 1
         else:
-            out[m["id"]] = m["runs"]
+            out[m["id"]] = module.get("runs", {}).get(m["id"], m["runs"])
+    if module["name"] != APP_SCOPE:
+        needs = {"pull_to_refresh": "L6", "pin_on_resume": "L7"}  # facts are observed during these tests
+        for k in UX_FACTS:
+            if needs.get(k) in out:
+                out[f"F.{k}"] = 1
     return out
 
 

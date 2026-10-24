@@ -6,6 +6,7 @@ Usage:
   python3 record.py --module fno --app Groww L14 --run 2 --value 1840 --note "Overview → Technicals"
   python3 record.py --module fno --app Groww O1 --item "Stale-data label" --value Partial
   python3 record.py --module fno --app Groww D1 --item "Indices strip" --value Yes
+  python3 record.py --module fno --app Groww --fact pull_to_refresh --value Yes   # user-feel facts (--items lists them)
   python3 record.py --module fno --app Groww --list                       # what is still missing
   python3 record.py --module fno --app Groww --items                      # the module's O1 / D1 items
 
@@ -42,6 +43,7 @@ def main():
     p.add_argument("--run", type=int, help="run number (default: next missing)")
     p.add_argument("--value", help="number, or Yes/Partial/No/N/A for --item")
     p.add_argument("--item", help="offline_items / data_items entry (for O1 / D1)")
+    p.add_argument("--fact", choices=sorted(B.UX_FACTS), help="Yes/No fact for the user-feel scorecard")
     p.add_argument("--note", default="")
     p.add_argument("--artifact", default="", help="local recording / trace file name")
     p.add_argument("--list", action="store_true", help="show what is still missing for this app")
@@ -63,6 +65,9 @@ def main():
         print("  D1 data items:")
         for it in module.get("data_items", []):
             print(f"    D1.{B.slug(it):<48} {it}")
+        print("  User-feel facts (--fact KEY --value Yes|No):")
+        for k, text in B.UX_FACTS.items():
+            print(f"    {k:<51} {B.render(text, module)}")
         return
 
     if not a.app:
@@ -79,21 +84,31 @@ def main():
         print(f"  {app} · module {module['name']} · still missing ({folder}):")
         for mid, (done, n) in sorted(gaps.items(), key=lambda kv: (kv[0].split(".")[0], kv[0])):
             base = mid.split(".", 1)[0]
+            if base == "F":
+                print(f"    {mid:<40} {done}/{n}  {'record.py --fact':<28} {B.render(B.UX_FACTS[mid[2:]], module)}")
+                continue
             how = "bench.py" if base in B.AUTOMATED else B.METRICS[base]["tool"]
             name = B.render(B.METRICS[base]["name"], module) if "." not in mid else mid
             print(f"    {mid:<40} {done}/{n}  {how:<28} {name}")
         return
 
-    if not a.metric or a.value is None:
-        sys.exit("Give a metric ID and --value (or --list / --items).")
-    mid = a.metric.upper()
-    if mid not in B.METRICS:
+    if a.fact:
+        if module["name"] == B.APP_SCOPE:
+            sys.exit("--fact is recorded per module, not under _app.")
+        val = (a.value or "").strip().capitalize()
+        if val not in ("Yes", "No"):
+            sys.exit("--fact needs --value Yes or No")
+        a.metric, a.value = f"F.{a.fact}", val
+    elif not a.metric or a.value is None:
+        sys.exit("Give a metric ID and --value (or --list / --items / --fact).")
+    mid = a.metric if a.fact else a.metric.upper()
+    if a.fact:
+        row = {"metric": mid, "run": 1, "value": a.value, "note": a.note, "source": "manual", "artifact": a.artifact}
+    elif mid not in B.METRICS:
         sys.exit(f"Unknown metric {mid}. See METRICS.md.")
-    ok, why = B.metric_applies(mid, module)
-    if not ok:
-        sys.exit(f"{mid} does not apply to module {module['name']}: {why}")
-
-    if mid in ("O1", "D1"):
+    elif not B.metric_applies(mid, module)[0]:
+        sys.exit(f"{mid} does not apply to module {module['name']}: {B.metric_applies(mid, module)[1]}")
+    elif mid in ("O1", "D1"):
         if not a.item:
             sys.exit(f"{mid} is recorded per item: add --item \"<item text>\" (see --items).")
         items = module["offline_items"] if mid == "O1" else module["data_items"]

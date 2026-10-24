@@ -25,3 +25,9 @@ __pycache__/
 /.idea/modules.xml
 /.idea/riise-benchmark.iml
 /.idea/vcs.xml
+
+# Execution plans hold copied app code: they stay on the developer's machine (share the site/ folder)
+execution-plan/plans/
+
+# IDE
+.idea/

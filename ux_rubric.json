@@ -1,0 +1,57 @@
+{
+  "_comment": "Scorecard 2 (user feel): fixed limits from published response-time and frame-rate standards, so a score does not depend on which other apps were measured. Weights must total 100 and need the lead's sign-off, like weights.json.",
+  "speed": {
+    "label": "Screens respond quickly",
+    "weight": 35,
+    "metrics": ["L3", "L4", "L5", "L6", "L7", "L14"],
+    "bands_ms": [[400, 100], [1000, 70], [10000, 30]],
+    "rule": "Each screen time (first open, re-open, detail, refresh, resume, tab switch): up to 0.4 s = 100, up to 1 s = 70, up to 10 s = 30, slower = 0. Averaged over the screens measured.",
+    "source": "Doherty threshold (0.4 s); Nielsen response-time limits (1 s, 10 s)",
+    "url": "https://www.nngroup.com/articles/response-times-3-important-limits/"
+  },
+  "smooth": {
+    "label": "Scrolling looks smooth",
+    "weight": 15,
+    "metric": "S5",
+    "min_fps": 60,
+    "pass": 100,
+    "fail": 30,
+    "rule": "60 fps or more while scrolling = 100, below = 30.",
+    "source": "Android vitals: frames within 16 ms (60 fps) count as smooth",
+    "url": "https://developer.android.com/topic/performance/vitals/render"
+  },
+  "offline": {
+    "label": "Works when the network drops",
+    "weight": 15,
+    "metric": "O1",
+    "rule": "Offline checklist score (O1) as tested.",
+    "source": "Module offline items",
+    "url": ""
+  },
+  "friction": {
+    "label": "No extra steps",
+    "weight": 15,
+    "penalty": 50,
+    "rule": "Starts at 100; minus 50 if it asks for the PIN again after 30 s in the background; minus 50 if the screen has no pull-to-refresh.",
+    "source": "Facts recorded with record.py --fact",
+    "url": ""
+  },
+  "battery": {
+    "label": "Battery lasts",
+    "weight": 10,
+    "metric": "C2",
+    "rule": "Least battery used in 15 min on the screen = 100; others = least ÷ the app's use.",
+    "source": "C2, batterystats",
+    "url": ""
+  },
+  "reliability": {
+    "label": "No hangs",
+    "weight": 10,
+    "metrics": ["L3", "L4", "L5", "L6", "L7", "L14"],
+    "factor": 3,
+    "penalty": 30,
+    "rule": "Starts at 100; minus 30 for each screen where one run took over 3× its median.",
+    "source": "Run-to-run timings",
+    "url": ""
+  }
+}
