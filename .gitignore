@@ -18,3 +18,10 @@ __pycache__/
 *.pyc
 .DS_Store
 .venv/
+/.idea/.gitignore
+/.idea/caches/deviceStreaming.xml
+/.idea/markdown.xml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/riise-benchmark.iml
+/.idea/vcs.xml
