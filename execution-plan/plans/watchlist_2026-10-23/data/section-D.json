@@ -1,0 +1,118 @@
+{
+ "section": "D",
+ "title": "Live prices and returning to the app",
+ "intro": "On the watchlist, RELIANCE's price changed 17 times a minute, always on whole seconds, and after a minute in the background the app came back showing old prices for about a second before they moved. The client code passes every packet straight to the rows (no throttle), so the 1 s cadence most likely comes from the feed and needs a BE answer. The stale prices on return come from the socket being closed 15 s after the app is paused, so it must reconnect and log in again. One change is a BE question, the other a configurable socket delay; the visual 'updating' marker is E2.",
+ "measured": [
+  {
+   "metric": "LTP changes per minute, RELIANCE (U1)",
+   "current": "17.0 /min, landing on whole seconds (one run, camera, minimum count)",
+   "expected": "depends on the BE answer in D1; FE changes here do not raise it"
+  },
+  {
+   "metric": "Live updates resume after 1 min in background (U3)",
+   "current": "1.0 s after the screen reappears; stale prices first; relaunch-to-visible ~2–3 s (one run)",
+   "expected": "≈ first tick within 0.5 s of reappearing if D2 keeps the socket open for a 60 s absence (to be confirmed); stale state marked by E2"
+  }
+ ],
+ "changes": [
+  {
+   "id": "D1",
+   "title": "Ask BE whether the quote feed is conflated to 1 s",
+   "summary": "The client publishes every quote packet as it arrives and the watchlist renders each one, yet RELIANCE changed only on whole seconds. Ask BE whether the regular (non tick-by-tick) quote feed sends at most one update per symbol per second, and whether a faster feed exists for the watchlist.",
+   "categories": [
+    "BE"
+   ],
+   "risk": "Low",
+   "risk_reason": "A question; no code change.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Confirm the update cadence of the regular quote broadcast (gowebsocketm.motilaloswal.com) per symbol: conflated to 1 s or per trade? If conflated, what would a 250–500 ms cadence cost on the server and in client data (C4 today 2.43 MB per 15 min)?",
+   "files": [
+    {
+     "path": "mosl_broadcaster: lib/internal/packet_publisher.dart",
+     "lines": "53-69",
+     "change": "No change; shows the client forwards packets without throttling."
+    }
+   ],
+   "current": "PacketPublisher.publish adds every parsed quote to a PublishSubject; BroadcastChannelImpl.onBroadcast updates the cached response and publishes it immediately. No throttle, debounce, sample or buffer exists in mosl_broadcaster 3deab191 (searched). The watchlist rows render each packet (watchlist_item.dart StreamBuilder). The one-run U1 reading shows changes on whole seconds, which points to the feed (verify with a packet timestamp log on a debug build).",
+   "steps": [
+    "Debug build: log arrival time and LTP of RELIANCE packets for 2 min in market hours; check spacing.",
+    "Send the BE question with the log.",
+    "If BE offers a faster feed, plan it as a separate change with the data cost."
+   ],
+   "before_code": {
+    "path": "mosl_broadcaster: lib/internal/packet_publisher.dart",
+    "lines": "53-69",
+    "code": "/// Publishes a broadcast response, routing to depth or quote subjects.\nvoid publish(\n  BroadcastResponse2 response, {\n  required bool depth,\n  required bool isTBTDepth,\n}) {\n  if (depth) {\n    _depthSubject.add(response);\n  } else if (isTBTDepth) {\n    _depthTBTSubject.add(response);\n    // Uncomment below line if u want to update LPT , High , Low ..etc from\n    // TBT broadcaster\n    _quoteSubject.add(response);\n  } else {\n    _quoteSubject.add(response);\n  }\n}"
+   },
+   "after_code": {
+    "code": "// No client code change. Debug-only probe used for the BE question:\n// BroadCastHelper.instance.onTickReceived(reliance).listen((t) =>\n//     debugPrint('${DateTime.now().millisecondsSinceEpoch} ${t.ltpValue}'));"
+   },
+   "safety": [
+    "No production change."
+   ],
+   "regression_checks": [
+    "None."
+   ],
+   "after_improvement": "Settles whether U1 can be improved at all from the app. Without a feed change, U1 stays near 17/min.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "D2",
+   "title": "Keep the price socket open longer in background",
+   "summary": "The broadcaster closes the price socket 15 s after the app is paused, so a user who comes back after a minute waits for a reconnect and login while old prices are shown. Make the delay configurable from Remote Config, default 15 s, and test 90–120 s.",
+   "categories": [
+    "FE-Shared",
+    "BE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Shared socket for the whole app. Default stays 15 s. A longer value keeps a socket and its traffic alive in background, which affects battery, data and server connections.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "May the live-price connection stay open for up to 2 minutes after the user leaves the app (so prices are live immediately on return), at the cost of some background data? Today it closes after 15 s.",
+   "be_request": "Remote Config integer broadcast_shutdown_delay_seconds (default 15). Confirm the broadcast servers can hold the extra idle connections.",
+   "files": [
+    {
+     "path": "mosl_broadcaster: lib/core/broadcast_helper.dart",
+     "lines": "49-67",
+     "change": "Pass shutdownDelay: BroadCastHelper.shutdownDelay (new static, default BroadcastOptions.defaultShutdownDelay) to BroadcastOptions."
+    },
+    {
+     "path": "apps/super_app/lib/core/app_initializer.dart",
+     "lines": "new code",
+     "change": "Set BroadCastHelper.shutdownDelay from Remote Config before the helper's first use (or from the value stored at the previous launch)."
+    }
+   ],
+   "current": "BroadCastHelper._init builds BroadcastOptions without shutdownDelay, so the default of 15 s applies (mosl_socket_core broadcast_option.dart line 45). On pause, BroadcastController starts that timer and then stops streaming (broadcast_controller.dart 152-158, 162-169). After 60 s away the socket is closed; on return it must connect, log in, and replay subscriptions (broadcast_channel.dart 213-227) before the first tick. Rows meanwhile show the cached BroadcastResponse2 values.",
+   "steps": [
+    "In mosl_broadcaster, add static Duration shutdownDelay = BroadcastOptions.defaultShutdownDelay; to BroadCastHelper and pass it in _init (additive; default unchanged).",
+    "In the app, set it before the first BroadCastHelper.instance access. If Remote Config is not active yet at that point, use the value stored at the previous launch.",
+    "Test 15 s (today), 90 s and 120 s: U3, background data (C4-style), battery over 1 h."
+   ],
+   "before_code": {
+    "path": "mosl_broadcaster: lib/core/broadcast_helper.dart",
+    "lines": "49-67",
+    "code": "factory BroadCastHelper._init() {\n  final UrlStore urlStore = BroadCastUrlStore(\n    SocketSharedPreferencesProvider.instance,\n    SocketCacheConst.prefBroadcastUrl,\n    SocketCacheConst.prefBroadcastLastConnectedUrl,\n    SocketCacheConst.prefMultiStreamBroadcastUrl,\n  );\n  final Broadcaster broadcaster = Broadcaster.init(\n    BroadcastOptions(\n      urlStore: urlStore,\n      connectionMode: ConnectionMode.preferWebSocket,\n      statsLog: true,\n      appEventStream: AppEventStreamImpl.getInstance(),\n      // Connection error callback - broadcasts errors to consumer apps\n      onConnectionError: _handleConnectionError,\n    ),\n  );\n  return BroadCastHelper._(broadcaster, urlStore);\n}"
+   },
+   "after_code": {
+    "code": "class BroadCastHelper {\n  /// Set before first use; default keeps today's 15 s.\n  static Duration shutdownDelay = BroadcastOptions.defaultShutdownDelay;\n\n  factory BroadCastHelper._init() {\n    // ... urlStore unchanged\n    final Broadcaster broadcaster = Broadcaster.init(\n      BroadcastOptions(\n        urlStore: urlStore,\n        connectionMode: ConnectionMode.preferWebSocket,\n        statsLog: true,\n        appEventStream: AppEventStreamImpl.getInstance(),\n        onConnectionError: _handleConnectionError,\n        shutdownDelay: shutdownDelay,\n      ),\n    );\n    return BroadCastHelper._(broadcaster, urlStore);\n  }\n}"
+   },
+   "safety": [
+    "Default value equals today's 15 s.",
+    "Rollback is a Remote Config change (applies from next launch).",
+    "Network loss still stops streaming immediately (unchanged branch in _handleAppEvent2)."
+   ],
+   "regression_checks": [
+    "Background 10 s, 60 s, 3 min and return: prices resume; no duplicate subscriptions.",
+    "Logout while in background, login as another user: socket re-authenticates.",
+    "Airplane mode in background: no crash on return."
+   ],
+   "after_improvement": "With a 90–120 s delay, a 60 s absence no longer needs a reconnect, so the first tick after return should arrive with the next market update (U3 towards ≈ 0.5 s, to be confirmed).",
+   "depends_on": [],
+   "verify": true
+  }
+ ]
+}

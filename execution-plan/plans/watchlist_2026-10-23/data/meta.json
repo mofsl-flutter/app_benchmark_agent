@@ -1,0 +1,12 @@
+{
+  "title": "Watchlist Module Change Plan",
+  "app": "RISE",
+  "subject": "Watchlist tab (Bench 20 list, list tabs, Manage Stocks, Create New Watchlist, add-scrip search, list menu)",
+  "module_path": "packages/trader_watchlist",
+  "code_stats": "82 Dart files in lib/ · ~23,000 lines (plus shared: trader_widgets, trader_home_market, mo_app_bar, trader_network, trader_core, trader_search, apps/super_app, mosl_broadcaster 3deab191)",
+  "date": "23 Oct 2026",
+  "branch": "develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)",
+  "measured_on": "OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026",
+  "benchmark_source": "reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md",
+  "smoke_test": "open Watchlist tab, switch list tabs, scroll Bench 20, swipe Buy/Sell, tap a row to the quote page and back, list menu (Info, Sort, Manage), Manage Stocks, Create New Watchlist, add a stock from search, airplane mode on/off, background 60 s and return"
+}

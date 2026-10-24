@@ -1,0 +1,278 @@
+{
+ "title": "Watchlist Module Summary",
+ "problems": [
+  {
+   "title": "Live ticks rebuild things that look the same",
+   "cause": "Every price packet rebuilds a whole watchlist row, even when it changed only fields the row does not show; the header wealth tile rebuilds twice per holdings tick; new tick streams are created on every build of the list and the indices rail.",
+   "effect": "185.5 % CPU on an idle Bench 20 list (C1) and 49.5 % of idle frames identical to the previous one (U5).",
+   "ids": [
+    "A2",
+    "A3",
+    "A4",
+    "A6",
+    "A7"
+   ]
+  },
+  {
+   "title": "The header wealth tile animates every 3 seconds",
+   "cause": "MO Wealth / External Wealth flip with a 500 ms page animation every 3 s for as long as the header is mounted, which is always on the watchlist.",
+   "effect": "About 60 frames every 3 s, roughly half of the 39.6 fps idle redraw (U4, verify); also the header shift users notice.",
+   "ids": [
+    "A5",
+    "J5"
+   ]
+  },
+  {
+   "title": "Scrolling down rebuilds the whole header every frame",
+   "cause": "The list emits a new header-pin state on every scroll update and the header BlocBuilder rebuilds the landing header, indices rail, tab bar and banners each time; the whole screen also rebuilds on each list update; the app renders through a texture view on Android 11+.",
+   "effect": "75.3 fps while scrolling on a 120 Hz screen, about 63 % of offered frames, although jank is only 0.34 % (S5, S1).",
+   "ids": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5"
+   ]
+  },
+  {
+   "title": "Rows are recreated on every update and leak listeners",
+   "cause": "Keys are created in build, so every list update unmounts and remounts every row; each row leaves a stream subscription and three tooltip controllers behind; the cubit is app-scoped, so leftovers live for the session.",
+   "effect": "+60.0 MB over 10 open/close cycles (R9) and 380.5 MB after 5 min (R3).",
+   "ids": [
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "B6",
+    "B7"
+   ]
+  },
+  {
+   "title": "Offline and stale prices look live",
+   "cause": "The only offline message is gated on a bottom-bar index the RISE shell does not appear to set; rows use the same style online and offline; the connectivity listener stops after the first background.",
+   "effect": "Offline score 44.4 (O1): no banner, no last-updated marker, stale prices after a return from background (U3).",
+   "ids": [
+    "E1",
+    "E2",
+    "E3",
+    "D2"
+   ]
+  },
+  {
+   "title": "Release builds write user data and noise to logcat",
+   "cause": "CleverTap events are printed with print; every cached response is printed; an 'API Failed' line is written before every response; the logged URL doubles the origin; the committed HEAD still prints the bearer token.",
+   "effect": "Client code, holdings data and misleading errors in release logcat (creation notes); extra string conversions on every API call.",
+   "ids": [
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F9"
+   ]
+  }
+ ],
+ "outcome": [
+  {
+   "area": "CPU on idle Bench 20, live market (C1)",
+   "today": "185.5 %",
+   "after": "≤ 60 % (estimate; re-measure in market hours)"
+  },
+  {
+   "area": "Idle redraw (U4)",
+   "today": "39.6 fps",
+   "after": "≈ 5–10 fps if A5 is approved, ≈ 15–20 fps without A5"
+  },
+  {
+   "area": "Idle frames identical to previous (U5)",
+   "today": "49.5 %",
+   "after": "≤ 10 %"
+  },
+  {
+   "area": "Scroll FPS at 120 Hz (S5)",
+   "today": "75.3 fps (~63 % of offered frames)",
+   "after": "≥ 110 fps; ≈ 120 fps if C5 confirms the render-mode cause"
+  },
+  {
+   "area": "PSS growth over 10 open/close cycles (R9)",
+   "today": "+60.0 MB",
+   "after": "≤ 20 MB (B7 confirms what is left)"
+  },
+  {
+   "area": "PSS after 5 min (R3)",
+   "today": "380.5 MB",
+   "after": "≤ 340 MB (estimate)"
+  },
+  {
+   "area": "Offline score (O1)",
+   "today": "44.4",
+   "after": "≈ 77.8 with E1 + E2 (OF2, OF4, OF8 to Yes)"
+  },
+  {
+   "area": "Resume after 1 min in background (U3)",
+   "today": "stale prices first; first tick 1.0 s after reappearing",
+   "after": "stale state marked (E2); ≈ 0.5 s to first tick if D2 is approved"
+  },
+  {
+   "area": "LTP changes per minute (U1)",
+   "today": "17.0 /min on whole seconds",
+   "after": "unchanged unless BE changes the feed (D1)"
+  },
+  {
+   "area": "Features score (D1)",
+   "today": "72.2",
+   "after": "≈ 88.9 with H1; ≈ 100 with H1 + H2"
+  },
+  {
+   "area": "Release logcat",
+   "today": "client code, doubled URL, 'API Failed' on 200",
+   "after": "none of these"
+  }
+ ],
+ "package": {
+  "title": "Major changes possible in 2–4 days",
+  "intro": "Two FE developers, Low and Medium changes of size S only, no Product decision needed. Ships the per-frame header fix, the row and stream reuse, the leak fixes and the logging clean-up. Each day ends with a smoke test on Bench 20.",
+  "plan": [
+   {
+    "owner": "Dev 1 · Idle and scrolling",
+    "rows": [
+     {
+      "when": "Day 1",
+      "ids": [
+       "A1",
+       "C1",
+       "K3",
+       "A3"
+      ],
+      "what": "Flag holder; header pin emitted only on change, with its unit test; one tick stream per row."
+     },
+     {
+      "when": "Day 2",
+      "ids": [
+       "C3",
+       "C4",
+       "A6"
+      ],
+      "what": "Drop shrinkWrap; resubscribe only when the visible set changes (after Dev 2's B3); cache tick streams in the indices rail."
+     },
+     {
+      "when": "Day 3",
+      "ids": [
+       "A4",
+       "C2"
+      ],
+      "what": "Wealth tile rebuilds only when its text changes (shared mo_app_bar, regression on other headers); shell rebuild only on tab changes."
+     },
+     {
+      "when": "Day 4",
+      "ids": [],
+      "what": "Regression pass on Watchlist, Home, Trades headers; profile build on the OPPO: idle CPU, U4, S5."
+     }
+    ]
+   },
+   {
+    "owner": "Dev 2 · Memory and logging",
+    "rows": [
+     {
+      "when": "Day 1",
+      "ids": [
+       "B1",
+       "B2",
+       "B3"
+      ],
+      "what": "Rows cancel their tooltip subscription and dispose controllers; one tooltip StreamController per listing; stable list and row keys."
+     },
+     {
+      "when": "Day 2",
+      "ids": [
+       "B4",
+       "B5",
+       "B6",
+       "K1",
+       "K2"
+      ],
+      "what": "Clear the cubit's screen context; cancel the indices-rail listener; stop symbol-list growth; remount and leak tests."
+     },
+     {
+      "when": "Day 3",
+      "ids": [
+       "F1",
+       "F2",
+       "F3",
+       "F4",
+       "F5",
+       "F6",
+       "F7",
+       "F9"
+      ],
+      "what": "Release logging clean-up in trader_core, trader_network, trader_widgets and the manifest."
+     },
+     {
+      "when": "Day 4",
+      "ids": [
+       "J3",
+       "J4"
+      ],
+      "what": "Accessibility labels on the list menu and the search add icon; release-build logcat check while adding stocks."
+     }
+    ]
+   }
+  ],
+  "effect": [
+   {
+    "area": "Scroll FPS at 120 Hz (S5)",
+    "today": "75.3 fps",
+    "after": "≈ 100–110 fps (C1–C4; to be measured)"
+   },
+   {
+    "area": "Idle CPU (C1)",
+    "today": "185.5 %",
+    "after": "lower; the largest share needs A2 and A5 from later work (estimate ≤ 150 %)"
+   },
+   {
+    "area": "Idle frames identical to previous (U5)",
+    "today": "49.5 %",
+    "after": "lower through A3, A4, A6 (≈ 30–40 %); A2 completes it"
+   },
+   {
+    "area": "PSS growth over 10 cycles (R9)",
+    "today": "+60.0 MB",
+    "after": "≈ 20–35 MB (B1–B6), confirm with B7"
+   },
+   {
+    "area": "Release logcat",
+    "today": "client code, doubled URL, false 'API Failed'",
+    "after": "clean"
+   }
+  ],
+  "needs_product": "Nothing for the package itself. Decisions needed for later work: A5 (wealth tile rotation on the watchlist), E1/E2 (offline banner and stale marker), G3 (keep list on return), J1/J2 (creation flow), H1/H2 (quick actions, sparkline), D2 (socket kept open in background).",
+  "needs_be": "Create the Remote Config keys listed in A1 (all default false) so later changes can ship dark. Answer D1 (quote feed cadence).",
+  "later": [
+   "A2",
+   "A5",
+   "A7",
+   "B7",
+   "C5",
+   "D1",
+   "D2",
+   "E1",
+   "E2",
+   "E3",
+   "E4",
+   "F8",
+   "G1",
+   "G2",
+   "G3",
+   "H1",
+   "H2",
+   "I1",
+   "I2",
+   "J1",
+   "J2",
+   "J5"
+  ]
+ }
+}

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D · Live prices and returning to the app</title>
+<meta name="description" content="On the watchlist, RELIANCE&#x27;s price changed 17 times a minute, always on whole seconds, and after a minute in the background the app came back showing old prices for about a second before they moved. The client code passes every packet straight to the rows (no throttle), so the 1 s cadence most likely comes from the feed and needs a BE answer. The stale prices on return come from the socket being closed 15 s after the app is paused, so it must reconnect and log in again. One change is a BE question, the other a configurable socket delay; the visual &#x27;updating&#x27; marker is E2.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html" class="current"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html" class="current"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section D</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Live prices and returning to the app</h1>
+        <p class="lede">On the watchlist, RELIANCE&#x27;s price changed 17 times a minute, always on whole seconds, and after a minute in the background the app came back showing old prices for about a second before they moved. The client code passes every packet straight to the rows (no throttle), so the 1 s cadence most likely comes from the feed and needs a BE answer. The stale prices on return come from the socket being closed 15 s after the app is paused, so it must reconnect and log in again. One change is a BE question, the other a configurable socket delay; the visual &#x27;updating&#x27; marker is E2.</p>
+        <div class="meta"><span><b>2</b> changes</span><span><b>1</b> low · <b>1</b> medium · <b>0</b> high risk</span><span>FE · shared <b>1</b> · BE <b>2</b> · Product <b>1</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>LTP changes per minute, RELIANCE (U1)</td><td>17.0 /min, landing on whole seconds (one run, camera, minimum count)</td><td><b>depends on the BE answer in D1; FE changes here do not raise it</b></td></tr><tr><td>Live updates resume after 1 min in background (U3)</td><td>1.0 s after the screen reappears; stale prices first; relaunch-to-visible ~2–3 s (one run)</td><td><b>≈ first tick within 0.5 s of reappearing if D2 keeps the socket open for a 60 s absence (to be confirmed); stale state marked by E2</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-d.html#D1" title="Ask BE whether the quote feed is conflated to 1 s">D1</a></td><td>Ask BE whether the quote feed is conflated to 1 s</td><td><span class="tags"><span class="tag cat-BE">BE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-d.html#D2" title="Keep the price socket open longer in background">D2</a></td><td>Keep the price socket open longer in background</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span><span class="tag cat-BE">BE</span><span class="tag cat-Product">Product</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td>Yes</td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="D1" data-item data-cat="BE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">D1</span><h3>Ask BE whether the quote feed is conflated to 1 s</h3></div>
+    <p class="summary">The client publishes every quote packet as it arrives and the watchlist renders each one, yet RELIANCE changed only on whole seconds. Ask BE whether the regular (non tick-by-tick) quote feed sends at most one update per symbol per second, and whether a faster feed exists for the watchlist.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-BE">BE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>PacketPublisher.publish adds every parsed quote to a PublishSubject; BroadcastChannelImpl.onBroadcast updates the cached response and publishes it immediately. No throttle, debounce, sample or buffer exists in mosl_broadcaster 3deab191 (searched). The watchlist rows render each packet (watchlist_item.dart StreamBuilder). The one-run U1 reading shows changes on whole seconds, which points to the feed (verify with a packet timestamp log on a debug build).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Debug build: log arrival time and LTP of RELIANCE packets for 2 min in market hours; check spacing.</li><li>Send the BE question with the log.</li><li>If BE offers a faster feed, plan it as a separate change with the data cost.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">mosl_broadcaster: lib/internal/packet_publisher.dart</td><td class="nowrap">53-69</td><td>No change; shows the client forwards packets without throttling.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">mosl_broadcaster: lib/internal/packet_publisher.dart:53-69</span></div><pre><code><span class="t-c">/// Publishes a broadcast response, routing to depth or quote subjects.</span>
+<span class="t-k">void</span> publish(
+  BroadcastResponse2 response, {
+  <span class="t-k">required</span> bool depth,
+  <span class="t-k">required</span> bool isTBTDepth,
+}) {
+  <span class="t-k">if</span> (depth) {
+    _depthSubject.add(response);
+  } <span class="t-k">else</span> <span class="t-k">if</span> (isTBTDepth) {
+    _depthTBTSubject.add(response);
+    <span class="t-c">// Uncomment below line if u want to update LPT , High , Low ..etc from</span>
+    <span class="t-c">// TBT broadcaster</span>
+    _quoteSubject.add(response);
+  } <span class="t-k">else</span> {
+    _quoteSubject.add(response);
+  }
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-c">// No client code change. Debug-only probe used for the BE question:</span>
+<span class="t-c">// BroadCastHelper.instance.onTickReceived(reliance).listen((t) =&gt;</span>
+<span class="t-c">//     debugPrint(&#x27;${DateTime.now().millisecondsSinceEpoch} ${t.ltpValue}&#x27;));</span></code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>No production change.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>None.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> A question; no code change.</p>
+    <div class="callouts"><div class="callout be"><h4>Backend request</h4><p>Confirm the update cadence of the regular quote broadcast (gowebsocketm.motilaloswal.com) per symbol: conflated to 1 s or per trade? If conflated, what would a 250–500 ms cadence cost on the server and in client data (C4 today 2.43 MB per 15 min)?</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>Settles whether U1 can be improved at all from the app. Without a feed change, U1 stays near 17/min.</p></div>
+  </div>
+</article><article class="card change" id="D2" data-item data-cat="FE-Shared BE Product" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">D2</span><h3>Keep the price socket open longer in background</h3></div>
+    <p class="summary">The broadcaster closes the price socket 15 s after the app is paused, so a user who comes back after a minute waits for a reconnect and login while old prices are shown. Make the delay configurable from Remote Config, default 15 s, and test 90–120 s.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span><span class="tag cat-BE">BE</span><span class="tag cat-Product">Product</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">Visible to users</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>BroadCastHelper._init builds BroadcastOptions without shutdownDelay, so the default of 15 s applies (mosl_socket_core broadcast_option.dart line 45). On pause, BroadcastController starts that timer and then stops streaming (broadcast_controller.dart 152-158, 162-169). After 60 s away the socket is closed; on return it must connect, log in, and replay subscriptions (broadcast_channel.dart 213-227) before the first tick. Rows meanwhile show the cached BroadcastResponse2 values.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>In mosl_broadcaster, add static Duration shutdownDelay = BroadcastOptions.defaultShutdownDelay; to BroadCastHelper and pass it in _init (additive; default unchanged).</li><li>In the app, set it before the first BroadCastHelper.instance access. If Remote Config is not active yet at that point, use the value stored at the previous launch.</li><li>Test 15 s (today), 90 s and 120 s: U3, background data (C4-style), battery over 1 h.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">mosl_broadcaster: lib/core/broadcast_helper.dart</td><td class="nowrap">49-67</td><td>Pass shutdownDelay: BroadCastHelper.shutdownDelay (new static, default BroadcastOptions.defaultShutdownDelay) to BroadcastOptions.</td></tr><tr><td class="path">apps/super_app/lib/core/app_initializer.dart</td><td class="nowrap">new code</td><td>Set BroadCastHelper.shutdownDelay from Remote Config before the helper&#x27;s first use (or from the value stored at the previous launch).</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">mosl_broadcaster: lib/core/broadcast_helper.dart:49-67</span></div><pre><code><span class="t-k">factory</span> BroadCastHelper._init() {
+  <span class="t-k">final</span> UrlStore urlStore = BroadCastUrlStore(
+    SocketSharedPreferencesProvider.instance,
+    SocketCacheConst.prefBroadcastUrl,
+    SocketCacheConst.prefBroadcastLastConnectedUrl,
+    SocketCacheConst.prefMultiStreamBroadcastUrl,
+  );
+  <span class="t-k">final</span> Broadcaster broadcaster = Broadcaster.init(
+    BroadcastOptions(
+      urlStore: urlStore,
+      connectionMode: ConnectionMode.preferWebSocket,
+      statsLog: <span class="t-k">true</span>,
+      appEventStream: AppEventStreamImpl.getInstance(),
+      <span class="t-c">// Connection error callback - broadcasts errors to consumer apps</span>
+      onConnectionError: _handleConnectionError,
+    ),
+  );
+  <span class="t-k">return</span> BroadCastHelper._(broadcaster, urlStore);
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">class</span> BroadCastHelper {
+  <span class="t-c">/// Set before first use; default keeps today&#x27;s 15 s.</span>
+  <span class="t-k">static</span> Duration shutdownDelay = BroadcastOptions.defaultShutdownDelay;
+
+  <span class="t-k">factory</span> BroadCastHelper._init() {
+    <span class="t-c">// ... urlStore unchanged</span>
+    <span class="t-k">final</span> Broadcaster broadcaster = Broadcaster.init(
+      BroadcastOptions(
+        urlStore: urlStore,
+        connectionMode: ConnectionMode.preferWebSocket,
+        statsLog: <span class="t-k">true</span>,
+        appEventStream: AppEventStreamImpl.getInstance(),
+        onConnectionError: _handleConnectionError,
+        shutdownDelay: shutdownDelay,
+      ),
+    );
+    <span class="t-k">return</span> BroadCastHelper._(broadcaster, urlStore);
+  }
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Default value equals today&#x27;s 15 s.</li><li>Rollback is a Remote Config change (applies from next launch).</li><li>Network loss still stops streaming immediately (unchanged branch in _handleAppEvent2).</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Background 10 s, 60 s, 3 min and return: prices resume; no duplicate subscriptions.</li><li>Logout while in background, login as another user: socket re-authenticates.</li><li>Airplane mode in background: no crash on return.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Shared socket for the whole app. Default stays 15 s. A longer value keeps a socket and its traffic alive in background, which affects battery, data and server connections.</p>
+    <div class="callouts two"><div class="callout prod"><h4>Product decision needed</h4><p>May the live-price connection stay open for up to 2 minutes after the user leaves the app (so prices are live immediately on return), at the cost of some background data? Today it closes after 15 s.</p></div><div class="callout be"><h4>Backend request</h4><p>Remote Config integer broadcast_shutdown_delay_seconds (default 15). Confirm the broadcast servers can hold the extra idle connections.</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>With a 90–120 s delay, a 60 s absence no longer needs a reconnect, so the first tick after return should arrive with the next market update (U3 towards ≈ 0.5 s, to be confirmed).</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-c.html"><span class="k">← Previous</span><span class="t">C · Scrolling and frame delivery</span></a><a class="card next" href="section-e.html"><span class="k">Next →</span><span class="t">E · Offline and reconnect</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

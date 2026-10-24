@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H · Watchlist features and quick actions</title>
+<meta name="description" content="The watchlist shows live price and change, holdings quantity and unrealised P&amp;L, and offers Buy/Sell by swiping a row. Market depth, alerts and an order ticket open only on the full quote page, and rows have no mini chart. Both items are Product decisions first; the FE work reuses widgets that already exist in the quote module and stays behind a flag.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html" class="current"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html" class="current"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section H</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Watchlist features and quick actions</h1>
+        <p class="lede">The watchlist shows live price and change, holdings quantity and unrealised P&amp;L, and offers Buy/Sell by swiping a row. Market depth, alerts and an order ticket open only on the full quote page, and rows have no mini chart. Both items are Product decisions first; the FE work reuses widgets that already exist in the quote module and stays behind a flag.</p>
+        <div class="meta"><span><b>2</b> changes</span><span><b>0</b> low · <b>0</b> medium · <b>2</b> high risk</span><span>FE <b>2</b> · BE <b>1</b> · Product <b>2</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>Data pointers / features score (D1)</td><td>72.2 (DP2 sparkline No; DP3 depth Partial; DP7 alerts Partial; DP8 quick buy/sell Partial)</td><td><b>≈ 88.9 if H1 is approved (DP3, DP7, DP8 to Yes); ≈ 100 with H2 as well (re-scored with the same checklist)</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-h.html#H1" title="Quick-action sheet over the watchlist">H1</a></td><td>Quick-action sheet over the watchlist</td><td><span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-Product">Product</span></span></td><td><span class="risk High">High</span></td><td><span class="effort">L · 1 week +</span></td><td>Yes</td></tr><tr><td class="nowrap"><a href="section-h.html#H2" title="Intraday sparkline on watchlist rows">H2</a></td><td>Intraday sparkline on watchlist rows</td><td><span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-BE">BE</span><span class="tag cat-Product">Product</span></span></td><td><span class="risk High">High</span></td><td><span class="effort">L · 1 week +</span></td><td>Yes</td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="H1" data-item data-cat="FE Product" data-risk="High">
+  <header>
+    <div class="idrow"><span class="cid">H1</span><h3>Quick-action sheet over the watchlist</h3></div>
+    <p class="summary">Add a bottom sheet over the list with Buy, Sell, 5-level market depth and Create Alert for a stock, opened from a row without leaving the watchlist. Long-press opens edit mode today, so the trigger is a Product choice. Behind a flag.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-Product">Product</span></span></span><span>Risk <span class="risk High">High</span></span><span>Effort <span class="effort">L · 1 week +</span></span><span><span class="tag visible">Visible to users</span></span><span class="idlinks">Depends on <a href="section-a.html#A1" title="Add a watchlist performance flag holder">A1</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>The listing&#x27;s InkWell long-press checks connectivity, logs a CleverTap event and calls switchToEditMode; a tap logs analytics and pushes the quote page with MoGetQuoteNavigator.navigateToScrip. Swiping a row calls searchToPlaceOrderNavigation with BUY or SELL (watchlist_listing.dart 420-456). Depth and alerts exist only on the quote page.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Product picks the gesture and actions.</li><li>Build the sheet as a StreamingBaseWidget so depth subscription stops when it closes (stopBidStreaming).</li><li>Reuse searchToPlaceOrderNavigation for Buy/Sell and the quote module&#x27;s alert entry point.</li><li>Log the same analytics events the quote page logs for these actions, with source &#x27;watchlist_sheet&#x27;.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/widgets/watchlist_listing.dart</td><td class="nowrap">143-151, 297-333</td><td>When the flag is on, open WatchlistQuickActionsSheet from the chosen gesture; keep today&#x27;s tap-to-quote and long-press-to-edit when it is off.</td></tr><tr><td class="path">packages/trader_watchlist/lib/widgets/quick_actions/watchlist_quick_actions_sheet.dart</td><td class="nowrap">new</td><td>New sheet: header (name, LTP), Buy/Sell buttons (searchToPlaceOrderNavigation, as the swipe uses), depth rows via startBidStreaming/onDepthStreamReceived from BasePageState, Create Alert entry from mo_get_quote.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/widgets/watchlist_listing.dart:143-151</span></div><pre><code>onLongPress: () <span class="t-k">async</span> {
+  bool isInternetAvailable = <span class="t-k">await</span> checkInternetConnectivity();
+  <span class="t-k">if</span> (isInternetAvailable &amp;&amp; mounted) {
+    WatchlistCleverTapHelper.instance
+        .logWatchlistCleverTapEventWithClientCode(
+            WatchlistClevarTapEvents.watchlistLongPress);
+    watchlistCubit.switchToEditMode(
+        context, widget.watchlistListingInfo.watchlistInfo);
+  }</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>onLongPress: () <span class="t-k">async</span> {
+  <span class="t-k">if</span> (WatchlistPerfFlags.quickActions &amp;&amp; _quickActionsOnLongPress) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: <span class="t-k">true</span>,
+      builder: (_) =&gt; WatchlistQuickActionsSheet(scrip: <span class="t-c">/* row scrip */</span>),
+    );
+    <span class="t-k">return</span>;
+  }
+  <span class="t-c">// today&#x27;s behaviour: edit mode</span>
+  bool isInternetAvailable = <span class="t-k">await</span> checkInternetConnectivity();
+  <span class="t-k">if</span> (isInternetAvailable &amp;&amp; mounted) { <span class="t-c">/* unchanged */</span> }
+},</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Behind WatchlistPerfFlags.quickActions, default off.</li><li>Tap-to-quote and swipe-to-trade unchanged.</li><li>Order placement goes through the existing order form, not a new path.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Flag off: long-press edit mode, tap to quote, swipe Buy/Sell as today.</li><li>Flag on: sheet opens, depth streams and stops on close, Buy/Sell open the order form with the right side, alert creation works.</li><li>Guest users get the guest sheet as with swipe.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk High.</b> New user-facing flow on the main list and a possible change to an existing gesture (long-press opens edit mode today). Needs live depth subscription and order-entry navigation. Behind WatchlistPerfFlags.quickActions, default off, with a full regression pass on the list.</p>
+    <div class="callouts"><div class="callout prod"><h4>Product decision needed</h4><p>Which gesture opens the quick-action sheet (tap on the price area, a new chevron, or long-press with edit mode moved to the menu)? Which actions does it show (Buy, Sell, 5-level market depth, Create Alert, View chart, Open quote page)?</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>DP3, DP7 and DP8 can move from Partial to Yes; fewer full quote-page pushes (each push keeps the watchlist mounted underneath).</p></div>
+  </div>
+</article><article class="card change" id="H2" data-item data-cat="FE BE Product" data-risk="High">
+  <header>
+    <div class="idrow"><span class="cid">H2</span><h3>Intraday sparkline on watchlist rows</h3></div>
+    <p class="summary">Rows have no mini chart. A sparkline needs an intraday price series per symbol from BE (or a client-built series from ticks since open) and a Product decision on space in the row.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-BE">BE</span><span class="tag cat-Product">Product</span></span></span><span>Risk <span class="risk High">High</span></span><span>Effort <span class="effort">L · 1 week +</span></span><span><span class="tag visible">Visible to users</span></span><span class="idlinks">Depends on <a href="section-a.html#A1" title="Add a watchlist performance flag holder">A1</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>rightColumnLtp shows LTP, an arrow SVG and change/% only. There is no price history on the watchlist.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Agree API with BE.</li><li>One CustomPainter per row with a fixed size and RepaintBoundary; repaint only when the series changes (not on every tick).</li><li>Fetch series once per open and every 5 min; append the last tick to the final point only if Product wants it live.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart</td><td class="nowrap">971-1009</td><td>Add a fixed-size sparkline widget left of rightColumnLtp when the flag is on.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart:971-981</span></div><pre><code>Column rightColumnLtp(BroadcastResponse2 bdData, Color changeColor,
+    WatchlistItemCubit watchlistItemCubit) {
+  <span class="t-k">return</span> Column(
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Text(
+        bdData.ltpValue,
+        style: MOTypography.bodyLargeMedium.copyWith(
+          color: context.surfaceTextNeutralNormal,
+        ),
+      ),</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>Row(children: [
+  <span class="t-k">if</span> (WatchlistPerfFlags.sparkline)
+    RepaintBoundary(
+      child: SizedBox(width: <span class="t-n">56</span>, height: <span class="t-n">24</span>,
+          child: CustomPaint(painter: SparklinePainter(series))),
+    ),
+  rightColumnLtp(bdData, changeColor, watchlistItemCubit),
+])</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Behind a flag (add a key to A1&#x27;s holder), default off.</li><li>Painter repaints only on series change.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Scroll FPS (S5) and idle redraw (U4) re-measured with the flag on.</li><li>Row layout on 360 dp screens.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk High.</b> New data source and new painting on every row; can undo the idle and scroll gains if not done carefully (one CustomPainter per row with shouldRepaint on data change only, RepaintBoundary). Behind a flag.</p>
+    <div class="callouts two"><div class="callout prod"><h4>Product decision needed</h4><p>Should rows show an intraday sparkline? Where (between name and price), and for all lists or only stocks/indices?</p></div><div class="callout be"><h4>Backend request</h4><p>An API returning a compact intraday series (for example 5-minute closes since open) for up to 100 symbols in one call, cacheable for 5 minutes.</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>DP2 moves from No to Yes.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-g.html"><span class="k">← Previous</span><span class="t">G · Opening the watchlist (not measured yet)</span></a><a class="card next" href="section-i.html"><span class="k">Next →</span><span class="t">I · Third-party SDK traffic on the watchlist</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

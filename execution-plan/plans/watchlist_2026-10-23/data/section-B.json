@@ -1,0 +1,361 @@
+{
+ "section": "B",
+ "title": "Memory and leaks",
+ "intro": "Opening and closing the watchlist ten times adds 60 MB that is not given back, and after five minutes the app holds 380.5 MB. The watchlist cubit lives for the whole app session, and the code adds objects to it or to long-lived streams on every open and every list update without removing them: stream subscriptions and tooltip controllers per row, a new StreamController per build, keys that force every row to be rebuilt from scratch, a listener in the indices rail and an ever-growing symbol list. These changes release what each open creates, without changing what the user sees.",
+ "measured": [
+  {
+   "metric": "PSS growth over 10 open/close cycles (R9)",
+   "current": "+60.0 MB (418.0 -> 478.0 MB, one run, market closed)",
+   "expected": "≤ 20 MB after B1–B6 (to be confirmed; part of the growth may be outside Dart, see B7)"
+  },
+  {
+   "metric": "PSS after 5 min on Bench 20 (R3)",
+   "current": "380.5 MB (one run)",
+   "expected": "lower by the per-open garbage removed here; target ≤ 340 MB, to be re-measured"
+  },
+  {
+   "metric": "PSS on Bench 20 (R2)",
+   "current": "361.2 MB median; runs 340.9, 433.3, 443.1, 354.5, 361.2 (two states, ~352 / ~438)",
+   "expected": "not expected to change from B1–B6 alone; B7 investigates the two states"
+  },
+  {
+   "metric": "PSS after cold start (R1)",
+   "current": "432.9 MB",
+   "expected": "not addressed by this section (app-wide)"
+  }
+ ],
+ "changes": [
+  {
+   "id": "B1",
+   "title": "Cancel row tooltip subscriptions and dispose controllers",
+   "summary": "Every WatchlistItem listens to the cubit's tooltip stream in initState and never cancels, and creates three JustTheControllers it never disposes. Keep the subscription, cancel it in dispose and dispose the controllers.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Only adds cleanup in dispose of a single widget. Tooltip show/hide behaviour is unchanged while the row is mounted.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+     "lines": "96-115, 133-137",
+     "change": "Store the StreamSubscription; cancel it and dispose the three JustTheControllers in dispose()."
+    }
+   ],
+   "current": "initState calls watchlistCubit.toolTipSteamSubscription.stream.listen(...) and drops the subscription. dispose() only calls super.dispose(). The cubit is app-scoped (apps/super_app/lib/Investor/core/utils/trader_bloc.dart line 90), so each disposed row stays referenced by the stream's listener list until that StreamController is replaced, and its three JustTheControllers (ValueNotifiers) are never disposed. With B3 rows are disposed and recreated on every list update, so this repeats many times per open.",
+   "steps": [
+    "Add StreamSubscription<bool>? _tooltipSub; assign it in initState.",
+    "In dispose: _tooltipSub?.cancel(); for (final c in tooltipController.values) c.dispose(); then super.dispose().",
+    "Do not call setState or hideTooltip after dispose (the listener checks mounted)."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+    "lines": "96-115",
+    "code": "@override\ninitState() {\n  watchlistCubit = BlocProvider.of<WatchlistCubit>(context);\n  closeThreshold = 0.3 * extentRatio;\n  openThreshold = 0.7 * extentRatio;\n  watchlistCubit.toolTipSteamSubscription.stream.listen((event) async {\n    for (var ctrl in tooltipController.values) {\n      if (ctrl.value == TooltipStatus.isShowing) {\n        await ctrl.hideTooltip(immediately: true);\n      }\n    }\n    watchlistCubit.isToolTipShow = false;\n  });\n  super.initState();\n}\n\n@override\nvoid dispose() {\n  super.dispose();\n}"
+   },
+   "after_code": {
+    "code": "StreamSubscription<bool>? _tooltipSub;\n\n@override\ninitState() {\n  watchlistCubit = BlocProvider.of<WatchlistCubit>(context);\n  closeThreshold = 0.3 * extentRatio;\n  openThreshold = 0.7 * extentRatio;\n  _tooltipSub = watchlistCubit.toolTipSteamSubscription.stream.listen((event) async {\n    if (!mounted) return;\n    for (var ctrl in tooltipController.values) {\n      if (ctrl.value == TooltipStatus.isShowing) {\n        await ctrl.hideTooltip(immediately: true);\n      }\n    }\n    watchlistCubit.isToolTipShow = false;\n  });\n  super.initState();\n}\n\n@override\nvoid dispose() {\n  _tooltipSub?.cancel();\n  for (final c in tooltipController.values) {\n    c.dispose();\n  }\n  super.dispose();\n}"
+   },
+   "safety": [
+    "No change while the row is on screen.",
+    "mounted check prevents work after dispose."
+   ],
+   "regression_checks": [
+    "Event 'Updates' chip opens the event sheet; closing it hides tooltips.",
+    "Starting a swipe hides an open tooltip.",
+    "Scrolling with a tooltip open hides it."
+   ],
+   "after_improvement": "Disposed rows no longer stay reachable from the long-lived cubit stream. Part of the R9 growth; size to be confirmed with B7.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "B2",
+   "title": "Create the tooltip stream once per listing and close it",
+   "summary": "WatchlistListing replaces the cubit's tooltip StreamController with a new one on every build and never closes the old one. Create it once in initState, close it in dispose.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Same stream type and same producers/consumers; it is just not recreated on every build. Rows built before the listing (Manage sheet preview) keep the cubit's default instance as today.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "94-110, 116-118",
+     "change": "Move the StreamController creation to initState; close it in dispose."
+    }
+   ],
+   "current": "build() runs watchlistCubit.toolTipSteamSubscription = StreamController<bool>.broadcast(); on every build. Builds happen on every list update, theme stream event and parent rebuild. The old controller is never closed, and its listeners (rows from B1) keep it and the rows alive until the rows are collected.",
+   "steps": [
+    "In initState (after super.initState), read the cubit with context.read<WatchlistCubit>() in a post-frame callback or didChangeDependencies once, create the controller and keep a reference.",
+    "Remove the assignment from build().",
+    "In dispose(): close the controller only if it is still the one this listing created."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+    "lines": "112-118",
+    "code": "@override\nWidget build(BuildContext context) {\n  _scrollController = PrimaryScrollController.of(context);\n  var listViewKey = RectGetter.createGlobalKey();\n  final watchlistCubit = BlocProvider.of<WatchlistCubit>(context);\n  watchlistCubit.toolTipSteamSubscription =\n      StreamController<bool>.broadcast();"
+   },
+   "after_code": {
+    "code": "StreamController<bool>? _tooltipCtrl;\nbool _wired = false;\n\n@override\nvoid didChangeDependencies() {\n  super.didChangeDependencies();\n  if (!_wired) {\n    _wired = true;\n    final cubit = BlocProvider.of<WatchlistCubit>(context);\n    _tooltipCtrl = StreamController<bool>.broadcast();\n    cubit.toolTipSteamSubscription = _tooltipCtrl!;\n  }\n}\n\n@override\nvoid dispose() {\n  _tooltipCtrl?.close();\n  updatesExpandedNotifier.dispose();\n  super.dispose();\n}\n\n@override\nWidget build(BuildContext context) {\n  _scrollController = PrimaryScrollController.of(context);\n  final watchlistCubit = BlocProvider.of<WatchlistCubit>(context);\n  // no controller assignment here any more\n  ..."
+   },
+   "safety": [
+    "Same broadcast stream semantics.",
+    "Rows created before the listing still find the cubit's default controller (watchlist_cubit.dart 113-114)."
+   ],
+   "regression_checks": [
+    "Tooltips hide on scroll and on swipe start.",
+    "Open Manage Watchlists sheet with an empty watchlist: preview row builds without error."
+   ],
+   "after_improvement": "Removes one unclosed StreamController per listing build. Small alone; together with B1 stops disposed rows from being retained.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "B3",
+   "title": "Keep list and row keys stable across rebuilds",
+   "summary": "The listing creates a new GlobalKey for the list and for every row inside build, which forces Flutter to throw away and recreate every row subtree on each list update. Create the keys once and reuse them.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes element identity of the list and rows, which affects state that today is reset on every update (Slidable open state, tooltip state). Visible-row detection (getVisible) reads these keys, so it must keep working.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "86, 115, 294-296, 522-541",
+     "change": "listViewKey becomes a state field; _keys[index] uses putIfAbsent; prune keys >= item count."
+    }
+   ],
+   "current": "build() does var listViewKey = RectGetter.createGlobalKey(); and itemBuilder does _keys[index] = RectGetter.createGlobalKey(); before wrapping the row in RectGetter(key: ...). A widget with a different key cannot update the existing element, so on every listing build the whole RefreshIndicator/ListView subtree and every visible row (Slidable, StreamBuilder, WatchlistItem state, three tooltip controllers, one stream subscription) is unmounted and mounted again. One open of Bench 20 emits WatchlistListLoaded at least twice (cache, then network; more with sort), so this happens several times per open.",
+   "steps": [
+    "Make final GlobalKey<RectGetterState> _listViewKey = RectGetter.createGlobalKey(); a field; pass it where listViewKey is used.",
+    "In itemBuilder: final key = _keys.putIfAbsent(index, () => RectGetter.createGlobalKey());",
+    "In build, remove keys whose index >= watchistScrips.length so getVisible never indexes past the list (today a stale index would throw inside the try and return an empty list).",
+    "Keep the ValueKey(index) on the InkWell and the Key(scripCode) on Slidable unchanged, so a sort still resets each row's swipe state."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+    "lines": "112-115, 294-296",
+    "code": "@override\nWidget build(BuildContext context) {\n  _scrollController = PrimaryScrollController.of(context);\n  var listViewKey = RectGetter.createGlobalKey();\n  // ...\n                          _keys[index] = RectGetter.createGlobalKey();\n                          return RectGetter(\n                              key: _keys[index],"
+   },
+   "after_code": {
+    "code": "final GlobalKey<RectGetterState> _listViewKey = RectGetter.createGlobalKey();\nfinal Map<int, GlobalKey<RectGetterState>> _keys = {};\n\n@override\nWidget build(BuildContext context) {\n  _scrollController = PrimaryScrollController.of(context);\n  final count = widget.watchlistListingInfo.watchistScrips.length;\n  _keys.removeWhere((i, _) => i >= count);\n  ...\n}\n\n// itemBuilder\nfinal rowKey = _keys.putIfAbsent(index, () => RectGetter.createGlobalKey());\nreturn RectGetter(\n    key: rowKey,\n    child: InkWell(key: ValueKey(index), /* unchanged */));"
+   },
+   "safety": [
+    "Row content still updates through normal widget updates (didUpdateWidget).",
+    "Slidable keeps its scripCode key, so moving a stock to another index still resets its swipe.",
+    "getVisible gets the same rects as today."
+   ],
+   "regression_checks": [
+    "Prices stream for visible rows after open, scroll, sort, refresh, add and remove.",
+    "Swipe Buy/Sell on rows after a sort.",
+    "Coach marks (first row keys) still anchor correctly.",
+    "Heatmap view still works (it uses the same _keys map)."
+   ],
+   "after_improvement": "Rows are updated in place instead of recreated on each list update. Less garbage per open (R9) and less work on each update; also removes the resubscribe storm in A3. Size to be confirmed with K1 and B7.",
+   "depends_on": [
+    "B1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "B4",
+   "title": "Release the screen context held by the cubit",
+   "summary": "The app-scoped WatchlistCubit stores the screen's BuildContext on every build and keeps it after the screen is disposed. Clear it in the screen's dispose.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "shouldShowToast and the snackbar paths already check _context?.mounted; a null context reads as not mounted.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "177-179",
+     "change": "Add clearContext(BuildContext c) that nulls _context only if it is still c."
+    },
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+     "lines": "513-526",
+     "change": "Call cubit.clearContext(context) in dispose()."
+    }
+   ],
+   "current": "build() calls cubit.saveContext(context) (watchlist_screen.dart 530). The cubit outlives the screen (provided in trader_bloc.dart), so after the user leaves the Watchlist tab it still references the defunct element of the last WatchListScreen until the next open replaces it.",
+   "steps": [
+    "Add void clearContext(BuildContext c) { if (identical(_context, c)) _context = null; } to WatchlistCubit.",
+    "Call it in WatchListScreen.dispose() before super.dispose().",
+    "Check the two places that use _context! (fetchWatchlist and getWatchlistById error paths): they run only when shouldShowToast is true, which requires _context?.mounted."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+    "lines": "177-185",
+    "code": "void saveContext(BuildContext context) {\n  _context = context;\n}\n\nbool get shouldShowToast =>\n    !isClosed &&\n    _context?.mounted == true &&\n    MyNavigatorObserver.instance.isLandingPageVisible &&\n    BottomNavCubit.currentPageInd == 1;"
+   },
+   "after_code": {
+    "code": "void saveContext(BuildContext context) {\n  _context = context;\n}\n\nvoid clearContext(BuildContext context) {\n  if (identical(_context, context)) _context = null;\n}\n\n// WatchListScreen.dispose()\ncubit.clearContext(context);"
+   },
+   "safety": [
+    "Existing guards already treat a missing context as 'do not show'."
+   ],
+   "regression_checks": [
+    "Leave the Watchlist tab during a slow fetch: no crash when the fetch fails.",
+    "Cached-data error snackbar still shows when on the tab."
+   ],
+   "after_improvement": "The defunct screen element can be collected after the tab is left. Small; mainly removes one retained subtree per session.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "B5",
+   "title": "Cancel the indices-rail listener on dispose",
+   "summary": "The indices rail in the watchlist header adds a listener to the indices list on every mount and never cancels it. Keep the subscription and cancel it in dispose.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Shared widget (8 call sites), but the change only adds cleanup; behaviour while mounted is the same.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_home_market/lib/home/ui/widgets/commonindices_show.dart",
+     "lines": "141-160, 162-169",
+     "change": "Store the StreamSubscription from mappedIndices.stream.asBroadcastStream().listen and cancel it in dispose."
+    }
+   ],
+   "current": "initState runs cubit.mappedIndices.stream.asBroadcastStream().listen((event) { safeSetState(...); subscribeGlobal(...); }) and dispose() does not cancel it. ExploreIndicesCubit is long-lived, and the watchlist screen (and its header) is remounted on every bottom-nav visit, so every visit adds one more listener holding a disposed State. safeSetState skips setState when unmounted, but subscribeGlobal still runs for every stale listener when the indices list changes.",
+   "steps": [
+    "Add StreamSubscription? _mappedIndicesSub; assign it in initState.",
+    "Cancel it in dispose() before super.dispose()."
+   ],
+   "before_code": {
+    "path": "packages/trader_home_market/lib/home/ui/widgets/commonindices_show.dart",
+    "lines": "142-155",
+    "code": "if (cubit.mappedIndices.isNotEmpty) {\n  safeSetState(() {\n    _getIndicesList(cubit.mappedIndices);\n    subscribeGlobal(\n        _indicesList.map((e) => e.broadcastSymbol).toList(growable: false));\n  });\n  cubit.mappedIndices.stream.asBroadcastStream().listen((event) {\n    safeSetState(() {\n      _getIndicesList(cubit.mappedIndices);\n      subscribeGlobal(_indicesList\n          .map((e) => e.broadcastSymbol)\n          .toList(growable: false));\n    });\n  });"
+   },
+   "after_code": {
+    "code": "StreamSubscription? _mappedIndicesSub;\n\n// initState\n_mappedIndicesSub = cubit.mappedIndices.stream.asBroadcastStream().listen((event) {\n  safeSetState(() {\n    _getIndicesList(cubit.mappedIndices);\n    subscribeGlobal(_indicesList.map((e) => e.broadcastSymbol).toList(growable: false));\n  });\n});\n\n@override\nvoid dispose() {\n  _mappedIndicesSub?.cancel();\n  _indicesScrollController\n    ?..removeListener(_onIndicesScroll)\n    ..dispose();\n  _tagOpacity?.dispose();\n  super.dispose();\n}"
+   },
+   "safety": [
+    "Mounted rails behave exactly as today."
+   ],
+   "regression_checks": [
+    "Edit pinned indices from Explore, return to Watchlist: rail shows the new set.",
+    "Rail ticks on Trades, Portfolio, Retail Portfolio and StratX."
+   ],
+   "after_improvement": "One fewer retained State and listener per watchlist visit; stale subscribeGlobal calls stop.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "B6",
+   "title": "Stop the subscribed-symbol list growing on every scroll",
+   "summary": "BasePageState.startQuoteStreaming appends the requested symbols to quoteSymbolList on every call, and the watchlist calls it on every scroll end. Add only symbols that are not already in the list.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Shared base class used by many streaming screens. resumeStreaming already uses quoteSymbolList.toSet(), so the set of symbols sent is identical; only duplicates are no longer stored.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+     "lines": "115-118",
+     "change": "Append only symbols not already present."
+    }
+   ],
+   "current": "startQuoteStreaming does quoteSymbolList.addAll(requestedList). The watchlist listing calls it from every ScrollEndNotification and every ScrollMetricsNotification at the top, so a long session on the watchlist keeps adding the same ~10–20 symbols.",
+   "steps": [
+    "Keep the List type (public field) and add a private Set mirror, or check contains before adding.",
+    "Leave the helper.startQuoteStreaming(requestedList.toSet()) call unchanged."
+   ],
+   "before_code": {
+    "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+    "lines": "115-118",
+    "code": "void startQuoteStreaming(List<BroadcastSymbol> requestedList) {\n  quoteSymbolList.addAll(requestedList);\n  helper.startQuoteStreaming(requestedList.toSet());\n}"
+   },
+   "after_code": {
+    "code": "void startQuoteStreaming(List<BroadcastSymbol> requestedList) {\n  for (final s in requestedList) {\n    if (!quoteSymbolList.contains(s)) quoteSymbolList.add(s);\n  }\n  helper.startQuoteStreaming(requestedList.toSet());\n}"
+   },
+   "safety": [
+    "Same socket requests as today.",
+    "resumeStreaming sends the same set."
+   ],
+   "regression_checks": [
+    "Watchlist, quote page, positions and holdings resume streaming after background.",
+    "Scroll the watchlist for 2 min: prices still tick."
+   ],
+   "after_improvement": "Bounded list per screen instead of one growing with every scroll. Small memory effect; removes a slow leak in long sessions.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "B7",
+   "title": "Find the rest of the growth with a memory diff",
+   "summary": "Part of R9 and the two R2 memory states are not explained by Dart code: the R2 dumps show Java heap of about 25 MB in the low runs and about 94–102 MB in the high runs, and a WebView exists in-process. After B1–B6, take a DevTools memory diff and an Android heap dump across 10 open/close cycles.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Measurement only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+     "lines": "393-401",
+     "change": "No change; this is what runs on every open and should be the focus of the diff."
+    }
+   ],
+   "current": "Each open of the Watchlist tab runs initState again (the shell does not keep the page alive), starts a fetch with a loading state, logs analytics and mounts the header. The R9 run was manual and at market close, so live-tick objects were not part of it. The Java heap difference between R2 runs points at native/Java SDK objects (WebView or analytics SDKs), which Dart tooling will not show.",
+   "steps": [
+    "Profile build, DevTools Memory: snapshot after first open, after 10 open/close cycles, diff by class (look for WatchlistItem states, JustTheController, StreamController, _StreamBuilderBaseState, CommonIndicesShowState).",
+    "adb shell dumpsys meminfo com.mosl.mobile before/after; Android Studio heap dump for Java objects (WebView, CleverTap, MoEngage, Plotline).",
+    "Record which objects grow; open a follow-up change for anything outside this module."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+    "lines": "393-401",
+    "code": "final int initialTab = _resolveInitialTab();\n_isWatchlistSelected = initialTab == 0;\ncubit = context.read<WatchlistCubit>();\ncubit.getResearchIdeasUserType();\ncubit.togglePersistHeader(true);\nif (_isWatchlistSelected) {\n  _loadData(localSelectedWatchlistId);\n  NotifyVisitorsService.trackScreen(WatchlistStrings.watchlistLbl);\n}"
+   },
+   "after_code": {
+    "code": "// No code change. Expected after B1-B6: no growth in WatchlistItem /\n// JustTheController / StreamController instance counts across 10 cycles."
+   },
+   "safety": [
+    "No production change."
+   ],
+   "regression_checks": [
+    "None."
+   ],
+   "after_improvement": "Separates the Dart leaks fixed here from SDK or Java-side growth, so the R9 target can be met or re-scoped with evidence.",
+   "depends_on": [
+    "B1",
+    "B2",
+    "B3"
+   ],
+   "verify": true
+  }
+ ]
+}

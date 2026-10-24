@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>G · Opening the watchlist (not measured yet)</title>
+<meta name="description" content="The benchmark has not measured screen opening times yet (L2–L14 are empty), so this section has no today values. The code shows three things that add time on every visit to the Watchlist tab: the MTF list is awaited before the watchlist request starts, fixed 300 ms waits follow every sorted load, and a shimmer replaces the list on every visit even though the app-scoped cubit still holds the last list. These are worth fixing once L-timings exist to confirm the gain.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html" class="current"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html" class="current"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section G</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Opening the watchlist (not measured yet)</h1>
+        <p class="lede">The benchmark has not measured screen opening times yet (L2–L14 are empty), so this section has no today values. The code shows three things that add time on every visit to the Watchlist tab: the MTF list is awaited before the watchlist request starts, fixed 300 ms waits follow every sorted load, and a shimmer replaces the list on every visit even though the app-scoped cubit still holds the last list. These are worth fixing once L-timings exist to confirm the gain.</p>
+        <div class="meta"><span><b>3</b> changes</span><span><b>0</b> low · <b>3</b> medium · <b>0</b> high risk</span><span>FE <b>3</b> · Product <b>1</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>Watchlist tab &gt; Bench 20 open time (L-series)</td><td>not measured</td><td><b>measure first; then ≈ one MTF round-trip shorter (G1) and ≥ 300 ms shorter when a sort is saved (G2), to be confirmed</b></td></tr><tr><td>Data per Watchlist &gt; Bench 20 open (L15)</td><td>75.7 KB (indicative)</td><td><b>unchanged by this section</b></td></tr><tr><td>Cold start (L1)</td><td>710 ms</td><td><b>not affected (app start, not the watchlist)</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-g.html#G1" title="Start the watchlist request without waiting for MTF">G1</a></td><td>Start the watchlist request without waiting for MTF</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-g.html#G2" title="Remove fixed 300 ms waits after sorted loads">G2</a></td><td>Remove fixed 300 ms waits after sorted loads</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">M · 2–4 days</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-g.html#G3" title="Show the last list instead of a shimmer on return">G3</a></td><td>Show the last list instead of a shimmer on return</td><td><span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-Product">Product</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td>Yes</td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="G1" data-item data-cat="FE" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">G1</span><h3>Start the watchlist request without waiting for MTF</h3></div>
+    <p class="summary">fetchWatchlist awaits getMtfStockList() before it starts the watchlist API call, although the MTF list is only needed to tag rows. Start both together and tag rows when the MTF list arrives.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>fetchWatchlist emits the loading states, then await getMtfStockList() (UserManager call), then calls repository.fetchWatchlist. The two calls are independent, so the watchlist call waits for the MTF call every time the tab opens.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>final mtfFuture = getMtfStockList().catchError((_) {});</li><li>Start repository.fetchWatchlist(...) as today.</li><li>In the .then handler, await mtfFuture before _parseWatchlistRes so the first full emit has tags; the cache callback can emit without waiting.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/watchlist_cubit.dart</td><td class="nowrap">199-214</td><td>final mtf = getMtfStockList(); start repository.fetchWatchlist immediately; await mtf before the final emit.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_cubit.dart:199-214</span></div><pre><code>Future&lt;<span class="t-k">void</span>&gt; fetchWatchlist(int? selectWatchlistId, bool showLoading) <span class="t-k">async</span> {
+  <span class="t-k">if</span> (showLoading) {
+    safeEmit(WatchlistHeaderLoading());
+    safeEmit(WatchlistLoading());
+  }
+  <span class="t-k">await</span> getMtfStockList();
+  <span class="t-k">await</span> repository
+      .fetchWatchlist(
+    showLoading
+        ? (WatchlistResponse cacheData) <span class="t-k">async</span> {
+            _parseWatchlistRes(cacheData, selectWatchlistId);
+          }
+        : <span class="t-k">null</span>,
+  )
+      .then((response) <span class="t-k">async</span> {
+    _parseWatchlistRes(response, selectWatchlistId);</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>Future&lt;<span class="t-k">void</span>&gt; fetchWatchlist(int? selectWatchlistId, bool showLoading) <span class="t-k">async</span> {
+  <span class="t-k">if</span> (showLoading) {
+    safeEmit(WatchlistHeaderLoading());
+    safeEmit(WatchlistLoading());
+  }
+  <span class="t-k">final</span> mtfFuture = getMtfStockList().catchError((_) {});
+  <span class="t-k">await</span> repository
+      .fetchWatchlist(showLoading
+          ? (WatchlistResponse cacheData) <span class="t-k">async</span> {
+              _parseWatchlistRes(cacheData, selectWatchlistId);
+            }
+          : <span class="t-k">null</span>)
+      .then((response) <span class="t-k">async</span> {
+    <span class="t-k">await</span> mtfFuture;
+    _parseWatchlistRes(response, selectWatchlistId);
+  }).onError&lt;ErrorException&gt;((failure, stackTrace) { <span class="t-c">/* unchanged */</span> });
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Same API calls and same final state.</li><li>MTF failure does not block the watchlist (it did not before either, except by time).</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>MTF tags appear on eligible rows after open.</li><li>MTF API failure: list still loads.</li><li>Pull to refresh.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Changes loading order. Rows may render a moment before their MTF tags; _getWatchlistListingInfo already treats a missing MTF entry as no tag.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>The watchlist call starts one MTF round-trip earlier on every open (exact gain to be measured once L-timings exist).</p></div>
+  </div>
+</article><article class="card change" id="G2" data-item data-cat="FE" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">G2</span><h3>Remove fixed 300 ms waits after sorted loads</h3></div>
+    <p class="summary">When a sort is saved, sortWatchlistDetail asks for a snapshot and then sleeps 300 ms before reading prices, and the parse paths add further 300 ms sleeps between emits. Sort with the cached prices immediately and re-sort when the snapshot arrives.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">M · 2–4 days</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>sortWatchlistDetail calls helper.fetchSnapShot(symbolSet) and then await Future.delayed(300 ms) before reading getBroadcastResponse for each scrip. checkWatchlistSorting calls it for every emit when a sort is active, and _parseWatchlistRes / _parseWatchlistByIdRes add further 300 ms delays after the first sorted emit. A user with a saved sort waits at least 300 ms more per load, and more when several emits are chained.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Remove the delay in sortWatchlistDetail; sort with current cache values.</li><li>Listen once (first event per symbol set, with a 1 s timeout) to the quote stream after fetchSnapShot and re-emit the sorted list if the order changed.</li><li>Remove the 300 ms delays at lines 1455, 1554 and 1596.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/watchlist_cubit.dart</td><td class="nowrap">1204-1222, 1455, 1554, 1596</td><td>Drop the Future.delayed(300 ms) calls; trigger one re-sort on the first snapshot for the list&#x27;s symbols.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_cubit.dart:1204-1222</span></div><pre><code>Future&lt;List&lt;WatchlistScrip&gt;&gt; sortWatchlistDetail(
+  SortOptions sortOptions,
+) <span class="t-k">async</span> {
+  List&lt;WatchlistScrip&gt; list = [...watchlistScrips];
+  <span class="t-k">final</span> helper = BroadCastHelper.instance;
+
+  <span class="t-k">var</span> symbolSet = list.map((e) =&gt; e.symbol).toSet();
+  helper.fetchSnapShot(symbolSet);
+  <span class="t-k">await</span> Future.delayed(<span class="t-k">const</span> Duration(milliseconds: milliseconds300));
+  <span class="t-k">final</span> sortData = list.map((e) {
+    <span class="t-k">var</span> response = helper.getBroadcastResponse(e.symbol);
+    <span class="t-k">return</span> WatchlistSortData(e, helper.getBroadcastResponse(e.symbol));
+  }).toList();
+  list = WatchlistSortUtility()
+      .sortWatchlist(sortData, sortOptions)
+      .map((e) =&gt; e.scrip)
+      .toList();
+  <span class="t-k">return</span> list;
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>Future&lt;List&lt;WatchlistScrip&gt;&gt; sortWatchlistDetail(SortOptions sortOptions) <span class="t-k">async</span> {
+  <span class="t-k">final</span> list = [...watchlistScrips];
+  <span class="t-k">final</span> helper = BroadCastHelper.instance;
+  helper.fetchSnapShot(list.map((e) =&gt; e.symbol).toSet());
+  <span class="t-c">// sort now with cached prices; _resortOnSnapshot() re-emits if order changes</span>
+  <span class="t-k">return</span> WatchlistSortUtility()
+      .sortWatchlist(
+          list.map((e) =&gt; WatchlistSortData(e, helper.getBroadcastResponse(e.symbol))).toList(),
+          sortOptions)
+      .map((e) =&gt; e.scrip)
+      .toList();
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Final order after the snapshot equals today&#x27;s order.</li><li>Users without a saved sort are unaffected.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Saved sort by LTP, % change, A–Z: final order correct after open and after refresh.</li><li>CAS default sort.</li><li>Sort sheet apply/clear.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Sort order could be based on slightly older cached prices for a moment; a second sort after the snapshot keeps the final order the same as today.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>≥ 300 ms less per sorted load, more when several emits chain (to be measured).</p></div>
+  </div>
+</article><article class="card change" id="G3" data-item data-cat="FE Product" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">G3</span><h3>Show the last list instead of a shimmer on return</h3></div>
+    <p class="summary">Every visit to the Watchlist tab emits WatchlistLoading first, so the list is replaced by a shimmer although the app-scoped cubit still holds the last list. When it already has scrips for the selected watchlist, render them and refresh in the background, behind a flag.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-Product">Product</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">Visible to users</span></span><span><span class="tag verify">verify on device</span></span><span class="idlinks">Depends on <a href="section-a.html#A1" title="Add a watchlist performance flag holder">A1</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>initState calls _loadData, which calls fetchWatchlist(id, true); showLoading emits WatchlistHeaderLoading and WatchlistLoading, and the list builder returns WatchListShimmer for WatchlistLoading. The cubit is provided once for the app (trader_bloc.dart 90) and keeps watchlistList and watchlistScrips between visits.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>In fetchWatchlist: if (showLoading &amp;&amp; WatchlistPerfFlags.keepListOnReopen &amp;&amp; watchlistScrips.isNotEmpty) emit WatchlistLoaded and WatchlistListLoaded from the current fields instead of the loading states.</li><li>Keep the cache callback and network refresh as today.</li><li>Logout only calls WatchListScreen.resetSessionState() (apps/super_app/lib/main_common.dart 935), which resets tab state, not the cubit lists. Confirm whether the app-level BlocProviders are recreated on login; if not, clear watchlistList and watchlistScrips on logout before enabling the flag, so a second client never sees the first client&#x27;s list.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/watchlist_cubit.dart</td><td class="nowrap">199-203</td><td>When the flag is on and watchlistScrips is not empty, skip the two loading emits and emit the current lists first.</td></tr><tr><td class="path">packages/trader_watchlist/lib/watchlist_screen.dart</td><td class="nowrap">991-992</td><td>No change; the shimmer still shows when there is nothing to show.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_cubit.dart:199-203</span></div><pre><code>Future&lt;<span class="t-k">void</span>&gt; fetchWatchlist(int? selectWatchlistId, bool showLoading) <span class="t-k">async</span> {
+  <span class="t-k">if</span> (showLoading) {
+    safeEmit(WatchlistHeaderLoading());
+    safeEmit(WatchlistLoading());
+  }</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">if</span> (showLoading) {
+  <span class="t-k">if</span> (WatchlistPerfFlags.keepListOnReopen &amp;&amp; watchlistScrips.isNotEmpty) {
+    _emitCurrentLists(); <span class="t-c">// WatchlistLoaded + WatchlistListLoaded from current fields</span>
+  } <span class="t-k">else</span> {
+    safeEmit(WatchlistHeaderLoading());
+    safeEmit(WatchlistLoading());
+  }
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Behind WatchlistPerfFlags.keepListOnReopen, default off.</li><li>First visit after login still shows the shimmer (no data).</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Return to the tab: list visible immediately, then updates.</li><li>Logout and login as another client, open the tab: the previous client&#x27;s list must never appear.</li><li>Edit in Manage Stocks, return: list reflects the change after refresh.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Visible change (no shimmer on return) and the list may show for a moment with the previous visit&#x27;s data before the refresh. Behind WatchlistPerfFlags.keepListOnReopen, default off.</p>
+    <div class="callouts"><div class="callout prod"><h4>Product decision needed</h4><p>When the user returns to the Watchlist tab, may we show the list as it was (prices update live) while it refreshes in the background, instead of a loading shimmer?</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>Content visible on the first frame of a return visit instead of a shimmer; also removes one full list remount per visit.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-f.html"><span class="k">← Previous</span><span class="t">F · Release logging and privacy</span></a><a class="card next" href="section-h.html"><span class="k">Next →</span><span class="t">H · Watchlist features and quick actions</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

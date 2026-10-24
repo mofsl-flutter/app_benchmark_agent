@@ -1,0 +1,150 @@
+{
+ "section": "K",
+ "title": "Tests and re-measurement",
+ "intro": "The fixes in sections A–C remove work that does not show on screen, so they can regress silently. These tests pin the behaviour: rows are not recreated on list updates, rows release their listeners, and the header state is emitted once per change. Re-measurement on the same phone closes the loop.",
+ "measured": [
+  {
+   "metric": "Automated checks for remounts, leaks and header emits",
+   "current": "none in trader_watchlist/test",
+   "expected": "3 tests in CI"
+  }
+ ],
+ "changes": [
+  {
+   "id": "K1",
+   "title": "Test that list updates do not recreate rows",
+   "summary": "Widget test: pump WatchlistListing with 20 scrips, emit a second WatchlistListLoaded with the same scrips, and assert WatchlistItem state objects are the same instances (no initState on update).",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Test only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/test/widgets/watchlist_listing_remount_test.dart",
+     "lines": "new",
+     "change": "New widget test using existing mocks in test/mocks."
+    }
+   ],
+   "current": "No test covers row identity. Today the test would fail because itemBuilder creates a new GlobalKey per row per build.",
+   "steps": [
+    "Find WatchlistItem states with tester.stateList, store identityHashCodes, rebuild with new info, compare.",
+    "Run with experimentalLeakTesting enabled (flutter_test's leak tracking) to catch undisposed controllers."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+    "lines": "294-296",
+    "code": "_keys[index] = RectGetter.createGlobalKey();\nreturn RectGetter(\n    key: _keys[index],"
+   },
+   "after_code": {
+    "code": "testWidgets('list update keeps row states', (tester) async {\n  await tester.pumpWidget(harness(info(scrips20)));\n  final before = tester.stateList(find.byType(WatchlistItem)).map(identityHashCode).toList();\n  await tester.pumpWidget(harness(info(scrips20)));\n  final after = tester.stateList(find.byType(WatchlistItem)).map(identityHashCode).toList();\n  expect(after, before);\n}, experimentalLeakTesting: LeakTesting.settings.withTrackedAll());"
+   },
+   "safety": [
+    "Test only."
+   ],
+   "regression_checks": [
+    "Test passes after B3; fails on today's code."
+   ],
+   "after_improvement": "Prevents B3 from regressing.",
+   "depends_on": [
+    "B3"
+   ],
+   "verify": false
+  },
+  {
+   "id": "K2",
+   "title": "Test that rows release their tooltip listener",
+   "summary": "Widget test: mount and unmount the listing 10 times and assert the cubit's tooltip stream has no listeners left and no JustTheController is leaked.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Test only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/test/widgets/watchlist_item_dispose_test.dart",
+     "lines": "new",
+     "change": "New widget test with leak tracking."
+    }
+   ],
+   "current": "No test covers WatchlistItem disposal; dispose() is empty today.",
+   "steps": [
+    "Pump/unpump 10 times.",
+    "expect(cubit.toolTipSteamSubscription.hasListener, isFalse) after the last unmount.",
+    "Enable leak tracking for ValueNotifier-based controllers."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+    "lines": "112-115",
+    "code": "@override\nvoid dispose() {\n  super.dispose();\n}"
+   },
+   "after_code": {
+    "code": "testWidgets('rows cancel tooltip subscriptions', (tester) async {\n  for (var i = 0; i < 10; i++) {\n    await tester.pumpWidget(harness(info(scrips20)));\n    await tester.pumpWidget(const SizedBox());\n  }\n  expect(cubit.toolTipSteamSubscription.hasListener, isFalse);\n}, experimentalLeakTesting: LeakTesting.settings.withTrackedAll());"
+   },
+   "safety": [
+    "Test only."
+   ],
+   "regression_checks": [
+    "Passes after B1 and B2."
+   ],
+   "after_improvement": "Prevents B1/B2 from regressing; gives an R9 proxy in CI.",
+   "depends_on": [
+    "B1",
+    "B2"
+   ],
+   "verify": false
+  },
+  {
+   "id": "K3",
+   "title": "Test one header emit per value change",
+   "summary": "Cubit test: call togglePersistHeader(false) 50 times and assert one TogglePersistHeader emission.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Test only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/test/watchlist_cubit_test.dart",
+     "lines": "append",
+     "change": "New test case in the existing cubit test file."
+    }
+   ],
+   "current": "watchlist_cubit_test.dart exists; no case checks repeated identical emits.",
+   "steps": [
+    "Listen to cubit.stream, call togglePersistHeader(true) once, then (false) 50 times, expect two states."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+    "lines": "101-104",
+    "code": "void togglePersistHeader(bool shouldPersist) {\n  _shouldPinnedHeader = shouldPersist;\n  safeEmit(TogglePersistHeader(_shouldPinnedHeader));\n}"
+   },
+   "after_code": {
+    "code": "test('togglePersistHeader emits only on change', () async {\n  final states = <WatchlistState>[];\n  final sub = cubit.stream.listen(states.add);\n  cubit.togglePersistHeader(true);\n  for (var i = 0; i < 50; i++) { cubit.togglePersistHeader(false); }\n  await Future<void>.delayed(Duration.zero);\n  expect(states.whereType<TogglePersistHeader>().length, 2);\n  await sub.cancel();\n});"
+   },
+   "safety": [
+    "Test only."
+   ],
+   "regression_checks": [
+    "Passes after C1."
+   ],
+   "after_improvement": "Prevents the per-frame header rebuild from coming back.",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": false
+  }
+ ]
+}

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I · Third-party SDK traffic on the watchlist</title>
+<meta name="description" content="In 60 s on the idle watchlist the app contacted 9 third-party domains (Plotline, VWO, Google Firebase, CleverTap, MoEngage, Protectt.ai, AppsFlyer). Most of these SDKs are started for the whole app, not by this module, so the main item is a Product and BE decision. The watchlist itself mounts a Plotline banner and a Plotline-tracked kebab on every open, which is worth checking.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html" class="current"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html" class="current"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section I</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Third-party SDK traffic on the watchlist</h1>
+        <p class="lede">In 60 s on the idle watchlist the app contacted 9 third-party domains (Plotline, VWO, Google Firebase, CleverTap, MoEngage, Protectt.ai, AppsFlyer). Most of these SDKs are started for the whole app, not by this module, so the main item is a Product and BE decision. The watchlist itself mounts a Plotline banner and a Plotline-tracked kebab on every open, which is worth checking.</p>
+        <div class="meta"><span><b>2</b> changes</span><span><b>2</b> low · <b>0</b> medium · <b>0</b> high risk</span><span>FE <b>1</b> · BE <b>1</b> · Product <b>2</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>Third-party domains contacted in 60 s on the screen (X3)</td><td>9</td><td><b>depends on I1; ≈ 5–6 if analytics SDKs batch and VWO/Plotline stop polling on this screen (to be confirmed with PCAPdroid)</b></td></tr><tr><td>Data used, 15-min equivalent (C4)</td><td>2.43 MB (indicative)</td><td><b>slightly lower if I1 removes idle SDK polling</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-i.html#I1" title="Decide which SDKs may use the network on the watchlist">I1</a></td><td>Decide which SDKs may use the network on the watchlist</td><td><span class="tags"><span class="tag cat-Product">Product</span><span class="tag cat-BE">BE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-i.html#I2" title="Check what the Plotline widgets do on each open">I2</a></td><td>Check what the Plotline widgets do on each open</td><td><span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-Product">Product</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="I1" data-item data-cat="Product BE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">I1</span><h3>Decide which SDKs may use the network on the watchlist</h3></div>
+    <p class="summary">Ask Product and BE which of the SDKs seen on the idle watchlist (Plotline, VWO, Firebase, CleverTap, MoEngage, Protectt.ai, AppsFlyer) must talk to the network there, and whether batching/flush intervals can be raised.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-Product">Product</span><span class="tag cat-BE">BE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>X3 counted 9 domains first seen within the 60 s capture while the app was idle on Bench 20. The SDKs are initialised at app level (apps/super_app); this plan did not analyse their initialisation line by line.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Collect each SDK&#x27;s network behaviour with PCAPdroid per SDK domain.</li><li>Product decides; BE/marketing change dashboard settings where possible.</li></ol></div>
+    </div>
+    
+    <div class="codepair"><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-c">// No code in this plan.</span></code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>No change until decided.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Analytics dashboards still receive events after any configuration change.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> A decision and SDK configuration review; no code in this plan.</p>
+    <div class="callouts two"><div class="callout prod"><h4>Product decision needed</h4><p>Which SDKs are required while a user sits on the watchlist? Can analytics flush every 60 s or on background instead of immediately? Is VWO needed on this screen?</p></div><div class="callout be"><h4>Backend request</h4><p>Share each SDK&#x27;s flush/poll configuration (CleverTap, MoEngage, AppsFlyer, VWO, Plotline, Protectt.ai) and whether it can be changed from the dashboard.</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>Fewer third-party connections from the idle watchlist; exact count after the decision.</p></div>
+  </div>
+</article><article class="card change" id="I2" data-item data-cat="FE Product" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">I2</span><h3>Check what the Plotline widgets do on each open</h3></div>
+    <p class="summary">The watchlist mounts PlotlineWidget(watchlistBannerKey) above the list on every open and wraps the kebab in a Plotline PView. Check with the Plotline SDK whether these widgets fetch or report on mount when no campaign targets them, and render them only when a campaign is active if they do.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-Product">Product</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>When the header part of the body builds for WatchlistLoaded, it inserts const PlotlineWidget(valueKey: PlotLineWidgetKey.watchlistBannerKey). The kebab menu is wrapped in PView(valueKey: PlotlineCampaignEvent.kebabMenuInWatchlistEvent). Plotline is one of the 9 third-party domains seen in X3. Whether these widgets cause network calls is not visible from this repo (SDK code) (verify with PCAPdroid filtered to Plotline&#x27;s domain while opening the tab).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Open/close the tab 10 times with PCAPdroid filtered to Plotline; count requests.</li><li>If requests scale with opens, ask Plotline for a campaign-presence check and gate the widget.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/watchlist_screen.dart</td><td class="nowrap">968-978</td><td>Investigate; if needed, build PlotlineWidget only when a campaign exists for the key.</td></tr><tr><td class="path">packages/trader_watchlist/lib/ui/watchlist_options/ui/watchlist_options_bottomsheet.dart</td><td class="nowrap">41-46</td><td>Investigate the PView wrapper on the kebab.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_screen.dart:967-978</span></div><pre><code><span class="t-k">if</span> (state.watchlistList.isNotEmpty) {
+  <span class="t-k">return</span> Column(
+    children: [
+      MOSpacing.verticalSpace6,
+      <span class="t-k">const</span> PlotlineWidget(valueKey: PlotLineWidgetKey.watchlistBannerKey),
+      <span class="t-k">if</span> (state.viewMode != WLViewModes.editView &amp;&amp;
+          state.viewMode != WLViewModes.manageWatchlistView)
+        WatchlistHeader(watchlistHeaderInfo: _getWatchlistHeaderInfo(state)),
+      <span class="t-c">// No divider under the pill rail — Figma has no rule</span>
+      <span class="t-c">// between the watchlist pills and the scrip list.</span>
+    ],
+  );</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-c">// Only if I2&#x27;s check shows per-open requests:</span>
+<span class="t-k">if</span> (PlotlineCampaigns.hasActive(PlotLineWidgetKey.watchlistBannerKey))
+  <span class="t-k">const</span> PlotlineWidget(valueKey: PlotLineWidgetKey.watchlistBannerKey),</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Campaigns keep working; only an empty slot is skipped.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>A test campaign on the watchlist banner still shows.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Investigation first; any change keeps the widgets when a campaign is configured.</p>
+    <div class="callouts"><div class="callout prod"><h4>Product decision needed</h4><p>May the watchlist banner slot be skipped when no Plotline campaign targets it?</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>Fewer Plotline requests per watchlist open, if the check confirms them.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-h.html"><span class="k">← Previous</span><span class="t">H · Watchlist features and quick actions</span></a><a class="card next" href="section-j.html"><span class="k">Next →</span><span class="t">J · Creation flow and accessibility</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

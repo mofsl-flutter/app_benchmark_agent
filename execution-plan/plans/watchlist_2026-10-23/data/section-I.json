@@ -1,0 +1,101 @@
+{
+ "section": "I",
+ "title": "Third-party SDK traffic on the watchlist",
+ "intro": "In 60 s on the idle watchlist the app contacted 9 third-party domains (Plotline, VWO, Google Firebase, CleverTap, MoEngage, Protectt.ai, AppsFlyer). Most of these SDKs are started for the whole app, not by this module, so the main item is a Product and BE decision. The watchlist itself mounts a Plotline banner and a Plotline-tracked kebab on every open, which is worth checking.",
+ "measured": [
+  {
+   "metric": "Third-party domains contacted in 60 s on the screen (X3)",
+   "current": "9",
+   "expected": "depends on I1; ≈ 5–6 if analytics SDKs batch and VWO/Plotline stop polling on this screen (to be confirmed with PCAPdroid)"
+  },
+  {
+   "metric": "Data used, 15-min equivalent (C4)",
+   "current": "2.43 MB (indicative)",
+   "expected": "slightly lower if I1 removes idle SDK polling"
+  }
+ ],
+ "changes": [
+  {
+   "id": "I1",
+   "title": "Decide which SDKs may use the network on the watchlist",
+   "summary": "Ask Product and BE which of the SDKs seen on the idle watchlist (Plotline, VWO, Firebase, CleverTap, MoEngage, Protectt.ai, AppsFlyer) must talk to the network there, and whether batching/flush intervals can be raised.",
+   "categories": [
+    "Product",
+    "BE"
+   ],
+   "risk": "Low",
+   "risk_reason": "A decision and SDK configuration review; no code in this plan.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": "Which SDKs are required while a user sits on the watchlist? Can analytics flush every 60 s or on background instead of immediately? Is VWO needed on this screen?",
+   "be_request": "Share each SDK's flush/poll configuration (CleverTap, MoEngage, AppsFlyer, VWO, Plotline, Protectt.ai) and whether it can be changed from the dashboard.",
+   "files": [],
+   "current": "X3 counted 9 domains first seen within the 60 s capture while the app was idle on Bench 20. The SDKs are initialised at app level (apps/super_app); this plan did not analyse their initialisation line by line.",
+   "steps": [
+    "Collect each SDK's network behaviour with PCAPdroid per SDK domain.",
+    "Product decides; BE/marketing change dashboard settings where possible."
+   ],
+   "after_code": {
+    "code": "// No code in this plan."
+   },
+   "safety": [
+    "No change until decided."
+   ],
+   "regression_checks": [
+    "Analytics dashboards still receive events after any configuration change."
+   ],
+   "after_improvement": "Fewer third-party connections from the idle watchlist; exact count after the decision.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "I2",
+   "title": "Check what the Plotline widgets do on each open",
+   "summary": "The watchlist mounts PlotlineWidget(watchlistBannerKey) above the list on every open and wraps the kebab in a Plotline PView. Check with the Plotline SDK whether these widgets fetch or report on mount when no campaign targets them, and render them only when a campaign is active if they do.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Low",
+   "risk_reason": "Investigation first; any change keeps the widgets when a campaign is configured.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": "May the watchlist banner slot be skipped when no Plotline campaign targets it?",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+     "lines": "968-978",
+     "change": "Investigate; if needed, build PlotlineWidget only when a campaign exists for the key."
+    },
+    {
+     "path": "packages/trader_watchlist/lib/ui/watchlist_options/ui/watchlist_options_bottomsheet.dart",
+     "lines": "41-46",
+     "change": "Investigate the PView wrapper on the kebab."
+    }
+   ],
+   "current": "When the header part of the body builds for WatchlistLoaded, it inserts const PlotlineWidget(valueKey: PlotLineWidgetKey.watchlistBannerKey). The kebab menu is wrapped in PView(valueKey: PlotlineCampaignEvent.kebabMenuInWatchlistEvent). Plotline is one of the 9 third-party domains seen in X3. Whether these widgets cause network calls is not visible from this repo (SDK code) (verify with PCAPdroid filtered to Plotline's domain while opening the tab).",
+   "steps": [
+    "Open/close the tab 10 times with PCAPdroid filtered to Plotline; count requests.",
+    "If requests scale with opens, ask Plotline for a campaign-presence check and gate the widget."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+    "lines": "967-978",
+    "code": "if (state.watchlistList.isNotEmpty) {\n  return Column(\n    children: [\n      MOSpacing.verticalSpace6,\n      const PlotlineWidget(valueKey: PlotLineWidgetKey.watchlistBannerKey),\n      if (state.viewMode != WLViewModes.editView &&\n          state.viewMode != WLViewModes.manageWatchlistView)\n        WatchlistHeader(watchlistHeaderInfo: _getWatchlistHeaderInfo(state)),\n      // No divider under the pill rail — Figma has no rule\n      // between the watchlist pills and the scrip list.\n    ],\n  );"
+   },
+   "after_code": {
+    "code": "// Only if I2's check shows per-open requests:\nif (PlotlineCampaigns.hasActive(PlotLineWidgetKey.watchlistBannerKey))\n  const PlotlineWidget(valueKey: PlotLineWidgetKey.watchlistBannerKey),"
+   },
+   "safety": [
+    "Campaigns keep working; only an empty slot is skipped."
+   ],
+   "regression_checks": [
+    "A test campaign on the watchlist banner still shows."
+   ],
+   "after_improvement": "Fewer Plotline requests per watchlist open, if the check confirms them.",
+   "depends_on": [],
+   "verify": true
+  }
+ ]
+}

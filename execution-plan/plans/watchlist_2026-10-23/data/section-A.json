@@ -1,0 +1,377 @@
+{
+ "section": "A",
+ "title": "Idle CPU and redraw on the watchlist",
+ "intro": "With nobody touching the phone, the Bench 20 watchlist keeps about two CPU cores busy and redraws about 40 times a second, and half of those frames are identical to the one before. The code shows three sources: every price packet rebuilds a whole row even when the shown numbers did not change, the header wealth tile rebuilds on every holdings tick and animates every 3 s, and new tick streams are created on every build. These changes keep every price, colour and animation the user sees, but stop the work that draws the same pixels again.",
+ "measured": [
+  {
+   "metric": "CPU on idle Bench 20, live market (C1)",
+   "current": "185.5 % of one core (runs 110.5, 185.5, 188.7)",
+   "expected": "a large drop from A2–A6; target ≤ 60 % after A2–A6 and C1, to be confirmed by re-measuring"
+  },
+  {
+   "metric": "Idle redraw, 60 s no input (U4)",
+   "current": "39.6 fps",
+   "expected": "≈ 10–20 fps with A2–A4; ≈ 5 fps or less if Product also approves A5"
+  },
+  {
+   "metric": "Idle frames identical to the previous frame (U5)",
+   "current": "49.5 %",
+   "expected": "≤ 10 % (A2, A4)"
+  },
+  {
+   "metric": "Battery, 15-min equivalent (C2)",
+   "current": "76.5 mAh",
+   "expected": "not used as a target: the benchmark notes say C2 does not discriminate between apps"
+  }
+ ],
+ "changes": [
+  {
+   "id": "A1",
+   "title": "Add a watchlist performance flag holder",
+   "summary": "Several changes in this plan alter visible behaviour or the tick path. Add one small class that reads their Remote Config switches, with every switch defaulting to today's behaviour.",
+   "categories": [
+    "FE",
+    "BE"
+   ],
+   "risk": "Low",
+   "risk_reason": "New file with read-only getters. Nothing reads it until the other changes land, and every getter returns false (today's behaviour) on any error.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Create these Remote Config booleans, all default false: watchlist_row_tick_diff_enabled (A2), watchlist_offline_banner_enabled (E1), watchlist_stale_marker_enabled (E2), watchlist_keep_list_on_reopen_enabled (G3), watchlist_quick_actions_enabled (H1), watchlist_name_select_on_focus_enabled (J1). Roll out to internal users first, then 10 %, 50 %, 100 % after each re-measure.",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/helper/watchlist_perf_flags.dart",
+     "lines": "new",
+     "change": "New: static getters that read FirebaseRemoteConfig.instance.getBool(...) in try/catch; any failure returns false."
+    },
+    {
+     "path": "packages/trader_watchlist/pubspec.yaml",
+     "lines": "12-22",
+     "change": "Declare firebase_remote_config with the version the workspace already resolves (trader_widgets uses ^6.5.3); it is only transitive today."
+    }
+   ],
+   "current": "trader_watchlist has no feature flags. Remote Config is already used elsewhere with the same pattern (mo_mutual_funds/lib/mf_common/utils/mf_feature_flags.dart), and firebase_remote_config reaches this package only through trader_widgets.",
+   "steps": [
+    "Create helper/watchlist_perf_flags.dart with a private constructor and one static bool getter per key.",
+    "Each getter: return a @visibleForTesting override if set, else FirebaseRemoteConfig.instance.getBool(key) inside try/catch returning false.",
+    "Add firebase_remote_config to pubspec.yaml at the version already in pubspec.lock; run melos bootstrap and confirm the lock does not change."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/pubspec.yaml",
+    "lines": "12-22",
+    "code": "dependencies:\n  mosl_socket_security:\n    git:\n      url: https://github.com/mofsl-flutter/mosl_socket_security.git\n      ref: develop/sprint_18_release\n  flutter:\n    sdk: flutter\n  flutter_bloc: ^9.1.1\n  get: ^4.7.3\n  injectable: ^2.7.1+4\n  build_runner: ^2.11.1"
+   },
+   "after_code": {
+    "code": "import 'package:firebase_remote_config/firebase_remote_config.dart';\nimport 'package:flutter/foundation.dart';\n\nclass WatchlistPerfFlags {\n  const WatchlistPerfFlags._();\n\n  @visibleForTesting\n  static Map<String, bool> debugOverrides = {};\n\n  static bool _read(String key) {\n    final o = debugOverrides[key];\n    if (o != null) return o;\n    try {\n      return FirebaseRemoteConfig.instance.getBool(key);\n    } catch (_) {\n      return false; // today's behaviour\n    }\n  }\n\n  static bool get rowTickDiff => _read('watchlist_row_tick_diff_enabled');\n  static bool get offlineBanner => _read('watchlist_offline_banner_enabled');\n  static bool get staleMarker => _read('watchlist_stale_marker_enabled');\n  static bool get keepListOnReopen => _read('watchlist_keep_list_on_reopen_enabled');\n  static bool get quickActions => _read('watchlist_quick_actions_enabled');\n  static bool get nameSelectOnFocus => _read('watchlist_name_select_on_focus_enabled');\n}"
+   },
+   "safety": [
+    "Every getter defaults to false, which is today's behaviour.",
+    "A Remote Config failure reads as false.",
+    "No caller exists until the dependent changes ship."
+   ],
+   "regression_checks": [
+    "App starts with Remote Config unreachable (airplane mode at launch): watchlist behaves as today.",
+    "pubspec.lock is unchanged after bootstrap."
+   ],
+   "after_improvement": "No direct effect. Lets A2, E1, E2, G3, H1 and J1 ship dark and be rolled back without a release.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "A2",
+   "title": "Rebuild a row only when its shown values change",
+   "summary": "Each price packet rebuilds the whole row, even when the packet only changed a field the row does not show. Pass a packet to the row only when the text it displays would change, and keep the static left column out of the tick builder.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Touches the live-price rendering path of every row. With the flag off the code path is today's. With it on, a missed field in the comparison key would leave that field stale until the next price change, so the key must cover every value the row renders.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+     "lines": "176-190, 971-1009",
+     "change": "Filter widget.streamCtrl through a last-shown-key check; build the name/badge column once outside the StreamBuilder."
+    }
+   ],
+   "current": "The StreamBuilder wraps the row's whole Column: name, exchange badge, MTF chip, the animated 'Updates' chip, SVG arrow, CasSessionRow, performance and P&L lines. The broadcaster keeps one BroadcastResponse2 per symbol, mutates it in place and re-publishes it for every packet (mosl_broadcaster broadcast_channel.dart 243-251), so every packet for a symbol rebuilds the whole row, including packets that change only volume, OI or depth when the row shows LTP and change. These rebuilds draw the same pixels, which matches the 49.5 % identical idle frames (verify the share with the DevTools rebuild counter).",
+   "steps": [
+    "Add String _shownKey(BroadcastResponse2 t): ltpValue, changeValue, perChangeValue and the sign of change; plus bid/ask/high/low/volume strings when isDetailedView; plus casRefPrice, inductiveEquilibriumPrice, inductiveEquilibriumQty, imbalanceQuantity, imbalanceQuantityFromMktOrder (CasSessionRow and the CAS view read these); plus ltp when holdings or performance lines are shown.",
+    "Because the same object is mutated in place, compare against the last key string, not the last object (Stream.distinct on the object would never fire).",
+    "In initState and didUpdateWidget (when streamCtrl changes) build _filtered = widget.streamCtrl.where((t) { final k = _shownKey(t); if (k == _lastKey) return false; _lastKey = k; return true; }). Use it only when WatchlistPerfFlags.rowTickDiff is true.",
+    "Move the left Flexible (name, badges, MTF, Updates chip) out of the builder so it is built once per row build, and keep only rightColumnLtp and the lower lines inside the StreamBuilder.",
+    "Reset _lastKey when isDetailedView, showPerformance or isCasScrip change."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+    "lines": "176-190",
+    "code": "child: Container(\n  color: context.surfaceBackgroundNeutralSubtle,\n  margin:\n      MOSpacing.paddingHorizontal16.add(MOSpacing.paddingVertical12),\n  child: StreamBuilder<BroadcastResponse2>(\n    stream: widget.streamCtrl,\n    builder: (context, snapshot) {\n      BroadcastResponse2 bdData = snapshot.data ??\n          BroadCastHelper.instance.getBroadcastResponse(\n              widget.watchlistScrip.scrip.toBroadcastSymbol());\n      Color? changeColor = bdData.change < 0\n          ? context.feedbackTextNegativeNormal\n          : context.feedbackTextPositiveNormal;\n      setMapEvents(widget.watchlistScrip.eventFlags.toInt());\n      return Column("
+   },
+   "after_code": {
+    "code": "String? _lastKey;\nlate Stream<BroadcastResponse2> _ticks;\n\nString _shownKey(BroadcastResponse2 t) {\n  final b = StringBuffer()\n    ..write(t.ltpValue)..write('|')..write(t.changeValue)\n    ..write('|')..write(t.perChangeValue)..write('|')..write(t.change < 0);\n  if (widget.isDetailedView) {\n    b..write(t.firstDepth.buyPriceStr)..write(t.firstDepth.sellPriceStr)\n     ..write(t.highValue)..write(t.lowValue)..write(t.volumeValue);\n  }\n  b..write(t.casRefPrice)..write(t.inductiveEquilibriumPrice)\n   ..write(t.inductiveEquilibriumQty)..write(t.imbalanceQuantity)\n   ..write(t.imbalanceQuantityFromMktOrder);\n  return b.toString();\n}\n\nvoid _wireTicks() {\n  _lastKey = null;\n  _ticks = WatchlistPerfFlags.rowTickDiff\n      ? widget.streamCtrl.where((t) {\n          final k = _shownKey(t);\n          if (k == _lastKey) return false;\n          _lastKey = k;\n          return true;\n        })\n      : widget.streamCtrl; // today's behaviour\n}\n// build: StreamBuilder(stream: _ticks, ...) around the price column only"
+   },
+   "safety": [
+    "Behind WatchlistPerfFlags.rowTickDiff (A1), default off.",
+    "The key includes every field the row renders, including the CAS fields read by CasSessionRow.",
+    "The first packet always passes (_lastKey starts null), so the initial render is unchanged."
+   ],
+   "regression_checks": [
+    "Prices, change and % update on Bench 20 in market hours, flag on and off.",
+    "Detailed view on: bid, ask, high, low, volume still update.",
+    "CAS-NSE / CAS-BSE lists and the pre-open session row still update.",
+    "Holdings watchlist: unrealised P&L line and the bottom P&L bar still update.",
+    "Show Performance on: performance % still updates.",
+    "Swipe Buy/Sell and tap to quote page still work."
+   ],
+   "after_improvement": "Rows rebuild only when a shown value changes. Expected to remove most identical idle frames (U5 49.5 % towards ≤ 10 %) and a share of C1; to be confirmed by re-measuring.",
+   "depends_on": [
+    "A1",
+    "A3"
+   ],
+   "verify": true
+  },
+  {
+   "id": "A3",
+   "title": "Reuse one tick stream per row",
+   "summary": "The listing creates a new filtered stream for every row on every build, so each row's StreamBuilder unsubscribes, resubscribes and replays the cached tick. Cache one stream per symbol in the listing state.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Same stream content (same filter, same startWith); only the object identity is kept across builds. Internal to the listing.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "257-258",
+     "change": "streamCtrl: _streamFor(watchistScrip.symbol) instead of onTickReceived(...)."
+    }
+   ],
+   "current": "onTickReceived builds helper.onStreamReceived().where(...).startWith(cached) each time it is called (trader_widgets StreamingBaseWidget.dart 54-59). It is called inside itemBuilder, so every list build hands each WatchlistItem a different Stream; StreamBuilder treats that as a new stream, cancels, resubscribes and immediately rebuilds with the cached value.",
+   "steps": [
+    "Add final Map<BroadcastSymbol, Stream<BroadcastResponse2>> _tickStreams = {} to _WatchlistListingState.",
+    "Stream<BroadcastResponse2> _streamFor(BroadcastSymbol s) => _tickStreams.putIfAbsent(s, () => onTickReceived(s)). The source is the broadcaster's PublishSubject, so the filtered stream is a broadcast stream and a remounted row can listen again (assert isBroadcast in a test).",
+    "In didUpdateWidget, drop entries for symbols no longer in watchistScrips."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+    "lines": "250-258",
+    "code": "watchlistScrip: watchistScrip,\nwatchlistScripData: widget.watchlistListingInfo\n    .watchistScripsData[index],\nshowPerformance:\n    widget.watchlistListingInfo.showPerformance,\nisPremade:\n    widget.watchlistListingInfo.isPremade,\nstreamCtrl:\n    onTickReceived(watchistScrip.symbol),"
+   },
+   "after_code": {
+    "code": "final Map<BroadcastSymbol, Stream<BroadcastResponse2>> _tickStreams = {};\n\nStream<BroadcastResponse2> _streamFor(BroadcastSymbol s) =>\n    _tickStreams.putIfAbsent(s, () => onTickReceived(s));\n\n@override\nvoid didUpdateWidget(covariant WatchlistListing old) {\n  super.didUpdateWidget(old);\n  final keep = widget.watchlistListingInfo.watchistScrips.map((e) => e.symbol).toSet();\n  _tickStreams.removeWhere((s, _) => !keep.contains(s));\n}\n\n// itemBuilder\nstreamCtrl: _streamFor(watchistScrip.symbol),"
+   },
+   "safety": [
+    "Same filter and same initial cached value as today.",
+    "StreamBuilder still cancels its own subscription when a row is disposed."
+   ],
+   "regression_checks": [
+    "Prices update on all rows after a sort, a pull-to-refresh and switching list tabs.",
+    "Adding and removing stocks: new rows tick, removed rows disappear."
+   ],
+   "after_improvement": "One fewer resubscribe and one fewer build per row on every list update (20 rows on Bench 20). Small on its own; it is also needed for A2 to keep its last key.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "A4",
+   "title": "Rebuild the wealth tile only when its text changes",
+   "summary": "The header wealth tile combines three portfolio streams that emit on every holdings tick, twice per tick, and rebuilds every time even though it shows rounded values. Add distinct on the values the tile actually displays.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Medium",
+   "risk_reason": "mo_app_bar is shared: the tile is shown in the landing header on every bottom tab. The displayed output is unchanged; only rebuilds with identical text are skipped. Needs a regression pass on the headers that show the tile.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart",
+     "lines": "86-101, 104-132",
+     "change": "Map the combined data to the tile list's display values and add .distinct() with a value comparison before the StreamBuilder."
+    }
+   ],
+   "current": "PortfolioSummaryService adds a new value to the MOFSL subject and then calls _updateOverallSummary on every holding P&L tick (portfolio_summary_service.dart 820-828). Rx.combineLatest3 therefore emits about twice per holdings tick, and the StreamBuilder rebuilds the tile, recomputes the tile list and rebuilds the PageView page. The test account holds stocks (the rows show holdings qty), so this runs all session (verify the emit rate with a counter).",
+   "steps": [
+    "Compute a small display record per emission: for each tile, title, formatted value and formatted % exactly as _ValueDisplay renders them.",
+    "Apply .distinct((a, b) => listEquals(a.keys, b.keys)) to _combinedStream before the StreamBuilder.",
+    "Keep the first emission unconditional so the tile still appears on first frame."
+   ],
+   "before_code": {
+    "path": "packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart",
+    "lines": "86-101",
+    "code": "// Combine all three streams into one using Rx.combineLatest3\n// This prevents triple rebuilds - widget only rebuilds once when any stream updates\n_combinedStream = Rx.combineLatest3<\n    PortfolioSummaryData,\n    ExternalPortfolioSummaryData,\n    OverallPortfolioSummaryData,\n    _CombinedPortfolioData>(\n  cubit.mofslStream,\n  cubit.externalStream,\n  cubit.overallStream,\n  (mofsl, external, overall) => _CombinedPortfolioData(\n    mofsl: mofsl,\n    external: external,\n    overall: overall,\n  ),\n);"
+   },
+   "after_code": {
+    "code": "_combinedStream = Rx.combineLatest3<PortfolioSummaryData,\n        ExternalPortfolioSummaryData, OverallPortfolioSummaryData,\n        _CombinedPortfolioData>(\n  cubit.mofslStream,\n  cubit.externalStream,\n  cubit.overallStream,\n  (mofsl, external, overall) => _CombinedPortfolioData(\n      mofsl: mofsl, external: external, overall: overall),\n).distinct((a, b) => _shownText(a) == _shownText(b));\n\n// Same rounding/formatting as _ValueDisplay, joined into one string.\nString _shownText(_CombinedPortfolioData d) => _getTilesFromPortfolioSummary(\n        mofsl: d.mofsl, external: d.external, overall: d.overall)\n    .map((t) => '${t.tileName}|${_fmtValue(t.value)}|${_fmtPct(t.percentageChange)}|${t.ctaText}')\n    .join(';');"
+   },
+   "safety": [
+    "The tile renders the same text; only rebuilds that would draw the same text are skipped.",
+    "First emission (seeded BehaviorSubject) always passes.",
+    "No API change for callers of WealthOverviewTile."
+   ],
+   "regression_checks": [
+    "Wealth tile values update during market hours on Home, Watchlist and Trades headers.",
+    "Tapping the tile still deep-links.",
+    "CTA tiles (no value) still show their CTA text."
+   ],
+   "after_improvement": "Removes most header rebuilds caused by holdings ticks on every tab, including the watchlist. Contributes to U5 and C1; size depends on the account's holdings (verify).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "A5",
+   "title": "Rotate the wealth tile less, or not on the watchlist",
+   "summary": "The wealth tile flips between MO Wealth and External Wealth every 3 s with a 500 ms animation, for as long as the header is mounted. Add an optional rotation interval and an opt-out to the shared widget, defaulting to today's 3 s, and let the landing header pass a slower value on the Watchlist tab once Product agrees.",
+   "categories": [
+    "FE-Shared",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes a visible animation in a shared header. New parameters default to today's values, so nothing changes until a caller opts in.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "On the Watchlist tab, may the wealth tile (MO Wealth / External Wealth) stop auto-rotating, or rotate every 10 s instead of every 3 s, or stop after 3 turns? Tapping and the content stay the same.",
+   "be_request": "Remote Config integer wealth_tile_rotation_seconds_watchlist, default 3 (today). 0 = no auto-rotation.",
+   "files": [
+    {
+     "path": "packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart",
+     "lines": "52-72, 269-275",
+     "change": "New optional parameter Duration autoRotateEvery = const Duration(seconds: 3) (Duration.zero = off) passed to _WealthOverviewTileContent and used by _startAutoScroll."
+    },
+    {
+     "path": "apps/super_app/lib/Investor/presentation/landingpage/landing_page_header/landingpage_header.dart",
+     "lines": "384-397",
+     "change": "Pass autoRotateEvery from Remote Config when bottomBarName is Watchlist; other tabs keep the default."
+    }
+   ],
+   "current": "_startAutoScroll starts Timer.periodic(3 s) and each tick calls animateToPage over 500 ms. There is no check for which tab is showing. On a 120 Hz display a 500 ms animation every 3 s is about 60 frames per 3 s, roughly 20 fps on average, which is about half of the 39.6 idle fps measured (verify by turning it off on a test build).",
+   "steps": [
+    "Add final Duration autoRotateEvery to WealthOverviewTile and _WealthOverviewTileContent, default Duration(seconds: 3).",
+    "In _startAutoScroll, return without a timer when autoRotateEvery == Duration.zero or tiles.length < 2; otherwise use autoRotateEvery.",
+    "In landingpage_header.dart, when widget.bottomBarName is the Watchlist tab, pass the Remote Config value; default 3 s keeps today's behaviour."
+   ],
+   "before_code": {
+    "path": "packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart",
+    "lines": "269-275",
+    "code": "void _startAutoScroll() {\n  _autoScrollTimer?.cancel(); // Cancel any existing timer\n  _autoScrollTimer = Timer.periodic(\n    const Duration(seconds: 3),\n    (_) => _animateToNextPage(),\n  );\n}"
+   },
+   "after_code": {
+    "code": "// WealthOverviewTile / _WealthOverviewTileContent\nfinal Duration autoRotateEvery; // default const Duration(seconds: 3)\n\nvoid _startAutoScroll() {\n  _autoScrollTimer?.cancel();\n  if (widget.autoRotateEvery == Duration.zero || widget.tiles.length < 2) {\n    _autoScrollTimer = null;\n    return;\n  }\n  _autoScrollTimer = Timer.periodic(\n    widget.autoRotateEvery,\n    (_) => _animateToNextPage(),\n  );\n}"
+   },
+   "safety": [
+    "Default parameter is today's 3 s, so every existing caller is unchanged.",
+    "Remote Config default 3 s; rollback is a config change.",
+    "Manual swipe/tap behaviour is not touched."
+   ],
+   "regression_checks": [
+    "Home, Portfolio, Trades headers still rotate every 3 s.",
+    "Watchlist header follows the configured value; 0 shows the first tile only.",
+    "Single-tile users: no timer, tile shown.",
+    "Coming back from a pushed route: rotation resumes at the configured rate."
+   ],
+   "after_improvement": "With rotation off on the watchlist, about 60 frames every 3 s disappear (≈ 20 fps of the 39.6 idle fps, to be confirmed); with a 10 s interval, about 70 % of them.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "A6",
+   "title": "Reuse tick streams in the indices rail",
+   "summary": "The indices rail in the watchlist header creates a new filtered tick stream for every index card on every build. Cache one stream per index symbol in the rail's state.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Internal to CommonIndicesShow (used by 8 call sites). Same stream content; only identity is kept across builds.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_home_market/lib/home/ui/widgets/commonindices_show.dart",
+     "lines": "436-441",
+     "change": "stream: _streamFor(indicesData.broadcastSymbol) backed by a Map in the state."
+    }
+   ],
+   "current": "_buildListItem returns StreamBuilder(stream: onTickReceived(symbol)) for each card. Every header rebuild hands each card a new stream, so each StreamBuilder resubscribes and replays the cached tick. Today the header rebuilds on every scroll frame (see C1), so this multiplies that cost; after C1 it mostly affects list updates.",
+   "steps": [
+    "Add a Map<BroadcastSymbol, Stream<BroadcastResponse2>> to CommonIndicesShowState.",
+    "Use putIfAbsent in _buildListItem; clear entries in _getIndicesList when the list changes."
+   ],
+   "before_code": {
+    "path": "packages/trader_home_market/lib/home/ui/widgets/commonindices_show.dart",
+    "lines": "436-441",
+    "code": "return StreamBuilder<BroadcastResponse2>(\n  stream: onTickReceived(indicesData.broadcastSymbol),\n  builder: (context, snapshot) {\n    final bdData = snapshot.data ??\n        BroadCastHelper.instance\n            .getBroadcastResponse(indicesData.broadcastSymbol);"
+   },
+   "after_code": {
+    "code": "final Map<BroadcastSymbol, Stream<BroadcastResponse2>> _tickStreams = {};\n\nStream<BroadcastResponse2> _streamFor(BroadcastSymbol s) =>\n    _tickStreams.putIfAbsent(s, () => onTickReceived(s));\n\nreturn StreamBuilder<BroadcastResponse2>(\n  stream: _streamFor(indicesData.broadcastSymbol),\n  builder: (context, snapshot) { /* unchanged */ },\n);"
+   },
+   "safety": [
+    "Same data and same first value as today.",
+    "No change to the widget's constructor."
+   ],
+   "regression_checks": [
+    "Indices rail ticks on Watchlist, Trades, Portfolio, Retail Portfolio and StratX.",
+    "Editing pinned indices updates the rail."
+   ],
+   "after_improvement": "Fewer resubscriptions per header build. Small alone; removes the multiplier on header rebuilds.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "A7",
+   "title": "Profile the remaining idle CPU before and after",
+   "summary": "Part of the 185.5 % CPU cannot be attributed from the code alone: socket packet parsing on the UI isolate, the texture compositing pass (C5) and the rise from 110.5 % to ~187 % between sessions. Capture a CPU profile of one idle minute before and after A2–A6 and C1.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Measurement only; no shipped code.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "mosl_broadcaster: lib/internal/broadcast_channel.dart",
+     "lines": "173-190",
+     "change": "No change; profile how much UI-isolate time packet parsing takes on Bench 20."
+    }
+   ],
+   "current": "handleSocketData parses every socket packet on the main isolate (dataMapper.map) and publishes each QuoteResponse. Every subscribed symbol in the app (watchlist rows, indices rail, holdings for the wealth tile) passes through it. C1 rose from 110.5 % in the 10-min first session to 185.5 % and 188.7 % later; the code does not tell whether that is market activity or accumulated listeners (B1, B5).",
+   "steps": [
+    "Profile build (flutter run --profile) on the OPPO, Bench 20, market hours, 60 s no input; DevTools CPU profiler and Performance tab with 'Track widget builds'.",
+    "Record: UI-thread share of parsing, number of row builds per second, raster time per frame.",
+    "Repeat after A2–A6 and C1; repeat a 10-min session to see whether CPU still rises over time.",
+    "If parsing dominates, raise moving parsing to a background isolate with the mosl_broadcaster owners (separate change)."
+   ],
+   "before_code": {
+    "path": "mosl_broadcaster: lib/internal/broadcast_channel.dart",
+    "lines": "173-190",
+    "code": "@override\nvoid handleSocketData(Uint8List data) {\n  final BroadcastType bType = (super.options as BroadcastOptions).bType;\n  final List<dynamic> responses = bType == BroadcastType.regular\n      ? dataMapper.map(data)\n      : dataMapper.mapTBT(data);\n  for (final dynamic event in responses) {\n    if (event is QuoteResponse) {\n      onBroadcast(event);\n    } else if (event is AuthResponse) {\n      onLogin(event);\n    } else if (event is AuthResponseTBT) {\n      onLoginTBT(event);\n    } else if (event is SessionResponse) {\n      onSessionChanged(event);\n    }\n  }\n}"
+   },
+   "after_code": {
+    "code": "// No code change. Record in the plan folder:\n// - idle CPU % (adb top) and U4/U5 before and after A2-A6, C1\n// - DevTools: builds/s of WatchlistItem, CommonIndicesShow, WealthOverviewTile\n// - share of UI isolate time in BroadcastDataMapper.map"
+   },
+   "safety": [
+    "No production change."
+   ],
+   "regression_checks": [
+    "None."
+   ],
+   "after_improvement": "Tells which of the remaining causes is worth a structural change, so the team does not guess.",
+   "depends_on": [],
+   "verify": true
+  }
+ ]
+}

@@ -1,0 +1,284 @@
+{
+ "section": "C",
+ "title": "Scrolling and frame delivery",
+ "intro": "Scrolling the watchlist is free of jank (0.34 % janky frames, p99 15 ms), but on the 120 Hz screen only 75.3 frames per second reach the display, about 63 % of what the screen offers. The code shows that every frame of a downward scroll rebuilds the whole header, that the whole screen rebuilds on each list update, and that the list re-measures itself. The app also renders through a texture view on Android 11 and later, which adds a second composition pass. These changes remove per-frame work and test the render mode behind a flag.",
+ "measured": [
+  {
+   "metric": "Average FPS while scrolling Bench 20 (S5)",
+   "current": "75.3 fps at 120 Hz (~63 % of offered frames)",
+   "expected": "≥ 110 fps at 120 Hz after C1–C4; C5 decides whether full 120 fps is reachable (verify)"
+  },
+  {
+   "metric": "Janky frames while scrolling (S1)",
+   "current": "0.34 %",
+   "expected": "unchanged or lower"
+  },
+  {
+   "metric": "Frame duration p50 / p90 / p99 (S2–S4)",
+   "current": "6.3 / 9.7 / 15 ms",
+   "expected": "≈ same or lower; header rebuild removal mainly cuts UI-thread work on reverse scroll"
+  },
+  {
+   "metric": "Tab switch gesture jank (S7)",
+   "current": "1.62 %",
+   "expected": "keep ≤ 2 % (regression guard)"
+  }
+ ],
+ "changes": [
+  {
+   "id": "C1",
+   "title": "Emit the header pin state only when it changes",
+   "summary": "On every frame of a downward scroll the listing calls togglePersistHeader(false), which emits a new state and rebuilds the whole header (landing header, wealth tile, indices rail, tab bar, banners). Emit only when the value actually changes.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "The pinned value is not used by the header any more (the header is a SliverToBoxAdapter, see the comment at watchlist_screen.dart 877-882), so skipping identical emits cannot change what is drawn.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "101-104",
+     "change": "Return early when shouldPersist equals the current value."
+    },
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "161-165, 463-465",
+     "change": "No change needed after the guard; optional: call only on ScrollStartNotification."
+    }
+   ],
+   "current": "The NotificationListener in the listing calls watchlistCubit.togglePersistHeader(false) for every ScrollUpdateNotification while the user scrolls down (and for every ScrollUpdateNotification in heatmap view). togglePersistHeader always calls safeEmit(TogglePersistHeader(...)); WatchlistState classes have no == and safeEmit does not dedupe, so Bloc emits each time. The header BlocBuilder (watchlist_screen.dart 588-597, buildWhen: current is TogglePersistHeader) then rebuilds watchlistHeaderAppBar, which rebuilds the landing header, CommonIndicesShow (with new tick streams, A6), the curve tab bar and CrossSellingBanners, once per frame.",
+   "steps": [
+    "In togglePersistHeader: if (_shouldPinnedHeader == shouldPersist && state is TogglePersistHeader) return; then assign and emit.",
+    "Keep the first emit (from initState) so the header BlocBuilder still gets a TogglePersistHeader state.",
+    "Add K3 (unit test: one emit per value change)."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+    "lines": "101-104",
+    "code": "void togglePersistHeader(bool shouldPersist) {\n  _shouldPinnedHeader = shouldPersist;\n  safeEmit(TogglePersistHeader(_shouldPinnedHeader));\n}"
+   },
+   "after_code": {
+    "code": "void togglePersistHeader(bool shouldPersist) {\n  if (_shouldPinnedHeader == shouldPersist && state is TogglePersistHeader) {\n    return; // nothing changed; avoid rebuilding the whole header\n  }\n  _shouldPinnedHeader = shouldPersist;\n  safeEmit(TogglePersistHeader(_shouldPinnedHeader));\n}"
+   },
+   "safety": [
+    "The header does not read the pin value for layout (it never pins), so the output is identical.",
+    "Other states still flow; only repeated identical TogglePersistHeader emits are skipped."
+   ],
+   "regression_checks": [
+    "Scroll down and up on Bench 20: header scrolls away and comes back as today.",
+    "Switch to Option List and Comm. List and back.",
+    "Wealth tile and indices rail keep updating while the list is still."
+   ],
+   "after_improvement": "Removes a full header rebuild from every frame of a downward scroll. Expected to be the largest code-side gain for S5 (75.3 fps towards ≥ 110 fps at 120 Hz, to be confirmed).",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "C2",
+   "title": "Stop rebuilding the whole screen on each list update",
+   "summary": "The outer BlocBuilder rebuilds the NestedScrollView, header and body on every WatchlistListLoaded, although the list has its own BlocBuilder for that state. Rebuild the outer tree only for tab changes and the initial state.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes which state rebuilds the screen shell. The outer builder also derives the selected tab and the coach-mark absorb state; those must still follow ToggleTabView and the initial load.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+     "lines": "549-554",
+     "change": "Drop WatchlistListLoaded from the outer buildWhen, after confirming nothing in _body reads that state."
+    }
+   ],
+   "current": "buildWhen returns true for WatchlistListLoaded, WatchlistInitial and ToggleTabView. One open emits WatchlistListLoaded at least twice (cache result, then network result; more with sort or a default-watchlist refetch), and each one rebuilds the whole NestedScrollView and header before the inner list BlocBuilder (lines 985-990) rebuilds the list again. _body only passes the state through; the list content comes from the inner builder (verify there is no other reader).",
+   "steps": [
+    "Search _body and its children for reads of the outer `state` other than ToggleTabView index; there should be none.",
+    "Change buildWhen to current is WatchlistInitial || current is ToggleTabView.",
+    "Keep the Comm. List and Option List branches unchanged (they do not depend on WatchlistListLoaded)."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+    "lines": "546-554",
+    "code": "body: Obx(() {\n  return AbsorbPointer(\n    absorbing: BottomNavCubit.isTutorialCoachMarkShowing.value,\n    child: BlocBuilder<WatchlistCubit, WatchlistState>(\n        buildWhen: (previous, current) {\n      return (current is WatchlistListLoaded ||\n          current is WatchlistInitial ||\n          current is ToggleTabView);\n    }, builder: (context, state) {"
+   },
+   "after_code": {
+    "code": "child: BlocBuilder<WatchlistCubit, WatchlistState>(\n    buildWhen: (previous, current) {\n  // The list has its own BlocBuilder for WatchlistListLoaded; the shell\n  // only needs to follow tab changes and the first state.\n  return current is WatchlistInitial || current is ToggleTabView;\n}, builder: (context, state) {"
+   },
+   "safety": [
+    "The inner list BlocBuilder still rebuilds on every WatchlistListLoaded.",
+    "Tab switching still rebuilds the shell."
+   ],
+   "regression_checks": [
+    "Open the tab cold and warm; list appears.",
+    "Switch list chips, sort, refresh, add/remove a stock.",
+    "Switch to Option List / Comm. List and back; post-market default tab.",
+    "Coach marks on first use still block taps while shown."
+   ],
+   "after_improvement": "One full header rebuild fewer per list update (2+ per open). Helps opening and the first scroll after a load.",
+   "depends_on": [
+    "C1"
+   ],
+   "verify": true
+  },
+  {
+   "id": "C3",
+   "title": "Remove shrinkWrap from the bounded list",
+   "summary": "The watchlist ListView uses shrinkWrap: true although it sits in an Expanded with a bounded height. Remove shrinkWrap (and from the heatmap GridView) so the viewport keeps a fixed size.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Layout change in the main list. With a bounded parent the visible result should be the same; short lists must still allow pull-to-refresh (AlwaysScrollableScrollPhysics is kept).",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "194-200, 483-486",
+     "change": "shrinkWrap: false (default) on ListView.separated and GridView.builder."
+    }
+   ],
+   "current": "ListView.separated(physics: AlwaysScrollableScrollPhysics(), shrinkWrap: true, controller: _scrollController, ...) inside Expanded > InkWell > ... > RefreshIndicator. A shrink-wrapping viewport sizes itself from its content, so any change in a row's height (detailed view, Updates chip animation, performance line) re-lays out the viewport.",
+   "steps": [
+    "Remove shrinkWrap: true from the ListView.separated.",
+    "Remove shrinkWrap: true from the heatmap GridView.builder.",
+    "Check the trailing 'Add Scrip' row and pull-to-refresh on a 1-stock list."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+    "lines": "194-200",
+    "code": "child: ListView.separated(\n  physics: const AlwaysScrollableScrollPhysics(),\n  shrinkWrap: true,\n  controller: _scrollController,\n  itemCount:\n      widget.watchlistListingInfo.watchistScrips.length +\n          (_showAddScripButton(watchlistCubit) ? 1 : 0),"
+   },
+   "after_code": {
+    "code": "child: ListView.separated(\n  physics: const AlwaysScrollableScrollPhysics(),\n  controller: _scrollController,\n  itemCount:\n      widget.watchlistListingInfo.watchistScrips.length +\n          (_showAddScripButton(watchlistCubit) ? 1 : 0),"
+   },
+   "safety": [
+    "Parent height is bounded (Expanded), so the list fills the same area.",
+    "Physics unchanged, so pull-to-refresh works on short lists."
+   ],
+   "regression_checks": [
+    "Lists with 1, 5, 20 and 100 stocks; Add Scrip row at the end.",
+    "Pull to refresh.",
+    "Heatmap view.",
+    "Header scroll-away behaviour in the NestedScrollView."
+   ],
+   "after_improvement": "Less layout work per frame when row heights change. Small but steady contribution to S5 (verify with the Performance overlay).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "C4",
+   "title": "Resubscribe only when the visible rows change",
+   "summary": "At every scroll end, and at every scroll-metrics change at the top, the listing walks all row keys, builds the visible symbol list and sends a subscribe request, which the broadcaster also writes to its log. Do it only when the visible set differs from the last one.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Same subscription content whenever the visible set changes; identical repeat requests are skipped. The broadcaster already ignores empty diff requests, so the socket sees the same result.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "166-178",
+     "change": "Compare the new visible set with the last one; call startQuoteStreaming only when different."
+    }
+   ],
+   "current": "On ScrollEndNotification or isFirstScroll(notification) (any ScrollMetricsNotification with extentBefore == 0) the listener calls getVisible, which reads every row's rect through its GlobalKey, then startQuoteStreaming(subscriptionList). In the broadcaster, subscribeQuote writes 'Subscribe Quote: <all symbols>' to the app log and computes subscription diffs (mosl_broadcaster broadcast_controller.dart 248-258) every time.",
+   "steps": [
+    "Keep Set<BroadcastSymbol> _lastVisible in the state.",
+    "After computing subscriptionList, if setEquals(_lastVisible, subscriptionList.toSet()) return; else store and call startQuoteStreaming.",
+    "Clear _lastVisible when the watchlist changes (didUpdateWidget with a different watchlistInfo.id) so a new list always subscribes."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+    "lines": "166-178",
+    "code": "if (notification is ScrollEndNotification ||\n    isFirstScroll(notification)) {\n  final visibleArea = getVisible(\n      listViewKey, widget.watchlistListingInfo.watchistScrips);\n\n  final shouldMergeSymbols = watchlistCubit.isHoldingSelected &&\n      watchlistCubit.symbols.isNotEmpty;\n  final List<BroadcastSymbol> subscriptionList =\n      shouldMergeSymbols\n          ? {...visibleArea, ...watchlistCubit.symbols}.toList()\n          : visibleArea;\n  startQuoteStreaming(subscriptionList);\n}"
+   },
+   "after_code": {
+    "code": "Set<BroadcastSymbol> _lastVisible = {};\n\nif (notification is ScrollEndNotification || isFirstScroll(notification)) {\n  final visibleArea = getVisible(_listViewKey, widget.watchlistListingInfo.watchistScrips);\n  final shouldMergeSymbols = watchlistCubit.isHoldingSelected && watchlistCubit.symbols.isNotEmpty;\n  final List<BroadcastSymbol> subscriptionList = shouldMergeSymbols\n      ? {...visibleArea, ...watchlistCubit.symbols}.toList()\n      : visibleArea;\n  final next = subscriptionList.toSet();\n  if (!setEquals(next, _lastVisible)) {\n    _lastVisible = next;\n    startQuoteStreaming(subscriptionList);\n  }\n}"
+   },
+   "safety": [
+    "A changed visible set always subscribes, exactly as today.",
+    "Resume after background still uses resumeStreaming from the base class."
+   ],
+   "regression_checks": [
+    "Scroll to the bottom and back: newly visible rows tick.",
+    "Switch list chips: the new list's visible rows tick.",
+    "Holdings list: P&L symbols remain subscribed."
+   ],
+   "after_improvement": "Fewer rect walks, subscribe packets and log writes during and after scrolling. Small CPU and network gain.",
+   "depends_on": [
+    "B3"
+   ],
+   "verify": false
+  },
+  {
+   "id": "C5",
+   "title": "Test SurfaceView rendering on Android 11+",
+   "summary": "MainActivity forces RenderMode.texture on Android 11 and later. Texture mode copies each Flutter frame into a texture that the Activity's own view hierarchy then composites, which matches the benchmark seeing RISE frames under ViewRootImpl and only ~63 % of 120 Hz frames delivered while frame times are low. Add a flag that selects RenderMode.surface and A/B it.",
+   "categories": [
+    "FE-Shared",
+    "BE"
+   ],
+   "risk": "High",
+   "risk_reason": "App shell change for every screen. The code comment says surface mode was 'crash-prone' on Android 10 and below, and platform views (WebView charts, payment SDKs) behave differently between modes. Must ship behind a flag, default texture, with a full regression pass.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": "Remote Config boolean android_render_mode_surface (default false). Because the render mode is read when the Activity is created, Dart stores the fetched value in SharedPreferences and Kotlin reads it on the next launch.",
+   "files": [
+    {
+     "path": "apps/super_app/android/app/src/main/kotlin/com/mosl/mobile/MainActivity.kt",
+     "lines": "120-130",
+     "change": "On Android 11+, return RenderMode.surface when the stored flag is true; otherwise texture as today."
+    },
+    {
+     "path": "apps/super_app/lib/core/app_initializer.dart",
+     "lines": "new code",
+     "change": "After Remote Config activation, write android_render_mode_surface to SharedPreferences."
+    }
+   ],
+   "current": "getRenderMode() returns RenderMode.surface only for SDK <= Q and RenderMode.texture otherwise, overriding the manifest's surface value. The test phone runs Android 17, so RISE renders through a FlutterTextureView. The benchmark notes show RISE frames attributed to VRI-com.mosl.mobile/MainActivity, 75.3 fps at a granted 120 Hz, S1 0.34 % and p50 6.3 ms: frames are fast but not every vsync produces a displayed frame (verify with a SurfaceFlinger trace in both modes).",
+   "steps": [
+    "Kotlin: read a boolean from FlutterSharedPreferences in getRenderMode(), the same way PushFanoutFlags.kt already reads a Remote Config value written by push_fanout_remote_config_service.dart; SDK <= Q keeps surface; SDK > Q returns surface only when the flag is true.",
+    "Dart: after Remote Config fetch/activate, persist the flag for the next launch.",
+    "Internal build: compare S5, S1, U4 and C1 on the OPPO in both modes; check WebView chart, payment and KYC SDK screens, screenshots/FLAG_SECURE, split screen and keyboard insets.",
+    "Roll out only if S5 improves and crash-free sessions stay flat."
+   ],
+   "before_code": {
+    "path": "apps/super_app/android/app/src/main/kotlin/com/mosl/mobile/MainActivity.kt",
+    "lines": "120-130",
+    "code": "override fun getRenderMode(): RenderMode {\n    return if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {\n        // Force surface for Android 10 and below (known crash-prone)\n        Log.d(\"MainActivity\", \"Using RenderMode.surface for Android 10 and below\")\n        RenderMode.surface\n    } else {\n        // Allow texture for Android 11+ (better performance, lower crash risk)\n        Log.d(\"MainActivity\", \"Using RenderMode.texture for Android 11+\")\n        RenderMode.texture\n    }\n}"
+   },
+   "after_code": {
+    "code": "override fun getRenderMode(): RenderMode {\n    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {\n        return RenderMode.surface // unchanged\n    }\n    val prefs = getSharedPreferences(\"FlutterSharedPreferences\", MODE_PRIVATE)\n    val useSurface = prefs.getBoolean(\"flutter.android_render_mode_surface\", false)\n    return if (useSurface) RenderMode.surface else RenderMode.texture // default = today\n}"
+   },
+   "safety": [
+    "Default false keeps texture mode for everyone.",
+    "Takes effect on the next cold start only, never mid-session.",
+    "Rollback is a Remote Config change plus one relaunch."
+   ],
+   "regression_checks": [
+    "Full app regression on Android 11–17 with the flag on: WebView charts, payment gateway, KYC, PDF viewers, video, maps.",
+    "FLAG_SECURE still blocks screenshots.",
+    "Keyboard insets and split screen.",
+    "Crash-free sessions in Firebase for the rollout cohort."
+   ],
+   "after_improvement": "If texture mode is the cause, S5 could approach the granted 120 Hz with lower raster/RenderThread CPU (also helps C1). Unknown until the A/B on the device.",
+   "depends_on": [],
+   "verify": true
+  }
+ ]
+}

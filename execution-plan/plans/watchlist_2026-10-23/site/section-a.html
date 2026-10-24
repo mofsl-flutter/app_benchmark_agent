@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A · Idle CPU and redraw on the watchlist</title>
+<meta name="description" content="With nobody touching the phone, the Bench 20 watchlist keeps about two CPU cores busy and redraws about 40 times a second, and half of those frames are identical to the one before. The code shows three sources: every price packet rebuilds a whole row even when the shown numbers did not change, the header wealth tile rebuilds on every holdings tick and animates every 3 s, and new tick streams are created on every build. These changes keep every price, colour and animation the user sees, but stop the work that draws the same pixels again.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html" class="current"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html" class="current"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section A</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Idle CPU and redraw on the watchlist</h1>
+        <p class="lede">With nobody touching the phone, the Bench 20 watchlist keeps about two CPU cores busy and redraws about 40 times a second, and half of those frames are identical to the one before. The code shows three sources: every price packet rebuilds a whole row even when the shown numbers did not change, the header wealth tile rebuilds on every holdings tick and animates every 3 s, and new tick streams are created on every build. These changes keep every price, colour and animation the user sees, but stop the work that draws the same pixels again.</p>
+        <div class="meta"><span><b>7</b> changes</span><span><b>4</b> low · <b>3</b> medium · <b>0</b> high risk</span><span>FE <b>3</b> · FE · shared <b>4</b> · BE <b>1</b> · Product <b>1</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>CPU on idle Bench 20, live market (C1)</td><td>185.5 % of one core (runs 110.5, 185.5, 188.7)</td><td><b>a large drop from A2–A6; target ≤ 60 % after A2–A6 and C1, to be confirmed by re-measuring</b></td></tr><tr><td>Idle redraw, 60 s no input (U4)</td><td>39.6 fps</td><td><b>≈ 10–20 fps with A2–A4; ≈ 5 fps or less if Product also approves A5</b></td></tr><tr><td>Idle frames identical to the previous frame (U5)</td><td>49.5 %</td><td><b>≤ 10 % (A2, A4)</b></td></tr><tr><td>Battery, 15-min equivalent (C2)</td><td>76.5 mAh</td><td><b>not used as a target: the benchmark notes say C2 does not discriminate between apps</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-a.html#A1" title="Add a watchlist performance flag holder">A1</a></td><td>Add a watchlist performance flag holder</td><td><span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-BE">BE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-a.html#A2" title="Rebuild a row only when its shown values change">A2</a></td><td>Rebuild a row only when its shown values change</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">M · 2–4 days</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-a.html#A3" title="Reuse one tick stream per row">A3</a></td><td>Reuse one tick stream per row</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-a.html#A4" title="Rebuild the wealth tile only when its text changes">A4</a></td><td>Rebuild the wealth tile only when its text changes</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-a.html#A5" title="Rotate the wealth tile less, or not on the watchlist">A5</a></td><td>Rotate the wealth tile less, or not on the watchlist</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span><span class="tag cat-Product">Product</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td>Yes</td></tr><tr><td class="nowrap"><a href="section-a.html#A6" title="Reuse tick streams in the indices rail">A6</a></td><td>Reuse tick streams in the indices rail</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-a.html#A7" title="Profile the remaining idle CPU before and after">A7</a></td><td>Profile the remaining idle CPU before and after</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="A1" data-item data-cat="FE BE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">A1</span><h3>Add a watchlist performance flag holder</h3></div>
+    <p class="summary">Several changes in this plan alter visible behaviour or the tick path. Add one small class that reads their Remote Config switches, with every switch defaulting to today&#x27;s behaviour.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-BE">BE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>trader_watchlist has no feature flags. Remote Config is already used elsewhere with the same pattern (mo_mutual_funds/lib/mf_common/utils/mf_feature_flags.dart), and firebase_remote_config reaches this package only through trader_widgets.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Create helper/watchlist_perf_flags.dart with a private constructor and one static bool getter per key.</li><li>Each getter: return a @visibleForTesting override if set, else FirebaseRemoteConfig.instance.getBool(key) inside try/catch returning false.</li><li>Add firebase_remote_config to pubspec.yaml at the version already in pubspec.lock; run melos bootstrap and confirm the lock does not change.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/helper/watchlist_perf_flags.dart</td><td class="nowrap">new</td><td>New: static getters that read FirebaseRemoteConfig.instance.getBool(...) in try/catch; any failure returns false.</td></tr><tr><td class="path">packages/trader_watchlist/pubspec.yaml</td><td class="nowrap">12-22</td><td>Declare firebase_remote_config with the version the workspace already resolves (trader_widgets uses ^6.5.3); it is only transitive today.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/pubspec.yaml:12-22</span></div><pre><code>dependencies:
+  mosl_socket_security:
+    git:
+      url: https:<span class="t-c">//github.com/mofsl-flutter/mosl_socket_security.git</span>
+      ref: develop/sprint_18_release
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^<span class="t-n">9.1</span>.<span class="t-n">1</span>
+  <span class="t-k">get</span>: ^<span class="t-n">4.7</span>.<span class="t-n">3</span>
+  injectable: ^<span class="t-n">2.7</span>.<span class="t-n">1</span>+<span class="t-n">4</span>
+  build_runner: ^<span class="t-n">2.11</span>.<span class="t-n">1</span></code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">import</span> <span class="t-s">&#x27;package:firebase_remote_config/firebase_remote_config.dart&#x27;</span>;
+<span class="t-k">import</span> <span class="t-s">&#x27;package:flutter/foundation.dart&#x27;</span>;
+
+<span class="t-k">class</span> WatchlistPerfFlags {
+  <span class="t-k">const</span> WatchlistPerfFlags._();
+
+  <span class="t-k">@visibleForTesting</span>
+  <span class="t-k">static</span> Map&lt;String, bool&gt; debugOverrides = {};
+
+  <span class="t-k">static</span> bool _read(String key) {
+    <span class="t-k">final</span> o = debugOverrides[key];
+    <span class="t-k">if</span> (o != <span class="t-k">null</span>) <span class="t-k">return</span> o;
+    <span class="t-k">try</span> {
+      <span class="t-k">return</span> FirebaseRemoteConfig.instance.getBool(key);
+    } <span class="t-k">catch</span> (_) {
+      <span class="t-k">return</span> <span class="t-k">false</span>; <span class="t-c">// today&#x27;s behaviour</span>
+    }
+  }
+
+  <span class="t-k">static</span> bool <span class="t-k">get</span> rowTickDiff =&gt; _read(<span class="t-s">&#x27;watchlist_row_tick_diff_enabled&#x27;</span>);
+  <span class="t-k">static</span> bool <span class="t-k">get</span> offlineBanner =&gt; _read(<span class="t-s">&#x27;watchlist_offline_banner_enabled&#x27;</span>);
+  <span class="t-k">static</span> bool <span class="t-k">get</span> staleMarker =&gt; _read(<span class="t-s">&#x27;watchlist_stale_marker_enabled&#x27;</span>);
+  <span class="t-k">static</span> bool <span class="t-k">get</span> keepListOnReopen =&gt; _read(<span class="t-s">&#x27;watchlist_keep_list_on_reopen_enabled&#x27;</span>);
+  <span class="t-k">static</span> bool <span class="t-k">get</span> quickActions =&gt; _read(<span class="t-s">&#x27;watchlist_quick_actions_enabled&#x27;</span>);
+  <span class="t-k">static</span> bool <span class="t-k">get</span> nameSelectOnFocus =&gt; _read(<span class="t-s">&#x27;watchlist_name_select_on_focus_enabled&#x27;</span>);
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Every getter defaults to false, which is today&#x27;s behaviour.</li><li>A Remote Config failure reads as false.</li><li>No caller exists until the dependent changes ship.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>App starts with Remote Config unreachable (airplane mode at launch): watchlist behaves as today.</li><li>pubspec.lock is unchanged after bootstrap.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> New file with read-only getters. Nothing reads it until the other changes land, and every getter returns false (today&#x27;s behaviour) on any error.</p>
+    <div class="callouts"><div class="callout be"><h4>Backend request</h4><p>Create these Remote Config booleans, all default false: watchlist_row_tick_diff_enabled (A2), watchlist_offline_banner_enabled (E1), watchlist_stale_marker_enabled (E2), watchlist_keep_list_on_reopen_enabled (G3), watchlist_quick_actions_enabled (H1), watchlist_name_select_on_focus_enabled (J1). Roll out to internal users first, then 10 %, 50 %, 100 % after each re-measure.</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>No direct effect. Lets A2, E1, E2, G3, H1 and J1 ship dark and be rolled back without a release.</p></div>
+  </div>
+</article><article class="card change" id="A2" data-item data-cat="FE" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">A2</span><h3>Rebuild a row only when its shown values change</h3></div>
+    <p class="summary">Each price packet rebuilds the whole row, even when the packet only changed a field the row does not show. Pass a packet to the row only when the text it displays would change, and keep the static left column out of the tick builder.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">M · 2–4 days</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span><span class="idlinks">Depends on <a href="section-a.html#A1" title="Add a watchlist performance flag holder">A1</a> <a href="section-a.html#A3" title="Reuse one tick stream per row">A3</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>The StreamBuilder wraps the row&#x27;s whole Column: name, exchange badge, MTF chip, the animated &#x27;Updates&#x27; chip, SVG arrow, CasSessionRow, performance and P&amp;L lines. The broadcaster keeps one BroadcastResponse2 per symbol, mutates it in place and re-publishes it for every packet (mosl_broadcaster broadcast_channel.dart 243-251), so every packet for a symbol rebuilds the whole row, including packets that change only volume, OI or depth when the row shows LTP and change. These rebuilds draw the same pixels, which matches the 49.5 % identical idle frames (verify the share with the DevTools rebuild counter).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add String _shownKey(BroadcastResponse2 t): ltpValue, changeValue, perChangeValue and the sign of change; plus bid/ask/high/low/volume strings when isDetailedView; plus casRefPrice, inductiveEquilibriumPrice, inductiveEquilibriumQty, imbalanceQuantity, imbalanceQuantityFromMktOrder (CasSessionRow and the CAS view read these); plus ltp when holdings or performance lines are shown.</li><li>Because the same object is mutated in place, compare against the last key string, not the last object (Stream.distinct on the object would never fire).</li><li>In initState and didUpdateWidget (when streamCtrl changes) build _filtered = widget.streamCtrl.where((t) { final k = _shownKey(t); if (k == _lastKey) return false; _lastKey = k; return true; }). Use it only when WatchlistPerfFlags.rowTickDiff is true.</li><li>Move the left Flexible (name, badges, MTF, Updates chip) out of the builder so it is built once per row build, and keep only rightColumnLtp and the lower lines inside the StreamBuilder.</li><li>Reset _lastKey when isDetailedView, showPerformance or isCasScrip change.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart</td><td class="nowrap">176-190, 971-1009</td><td>Filter widget.streamCtrl through a last-shown-key check; build the name/badge column once outside the StreamBuilder.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart:176-190</span></div><pre><code>child: Container(
+  color: context.surfaceBackgroundNeutralSubtle,
+  margin:
+      MOSpacing.paddingHorizontal16.add(MOSpacing.paddingVertical12),
+  child: StreamBuilder&lt;BroadcastResponse2&gt;(
+    stream: widget.streamCtrl,
+    builder: (context, snapshot) {
+      BroadcastResponse2 bdData = snapshot.data ??
+          BroadCastHelper.instance.getBroadcastResponse(
+              widget.watchlistScrip.scrip.toBroadcastSymbol());
+      Color? changeColor = bdData.change &lt; <span class="t-n">0</span>
+          ? context.feedbackTextNegativeNormal
+          : context.feedbackTextPositiveNormal;
+      setMapEvents(widget.watchlistScrip.eventFlags.toInt());
+      <span class="t-k">return</span> Column(</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>String? _lastKey;
+<span class="t-k">late</span> Stream&lt;BroadcastResponse2&gt; _ticks;
+
+String _shownKey(BroadcastResponse2 t) {
+  <span class="t-k">final</span> b = StringBuffer()
+    ..write(t.ltpValue)..write(<span class="t-s">&#x27;|&#x27;</span>)..write(t.changeValue)
+    ..write(<span class="t-s">&#x27;|&#x27;</span>)..write(t.perChangeValue)..write(<span class="t-s">&#x27;|&#x27;</span>)..write(t.change &lt; <span class="t-n">0</span>);
+  <span class="t-k">if</span> (widget.isDetailedView) {
+    b..write(t.firstDepth.buyPriceStr)..write(t.firstDepth.sellPriceStr)
+     ..write(t.highValue)..write(t.lowValue)..write(t.volumeValue);
+  }
+  b..write(t.casRefPrice)..write(t.inductiveEquilibriumPrice)
+   ..write(t.inductiveEquilibriumQty)..write(t.imbalanceQuantity)
+   ..write(t.imbalanceQuantityFromMktOrder);
+  <span class="t-k">return</span> b.toString();
+}
+
+<span class="t-k">void</span> _wireTicks() {
+  _lastKey = <span class="t-k">null</span>;
+  _ticks = WatchlistPerfFlags.rowTickDiff
+      ? widget.streamCtrl.where((t) {
+          <span class="t-k">final</span> k = _shownKey(t);
+          <span class="t-k">if</span> (k == _lastKey) <span class="t-k">return</span> <span class="t-k">false</span>;
+          _lastKey = k;
+          <span class="t-k">return</span> <span class="t-k">true</span>;
+        })
+      : widget.streamCtrl; <span class="t-c">// today&#x27;s behaviour</span>
+}
+<span class="t-c">// build: StreamBuilder(stream: _ticks, ...) around the price column only</span></code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Behind WatchlistPerfFlags.rowTickDiff (A1), default off.</li><li>The key includes every field the row renders, including the CAS fields read by CasSessionRow.</li><li>The first packet always passes (_lastKey starts null), so the initial render is unchanged.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Prices, change and % update on Bench 20 in market hours, flag on and off.</li><li>Detailed view on: bid, ask, high, low, volume still update.</li><li>CAS-NSE / CAS-BSE lists and the pre-open session row still update.</li><li>Holdings watchlist: unrealised P&amp;L line and the bottom P&amp;L bar still update.</li><li>Show Performance on: performance % still updates.</li><li>Swipe Buy/Sell and tap to quote page still work.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Touches the live-price rendering path of every row. With the flag off the code path is today&#x27;s. With it on, a missed field in the comparison key would leave that field stale until the next price change, so the key must cover every value the row renders.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Rows rebuild only when a shown value changes. Expected to remove most identical idle frames (U5 49.5 % towards ≤ 10 %) and a share of C1; to be confirmed by re-measuring.</p></div>
+  </div>
+</article><article class="card change" id="A3" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">A3</span><h3>Reuse one tick stream per row</h3></div>
+    <p class="summary">The listing creates a new filtered stream for every row on every build, so each row&#x27;s StreamBuilder unsubscribes, resubscribes and replays the cached tick. Cache one stream per symbol in the listing state.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>onTickReceived builds helper.onStreamReceived().where(...).startWith(cached) each time it is called (trader_widgets StreamingBaseWidget.dart 54-59). It is called inside itemBuilder, so every list build hands each WatchlistItem a different Stream; StreamBuilder treats that as a new stream, cancels, resubscribes and immediately rebuilds with the cached value.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add final Map&lt;BroadcastSymbol, Stream&lt;BroadcastResponse2&gt;&gt; _tickStreams = {} to _WatchlistListingState.</li><li>Stream&lt;BroadcastResponse2&gt; _streamFor(BroadcastSymbol s) =&gt; _tickStreams.putIfAbsent(s, () =&gt; onTickReceived(s)). The source is the broadcaster&#x27;s PublishSubject, so the filtered stream is a broadcast stream and a remounted row can listen again (assert isBroadcast in a test).</li><li>In didUpdateWidget, drop entries for symbols no longer in watchistScrips.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/widgets/watchlist_listing.dart</td><td class="nowrap">257-258</td><td>streamCtrl: _streamFor(watchistScrip.symbol) instead of onTickReceived(...).</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/widgets/watchlist_listing.dart:250-258</span></div><pre><code>watchlistScrip: watchistScrip,
+watchlistScripData: widget.watchlistListingInfo
+    .watchistScripsData[index],
+showPerformance:
+    widget.watchlistListingInfo.showPerformance,
+isPremade:
+    widget.watchlistListingInfo.isPremade,
+streamCtrl:
+    onTickReceived(watchistScrip.symbol),</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">final</span> Map&lt;BroadcastSymbol, Stream&lt;BroadcastResponse2&gt;&gt; _tickStreams = {};
+
+Stream&lt;BroadcastResponse2&gt; _streamFor(BroadcastSymbol s) =&gt;
+    _tickStreams.putIfAbsent(s, () =&gt; onTickReceived(s));
+
+<span class="t-k">@override</span>
+<span class="t-k">void</span> didUpdateWidget(<span class="t-k">covariant</span> WatchlistListing old) {
+  <span class="t-k">super</span>.didUpdateWidget(old);
+  <span class="t-k">final</span> keep = widget.watchlistListingInfo.watchistScrips.map((e) =&gt; e.symbol).toSet();
+  _tickStreams.removeWhere((s, _) =&gt; !keep.contains(s));
+}
+
+<span class="t-c">// itemBuilder</span>
+streamCtrl: _streamFor(watchistScrip.symbol),</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Same filter and same initial cached value as today.</li><li>StreamBuilder still cancels its own subscription when a row is disposed.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Prices update on all rows after a sort, a pull-to-refresh and switching list tabs.</li><li>Adding and removing stocks: new rows tick, removed rows disappear.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Same stream content (same filter, same startWith); only the object identity is kept across builds. Internal to the listing.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>One fewer resubscribe and one fewer build per row on every list update (20 rows on Bench 20). Small on its own; it is also needed for A2 to keep its last key.</p></div>
+  </div>
+</article><article class="card change" id="A4" data-item data-cat="FE-Shared" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">A4</span><h3>Rebuild the wealth tile only when its text changes</h3></div>
+    <p class="summary">The header wealth tile combines three portfolio streams that emit on every holdings tick, twice per tick, and rebuilds every time even though it shows rounded values. Add distinct on the values the tile actually displays.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>PortfolioSummaryService adds a new value to the MOFSL subject and then calls _updateOverallSummary on every holding P&amp;L tick (portfolio_summary_service.dart 820-828). Rx.combineLatest3 therefore emits about twice per holdings tick, and the StreamBuilder rebuilds the tile, recomputes the tile list and rebuilds the PageView page. The test account holds stocks (the rows show holdings qty), so this runs all session (verify the emit rate with a counter).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Compute a small display record per emission: for each tile, title, formatted value and formatted % exactly as _ValueDisplay renders them.</li><li>Apply .distinct((a, b) =&gt; listEquals(a.keys, b.keys)) to _combinedStream before the StreamBuilder.</li><li>Keep the first emission unconditional so the tile still appears on first frame.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart</td><td class="nowrap">86-101, 104-132</td><td>Map the combined data to the tile list&#x27;s display values and add .distinct() with a value comparison before the StreamBuilder.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart:86-101</span></div><pre><code><span class="t-c">// Combine all three streams into one using Rx.combineLatest3</span>
+<span class="t-c">// This prevents triple rebuilds - widget only rebuilds once when any stream updates</span>
+_combinedStream = Rx.combineLatest3&lt;
+    PortfolioSummaryData,
+    ExternalPortfolioSummaryData,
+    OverallPortfolioSummaryData,
+    _CombinedPortfolioData&gt;(
+  cubit.mofslStream,
+  cubit.externalStream,
+  cubit.overallStream,
+  (mofsl, <span class="t-k">external</span>, overall) =&gt; _CombinedPortfolioData(
+    mofsl: mofsl,
+    <span class="t-k">external</span>: <span class="t-k">external</span>,
+    overall: overall,
+  ),
+);</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>_combinedStream = Rx.combineLatest3&lt;PortfolioSummaryData,
+        ExternalPortfolioSummaryData, OverallPortfolioSummaryData,
+        _CombinedPortfolioData&gt;(
+  cubit.mofslStream,
+  cubit.externalStream,
+  cubit.overallStream,
+  (mofsl, <span class="t-k">external</span>, overall) =&gt; _CombinedPortfolioData(
+      mofsl: mofsl, <span class="t-k">external</span>: <span class="t-k">external</span>, overall: overall),
+).distinct((a, b) =&gt; _shownText(a) == _shownText(b));
+
+<span class="t-c">// Same rounding/formatting as _ValueDisplay, joined into one string.</span>
+String _shownText(_CombinedPortfolioData d) =&gt; _getTilesFromPortfolioSummary(
+        mofsl: d.mofsl, <span class="t-k">external</span>: d.<span class="t-k">external</span>, overall: d.overall)
+    .map((t) =&gt; <span class="t-s">&#x27;${t.tileName}|${_fmtValue(t.value)}|${_fmtPct(t.percentageChange)}|${t.ctaText}&#x27;</span>)
+    .join(<span class="t-s">&#x27;;&#x27;</span>);</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>The tile renders the same text; only rebuilds that would draw the same text are skipped.</li><li>First emission (seeded BehaviorSubject) always passes.</li><li>No API change for callers of WealthOverviewTile.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Wealth tile values update during market hours on Home, Watchlist and Trades headers.</li><li>Tapping the tile still deep-links.</li><li>CTA tiles (no value) still show their CTA text.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> mo_app_bar is shared: the tile is shown in the landing header on every bottom tab. The displayed output is unchanged; only rebuilds with identical text are skipped. Needs a regression pass on the headers that show the tile.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Removes most header rebuilds caused by holdings ticks on every tab, including the watchlist. Contributes to U5 and C1; size depends on the account&#x27;s holdings (verify).</p></div>
+  </div>
+</article><article class="card change" id="A5" data-item data-cat="FE-Shared Product" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">A5</span><h3>Rotate the wealth tile less, or not on the watchlist</h3></div>
+    <p class="summary">The wealth tile flips between MO Wealth and External Wealth every 3 s with a 500 ms animation, for as long as the header is mounted. Add an optional rotation interval and an opt-out to the shared widget, defaulting to today&#x27;s 3 s, and let the landing header pass a slower value on the Watchlist tab once Product agrees.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span><span class="tag cat-Product">Product</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">Visible to users</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>_startAutoScroll starts Timer.periodic(3 s) and each tick calls animateToPage over 500 ms. There is no check for which tab is showing. On a 120 Hz display a 500 ms animation every 3 s is about 60 frames per 3 s, roughly 20 fps on average, which is about half of the 39.6 idle fps measured (verify by turning it off on a test build).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add final Duration autoRotateEvery to WealthOverviewTile and _WealthOverviewTileContent, default Duration(seconds: 3).</li><li>In _startAutoScroll, return without a timer when autoRotateEvery == Duration.zero or tiles.length &lt; 2; otherwise use autoRotateEvery.</li><li>In landingpage_header.dart, when widget.bottomBarName is the Watchlist tab, pass the Remote Config value; default 3 s keeps today&#x27;s behaviour.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart</td><td class="nowrap">52-72, 269-275</td><td>New optional parameter Duration autoRotateEvery = const Duration(seconds: 3) (Duration.zero = off) passed to _WealthOverviewTileContent and used by _startAutoScroll.</td></tr><tr><td class="path">apps/super_app/lib/Investor/presentation/landingpage/landing_page_header/landingpage_header.dart</td><td class="nowrap">384-397</td><td>Pass autoRotateEvery from Remote Config when bottomBarName is Watchlist; other tabs keep the default.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart:269-275</span></div><pre><code><span class="t-k">void</span> _startAutoScroll() {
+  _autoScrollTimer?.cancel(); <span class="t-c">// Cancel any existing timer</span>
+  _autoScrollTimer = Timer.periodic(
+    <span class="t-k">const</span> Duration(seconds: <span class="t-n">3</span>),
+    (_) =&gt; _animateToNextPage(),
+  );
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-c">// WealthOverviewTile / _WealthOverviewTileContent</span>
+<span class="t-k">final</span> Duration autoRotateEvery; <span class="t-c">// default const Duration(seconds: 3)</span>
+
+<span class="t-k">void</span> _startAutoScroll() {
+  _autoScrollTimer?.cancel();
+  <span class="t-k">if</span> (widget.autoRotateEvery == Duration.zero || widget.tiles.length &lt; <span class="t-n">2</span>) {
+    _autoScrollTimer = <span class="t-k">null</span>;
+    <span class="t-k">return</span>;
+  }
+  _autoScrollTimer = Timer.periodic(
+    widget.autoRotateEvery,
+    (_) =&gt; _animateToNextPage(),
+  );
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Default parameter is today&#x27;s 3 s, so every existing caller is unchanged.</li><li>Remote Config default 3 s; rollback is a config change.</li><li>Manual swipe/tap behaviour is not touched.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Home, Portfolio, Trades headers still rotate every 3 s.</li><li>Watchlist header follows the configured value; 0 shows the first tile only.</li><li>Single-tile users: no timer, tile shown.</li><li>Coming back from a pushed route: rotation resumes at the configured rate.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Changes a visible animation in a shared header. New parameters default to today&#x27;s values, so nothing changes until a caller opts in.</p>
+    <div class="callouts two"><div class="callout prod"><h4>Product decision needed</h4><p>On the Watchlist tab, may the wealth tile (MO Wealth / External Wealth) stop auto-rotating, or rotate every 10 s instead of every 3 s, or stop after 3 turns? Tapping and the content stay the same.</p></div><div class="callout be"><h4>Backend request</h4><p>Remote Config integer wealth_tile_rotation_seconds_watchlist, default 3 (today). 0 = no auto-rotation.</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>With rotation off on the watchlist, about 60 frames every 3 s disappear (≈ 20 fps of the 39.6 idle fps, to be confirmed); with a 10 s interval, about 70 % of them.</p></div>
+  </div>
+</article><article class="card change" id="A6" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">A6</span><h3>Reuse tick streams in the indices rail</h3></div>
+    <p class="summary">The indices rail in the watchlist header creates a new filtered tick stream for every index card on every build. Cache one stream per index symbol in the rail&#x27;s state.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>_buildListItem returns StreamBuilder(stream: onTickReceived(symbol)) for each card. Every header rebuild hands each card a new stream, so each StreamBuilder resubscribes and replays the cached tick. Today the header rebuilds on every scroll frame (see C1), so this multiplies that cost; after C1 it mostly affects list updates.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add a Map&lt;BroadcastSymbol, Stream&lt;BroadcastResponse2&gt;&gt; to CommonIndicesShowState.</li><li>Use putIfAbsent in _buildListItem; clear entries in _getIndicesList when the list changes.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_home_market/lib/home/ui/widgets/commonindices_show.dart</td><td class="nowrap">436-441</td><td>stream: _streamFor(indicesData.broadcastSymbol) backed by a Map in the state.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_home_market/lib/home/ui/widgets/commonindices_show.dart:436-441</span></div><pre><code><span class="t-k">return</span> StreamBuilder&lt;BroadcastResponse2&gt;(
+  stream: onTickReceived(indicesData.broadcastSymbol),
+  builder: (context, snapshot) {
+    <span class="t-k">final</span> bdData = snapshot.data ??
+        BroadCastHelper.instance
+            .getBroadcastResponse(indicesData.broadcastSymbol);</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">final</span> Map&lt;BroadcastSymbol, Stream&lt;BroadcastResponse2&gt;&gt; _tickStreams = {};
+
+Stream&lt;BroadcastResponse2&gt; _streamFor(BroadcastSymbol s) =&gt;
+    _tickStreams.putIfAbsent(s, () =&gt; onTickReceived(s));
+
+<span class="t-k">return</span> StreamBuilder&lt;BroadcastResponse2&gt;(
+  stream: _streamFor(indicesData.broadcastSymbol),
+  builder: (context, snapshot) { <span class="t-c">/* unchanged */</span> },
+);</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Same data and same first value as today.</li><li>No change to the widget&#x27;s constructor.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Indices rail ticks on Watchlist, Trades, Portfolio, Retail Portfolio and StratX.</li><li>Editing pinned indices updates the rail.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Internal to CommonIndicesShow (used by 8 call sites). Same stream content; only identity is kept across builds.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Fewer resubscriptions per header build. Small alone; removes the multiplier on header rebuilds.</p></div>
+  </div>
+</article><article class="card change" id="A7" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">A7</span><h3>Profile the remaining idle CPU before and after</h3></div>
+    <p class="summary">Part of the 185.5 % CPU cannot be attributed from the code alone: socket packet parsing on the UI isolate, the texture compositing pass (C5) and the rise from 110.5 % to ~187 % between sessions. Capture a CPU profile of one idle minute before and after A2–A6 and C1.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>handleSocketData parses every socket packet on the main isolate (dataMapper.map) and publishes each QuoteResponse. Every subscribed symbol in the app (watchlist rows, indices rail, holdings for the wealth tile) passes through it. C1 rose from 110.5 % in the 10-min first session to 185.5 % and 188.7 % later; the code does not tell whether that is market activity or accumulated listeners (B1, B5).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Profile build (flutter run --profile) on the OPPO, Bench 20, market hours, 60 s no input; DevTools CPU profiler and Performance tab with &#x27;Track widget builds&#x27;.</li><li>Record: UI-thread share of parsing, number of row builds per second, raster time per frame.</li><li>Repeat after A2–A6 and C1; repeat a 10-min session to see whether CPU still rises over time.</li><li>If parsing dominates, raise moving parsing to a background isolate with the mosl_broadcaster owners (separate change).</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">mosl_broadcaster: lib/internal/broadcast_channel.dart</td><td class="nowrap">173-190</td><td>No change; profile how much UI-isolate time packet parsing takes on Bench 20.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">mosl_broadcaster: lib/internal/broadcast_channel.dart:173-190</span></div><pre><code><span class="t-k">@override</span>
+<span class="t-k">void</span> handleSocketData(Uint8List data) {
+  <span class="t-k">final</span> BroadcastType bType = (<span class="t-k">super</span>.options <span class="t-k">as</span> BroadcastOptions).bType;
+  <span class="t-k">final</span> List&lt;<span class="t-k">dynamic</span>&gt; responses = bType == BroadcastType.regular
+      ? dataMapper.map(data)
+      : dataMapper.mapTBT(data);
+  <span class="t-k">for</span> (<span class="t-k">final</span> <span class="t-k">dynamic</span> event <span class="t-k">in</span> responses) {
+    <span class="t-k">if</span> (event <span class="t-k">is</span> QuoteResponse) {
+      onBroadcast(event);
+    } <span class="t-k">else</span> <span class="t-k">if</span> (event <span class="t-k">is</span> AuthResponse) {
+      onLogin(event);
+    } <span class="t-k">else</span> <span class="t-k">if</span> (event <span class="t-k">is</span> AuthResponseTBT) {
+      onLoginTBT(event);
+    } <span class="t-k">else</span> <span class="t-k">if</span> (event <span class="t-k">is</span> SessionResponse) {
+      onSessionChanged(event);
+    }
+  }
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-c">// No code change. Record in the plan folder:</span>
+<span class="t-c">// - idle CPU % (adb top) and U4/U5 before and after A2-A6, C1</span>
+<span class="t-c">// - DevTools: builds/s of WatchlistItem, CommonIndicesShow, WealthOverviewTile</span>
+<span class="t-c">// - share of UI isolate time in BroadcastDataMapper.map</span></code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>No production change.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>None.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Measurement only; no shipped code.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Tells which of the remaining causes is worth a structural change, so the team does not guess.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="index.html"><span class="k">← Back</span><span class="t">Overview</span></a><a class="card next" href="section-b.html"><span class="k">Next →</span><span class="t">B · Memory and leaks</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

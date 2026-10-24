@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J · Creation flow and accessibility</title>
+<meta name="description" content="Creating Bench 20 showed a prefilled name that must be cleared, no confirmation when a stock is added, a header that shifts while the wealth tile rotates, and two icons that screen readers cannot name. These are small fixes; the visible ones are behind flags.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html" class="current"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html" class="current"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section J</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Creation flow and accessibility</h1>
+        <p class="lede">Creating Bench 20 showed a prefilled name that must be cleared, no confirmation when a stock is added, a header that shifts while the wealth tile rotates, and two icons that screen readers cannot name. These are small fixes; the visible ones are behind flags.</p>
+        <div class="meta"><span><b>5</b> changes</span><span><b>4</b> low · <b>1</b> medium · <b>0</b> high risk</span><span>FE <b>2</b> · FE · shared <b>3</b> · Product <b>2</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>Taps to create a list</td><td>4 + clear prefilled name</td><td><b>4 (J1)</b></td></tr><tr><td>Confirmation on add</td><td>none visible</td><td><b>short confirmation (J2)</b></td></tr><tr><td>Accessibility labels on list menu and add icon</td><td>missing</td><td><b>present (J3, J4)</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-j.html#J1" title="Select the prefilled name so typing replaces it">J1</a></td><td>Select the prefilled name so typing replaces it</td><td><span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-Product">Product</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td>Yes</td></tr><tr><td class="nowrap"><a href="section-j.html#J2" title="Confirm when a stock is added from search">J2</a></td><td>Confirm when a stock is added from search</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span><span class="tag cat-Product">Product</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td>Yes</td></tr><tr><td class="nowrap"><a href="section-j.html#J3" title="Label the list-menu icon for screen readers">J3</a></td><td>Label the list-menu icon for screen readers</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-j.html#J4" title="Label the add/remove icon in search results">J4</a></td><td>Label the add/remove icon in search results</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-j.html#J5" title="Keep the header height fixed while the wealth tile changes">J5</a></td><td>Keep the header height fixed while the wealth tile changes</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td>Yes</td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="J1" data-item data-cat="FE Product" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">J1</span><h3>Select the prefilled name so typing replaces it</h3></div>
+    <p class="summary">The Create New Watchlist name field is prefilled with &#x27;WatchList N&#x27; and the cursor goes to the end, so users must delete it first. Select the whole text when the field gets focus, so typing replaces it and leaving it keeps the default.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span><span class="tag cat-Product">Product</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">Visible to users</span></span><span class="idlinks">Depends on <a href="section-a.html#A1" title="Add a watchlist performance flag holder">A1</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>initState computes &#x27;WatchList ${n}&#x27; and creates TextEditingController(text: watchlistName). Nothing selects the text, so typing appends to it.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add FocusNode _nameFocus; listener: if hasFocus and flag on, _controller.selection = TextSelection(baseOffset: 0, extentOffset: _controller.text.length).</li><li>Pass focusNode to the TextField; dispose it.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/widgets/add_new_watchlist/add_new_watchlist.dart</td><td class="nowrap">53-60, 210-218</td><td>Add a FocusNode; on focus, set controller.selection to the full text.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/widgets/add_new_watchlist/add_new_watchlist.dart:53-60</span></div><pre><code><span class="t-k">@override</span>
+<span class="t-k">void</span> initState() {
+  <span class="t-k">super</span>.initState();
+  getWatchlistName();
+  _controller = TextEditingController(text: watchlistName);
+  tabController =
+      TabController(length: <span class="t-n">2</span>, vsync: <span class="t-k">this</span>, initialIndex: selectedTab);
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">final</span> FocusNode _nameFocus = FocusNode();
+
+<span class="t-k">@override</span>
+<span class="t-k">void</span> initState() {
+  <span class="t-k">super</span>.initState();
+  getWatchlistName();
+  _controller = TextEditingController(text: watchlistName);
+  _nameFocus.addListener(() {
+    <span class="t-k">if</span> (_nameFocus.hasFocus &amp;&amp; WatchlistPerfFlags.nameSelectOnFocus) {
+      _controller.selection =
+          TextSelection(baseOffset: <span class="t-n">0</span>, extentOffset: _controller.text.length);
+    }
+  });
+  tabController = TabController(length: <span class="t-n">2</span>, vsync: <span class="t-k">this</span>, initialIndex: selectedTab);
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Behind a flag, default off.</li><li>Name rules (5–20 chars, unique) unchanged.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Tap field and type: name replaced.</li><li>Create without typing: &#x27;WatchList N&#x27; created.</li><li>Readymade tab unaffected.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Text-field focus behaviour inside one sheet. Default name and validation unchanged. Behind WatchlistPerfFlags.nameSelectOnFocus.</p>
+    <div class="callouts"><div class="callout prod"><h4>Product decision needed</h4><p>Keep the &#x27;WatchList N&#x27; default but select it on focus so typing replaces it (instead of an empty field with the default as hint)?</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>One fewer action per custom watchlist.</p></div>
+  </div>
+</article><article class="card change" id="J2" data-item data-cat="FE-Shared Product" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">J2</span><h3>Confirm when a stock is added from search</h3></div>
+    <p class="summary">Adding a stock from the add-scrip search only turns the icon into a tick; there is no message. Show a short positive snackbar &#x27;Added to &lt;watchlist&gt;&#x27; on success, behind a flag in trader_search.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span><span class="tag cat-Product">Product</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">Visible to users</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>On a successful addScripAPI the row sets isTick = true and calls setState; the cubit shows snackbars only for errors (dashboard_section_cubit.dart 312-342). The benchmark recorded no confirmation in RISE.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add the snackbar after isTick = true when the flag is on.</li><li>Use the watchlist name already passed to addScripAPI.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_search/lib/ui/widgets/search_result_item_widget.dart</td><td class="nowrap">577-589</td><td>On isSuccess == true, MOSnackbarService.showPositive(context, message: &#x27;Added to ${watchListName}&#x27;) when the flag is on.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_search/lib/ui/widgets/search_result_item_widget.dart:577-589</span></div><pre><code>bool? isSuccess = <span class="t-k">await</span> searchDashBoardCubit.addScripAPI(
+    context,
+    widget.searchResultItemData.scrip.id,
+    watchListId,
+    widget.searchResultItemData.watchListName);
+<span class="t-k">if</span> (isSuccess == <span class="t-k">true</span>) {
+  isTick = <span class="t-k">true</span>;
+  showLoading = <span class="t-k">false</span>;
+  setState(() {});
+} <span class="t-k">else</span> {
+  showLoading = <span class="t-k">false</span>;
+  setState(() {});
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">if</span> (isSuccess == <span class="t-k">true</span>) {
+  isTick = <span class="t-k">true</span>;
+  showLoading = <span class="t-k">false</span>;
+  setState(() {});
+  <span class="t-k">if</span> (SearchFlags.addConfirmation &amp;&amp; context.mounted) {
+    MOSnackbarService.showPositive(context,
+        message: <span class="t-s">&#x27;Added to ${widget.searchResultItemData.watchListName}&#x27;</span>);
+  }
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Behind a flag, default off.</li><li>API call and tick state unchanged.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Add 20 stocks in a row: one confirmation each, no stacking that hides the list.</li><li>General search add icon behaves the same.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> trader_search is a separate shared module; the result row is used in general search too. Visible change, behind a Remote Config flag read in trader_search, default off.</p>
+    <div class="callouts two"><div class="callout prod"><h4>Product decision needed</h4><p>After adding a stock to a watchlist from search, show a 2-second confirmation &#x27;Added to Bench 20&#x27;? Also on remove (&#x27;Removed from ...&#x27;)?</p></div><div class="callout be"><h4>Backend request</h4><p>Remote Config boolean search_add_confirmation_enabled (default false).</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>Users see that the add worked.</p></div>
+  </div>
+</article><article class="card change" id="J3" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">J3</span><h3>Label the list-menu icon for screen readers</h3></div>
+    <p class="summary">The kebab that opens Info / Sort / Manage is an InkWell around an icon with no semantic label. Wrap it in Semantics(button: true, label: &#x27;Watchlist options&#x27;).</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>build returns PView(child: InkWell(onTap: onClickMoreIcon, child: Container(... MOIcon(menu-circle-vertical) ...))). No Semantics, tooltip or semanticLabel anywhere in trader_watchlist (searched).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Wrap the InkWell in Semantics with button: true and a label.</li><li>Add the string to WatchlistStrings.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/ui/watchlist_options/ui/watchlist_options_bottomsheet.dart</td><td class="nowrap">41-49</td><td>Semantics(button: true, label: WatchlistStrings.wlOptionsA11y) around the InkWell.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/ui/watchlist_options/ui/watchlist_options_bottomsheet.dart:41-49</span></div><pre><code><span class="t-k">@override</span>
+Widget build(BuildContext context) {
+  <span class="t-k">return</span> PView(
+    key: <span class="t-k">const</span> ValueKey(PlotlineCampaignEvent.kebabMenuInWatchlistEvent),
+    valueKey: PlotlineCampaignEvent.kebabMenuInWatchlistEvent,
+    child: InkWell(
+      splashFactory: InkRipple.splashFactory,
+      onTap: () =&gt; onClickMoreIcon(),
+      child: Container(</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">return</span> PView(
+  key: <span class="t-k">const</span> ValueKey(PlotlineCampaignEvent.kebabMenuInWatchlistEvent),
+  valueKey: PlotlineCampaignEvent.kebabMenuInWatchlistEvent,
+  child: Semantics(
+    button: <span class="t-k">true</span>,
+    label: <span class="t-s">&#x27;Watchlist options&#x27;</span>,
+    child: InkWell(
+      splashFactory: InkRipple.splashFactory,
+      onTap: () =&gt; onClickMoreIcon(),
+      child: <span class="t-c">/* unchanged */</span>,
+    ),
+  ),
+);</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>No visual or behavioural change.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>TalkBack reads &#x27;Watchlist options, button&#x27;.</li><li>Coach mark still anchors to kebabMenuKey.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Adds accessibility metadata only; no visual change.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>The list menu is usable with TalkBack.</p></div>
+  </div>
+</article><article class="card change" id="J4" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">J4</span><h3>Label the add/remove icon in search results</h3></div>
+    <p class="summary">The add-to-watchlist icon in search results is a GestureDetector around an SVG with no label. Add Semantics with &#x27;Add to watchlist&#x27; or &#x27;Remove from watchlist&#x27; depending on state.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>child: showLoading ? CupertinoActivityIndicator() : SvgCommonRender(isTick ? iconSearchAddedToWatchlist : iconSearchAddToWatchlist, ...). No semantic label; the benchmark&#x27;s UI tree could not name it.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Wrap the GestureDetector in Semantics with a state-dependent label.</li><li>Do the same in recent_search_item.dart _buildWatchlistIcon for consistency.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_search/lib/ui/widgets/search_result_item_widget.dart</td><td class="nowrap">603-611</td><td>Semantics(button: true, label: isTick ? &#x27;Remove from watchlist&#x27; : &#x27;Add to watchlist&#x27;).</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_search/lib/ui/widgets/search_result_item_widget.dart:603-611</span></div><pre><code>child: showLoading
+    ? <span class="t-k">const</span> CupertinoActivityIndicator()
+    : SvgCommonRender(
+        isTick ? iconSearchAddedToWatchlist : iconSearchAddToWatchlist,
+        color: isTick ? <span class="t-k">null</span> : context.surfaceIconNeutralNormal,
+        height: MOSpacing.spacing24,
+        width: MOSpacing.spacing20,
+        fit: BoxFit.fitWidth,
+      ),</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">return</span> Semantics(
+  button: <span class="t-k">true</span>,
+  label: isTick ? <span class="t-s">&#x27;Remove from watchlist&#x27;</span> : <span class="t-s">&#x27;Add to watchlist&#x27;</span>,
+  child: GestureDetector(
+    onTap: () <span class="t-k">async</span> { <span class="t-c">/* unchanged */</span> },
+    child: <span class="t-c">/* unchanged */</span>,
+  ),
+);</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>No visual change.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>TalkBack names the icon in both states.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Accessibility metadata only, in the shared search module.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Add/remove is usable with TalkBack and in UI automation.</p></div>
+  </div>
+</article><article class="card change" id="J5" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">J5</span><h3>Keep the header height fixed while the wealth tile changes</h3></div>
+    <p class="summary">The developer saw the list shift while the header&#x27;s wealth tile rotates. The tile sits in a box of fixed height (5.5 % of screen height) with an AnimatedSize inside, so the shift probably comes from the tile switching between nothing (SizedBox.shrink) and content when its stream re-emits, which changes the header row&#x27;s height. Reserve the tile&#x27;s height in all states.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">Visible to users</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>WealthOverviewTile returns const SizedBox.shrink() when the snapshot has no data or the tile list is empty, and _WealthOverviewTileContent otherwise, which is a SizedBox of MediaQuery height × 0.055. The landing header is in a SliverToBoxAdapter above the list, so any header height change moves the list. Which of these states occurs during rotation was not observed (verify with the Flutter inspector&#x27;s layout explorer while it rotates).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Confirm with the inspector which widget changes height.</li><li>If it is the shrink/content switch, return a same-size empty box.</li><li>If it is the AnimatedSize, clamp its child height to the outer box.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart</td><td class="nowrap">104-132, 333-345</td><td>Return SizedBox(height: tileHeight, width: tileWidth) instead of SizedBox.shrink() while data or tiles are missing.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart:333-345</span></div><pre><code>child: SizedBox(
+  height: MediaQuery.of(context).size.height * <span class="t-n">0.055</span>,
+  width: MediaQuery.of(context).size.width * <span class="t-n">0.5</span>,
+  child: ValueListenableBuilder&lt;double&gt;(
+    valueListenable: _currentHeightNotifier,
+    builder: (context, currentHeight, child) {
+      <span class="t-k">return</span> AnimatedSize(
+        duration: <span class="t-k">const</span> Duration(milliseconds: <span class="t-n">250</span>),
+        curve: Curves.easeInOut,
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          height: currentHeight,
+          child: PageView.builder(</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-c">// in WealthOverviewTile.build</span>
+<span class="t-k">if</span> (!snapshot.hasData || tiles.isEmpty) {
+  <span class="t-k">return</span> SizedBox(
+    height: MediaQuery.sizeOf(context).height * _WealthOverviewConstants.tileHeightFactor,
+    width: MediaQuery.sizeOf(context).width * _WealthOverviewConstants.tileWidthFactor,
+  );
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Same size as the visible tile; no content change.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Header height constant through 10 rotations on Watchlist, Home, Trades.</li><li>Users without wealth tiles: header spacing acceptable (Design check).</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Layout inside one shared widget; the reserved height equals the height the tile already uses when visible.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>No list jump while the header tile changes.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-i.html"><span class="k">← Previous</span><span class="t">I · Third-party SDK traffic on the watchlist</span></a><a class="card next" href="section-k.html"><span class="k">Next →</span><span class="t">K · Tests and re-measurement</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

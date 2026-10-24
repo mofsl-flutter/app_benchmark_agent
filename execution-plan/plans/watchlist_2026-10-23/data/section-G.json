@@ -1,0 +1,173 @@
+{
+ "section": "G",
+ "title": "Opening the watchlist (not measured yet)",
+ "intro": "The benchmark has not measured screen opening times yet (L2–L14 are empty), so this section has no today values. The code shows three things that add time on every visit to the Watchlist tab: the MTF list is awaited before the watchlist request starts, fixed 300 ms waits follow every sorted load, and a shimmer replaces the list on every visit even though the app-scoped cubit still holds the last list. These are worth fixing once L-timings exist to confirm the gain.",
+ "measured": [
+  {
+   "metric": "Watchlist tab > Bench 20 open time (L-series)",
+   "current": "not measured",
+   "expected": "measure first; then ≈ one MTF round-trip shorter (G1) and ≥ 300 ms shorter when a sort is saved (G2), to be confirmed"
+  },
+  {
+   "metric": "Data per Watchlist > Bench 20 open (L15)",
+   "current": "75.7 KB (indicative)",
+   "expected": "unchanged by this section"
+  },
+  {
+   "metric": "Cold start (L1)",
+   "current": "710 ms",
+   "expected": "not affected (app start, not the watchlist)"
+  }
+ ],
+ "changes": [
+  {
+   "id": "G1",
+   "title": "Start the watchlist request without waiting for MTF",
+   "summary": "fetchWatchlist awaits getMtfStockList() before it starts the watchlist API call, although the MTF list is only needed to tag rows. Start both together and tag rows when the MTF list arrives.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Changes loading order. Rows may render a moment before their MTF tags; _getWatchlistListingInfo already treats a missing MTF entry as no tag.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "199-214",
+     "change": "final mtf = getMtfStockList(); start repository.fetchWatchlist immediately; await mtf before the final emit."
+    }
+   ],
+   "current": "fetchWatchlist emits the loading states, then await getMtfStockList() (UserManager call), then calls repository.fetchWatchlist. The two calls are independent, so the watchlist call waits for the MTF call every time the tab opens.",
+   "steps": [
+    "final mtfFuture = getMtfStockList().catchError((_) {});",
+    "Start repository.fetchWatchlist(...) as today.",
+    "In the .then handler, await mtfFuture before _parseWatchlistRes so the first full emit has tags; the cache callback can emit without waiting."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+    "lines": "199-214",
+    "code": "Future<void> fetchWatchlist(int? selectWatchlistId, bool showLoading) async {\n  if (showLoading) {\n    safeEmit(WatchlistHeaderLoading());\n    safeEmit(WatchlistLoading());\n  }\n  await getMtfStockList();\n  await repository\n      .fetchWatchlist(\n    showLoading\n        ? (WatchlistResponse cacheData) async {\n            _parseWatchlistRes(cacheData, selectWatchlistId);\n          }\n        : null,\n  )\n      .then((response) async {\n    _parseWatchlistRes(response, selectWatchlistId);"
+   },
+   "after_code": {
+    "code": "Future<void> fetchWatchlist(int? selectWatchlistId, bool showLoading) async {\n  if (showLoading) {\n    safeEmit(WatchlistHeaderLoading());\n    safeEmit(WatchlistLoading());\n  }\n  final mtfFuture = getMtfStockList().catchError((_) {});\n  await repository\n      .fetchWatchlist(showLoading\n          ? (WatchlistResponse cacheData) async {\n              _parseWatchlistRes(cacheData, selectWatchlistId);\n            }\n          : null)\n      .then((response) async {\n    await mtfFuture;\n    _parseWatchlistRes(response, selectWatchlistId);\n  }).onError<ErrorException>((failure, stackTrace) { /* unchanged */ });\n}"
+   },
+   "safety": [
+    "Same API calls and same final state.",
+    "MTF failure does not block the watchlist (it did not before either, except by time)."
+   ],
+   "regression_checks": [
+    "MTF tags appear on eligible rows after open.",
+    "MTF API failure: list still loads.",
+    "Pull to refresh."
+   ],
+   "after_improvement": "The watchlist call starts one MTF round-trip earlier on every open (exact gain to be measured once L-timings exist).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "G2",
+   "title": "Remove fixed 300 ms waits after sorted loads",
+   "summary": "When a sort is saved, sortWatchlistDetail asks for a snapshot and then sleeps 300 ms before reading prices, and the parse paths add further 300 ms sleeps between emits. Sort with the cached prices immediately and re-sort when the snapshot arrives.",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Sort order could be based on slightly older cached prices for a moment; a second sort after the snapshot keeps the final order the same as today.",
+   "effort": "M",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "1204-1222, 1455, 1554, 1596",
+     "change": "Drop the Future.delayed(300 ms) calls; trigger one re-sort on the first snapshot for the list's symbols."
+    }
+   ],
+   "current": "sortWatchlistDetail calls helper.fetchSnapShot(symbolSet) and then await Future.delayed(300 ms) before reading getBroadcastResponse for each scrip. checkWatchlistSorting calls it for every emit when a sort is active, and _parseWatchlistRes / _parseWatchlistByIdRes add further 300 ms delays after the first sorted emit. A user with a saved sort waits at least 300 ms more per load, and more when several emits are chained.",
+   "steps": [
+    "Remove the delay in sortWatchlistDetail; sort with current cache values.",
+    "Listen once (first event per symbol set, with a 1 s timeout) to the quote stream after fetchSnapShot and re-emit the sorted list if the order changed.",
+    "Remove the 300 ms delays at lines 1455, 1554 and 1596."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+    "lines": "1204-1222",
+    "code": "Future<List<WatchlistScrip>> sortWatchlistDetail(\n  SortOptions sortOptions,\n) async {\n  List<WatchlistScrip> list = [...watchlistScrips];\n  final helper = BroadCastHelper.instance;\n\n  var symbolSet = list.map((e) => e.symbol).toSet();\n  helper.fetchSnapShot(symbolSet);\n  await Future.delayed(const Duration(milliseconds: milliseconds300));\n  final sortData = list.map((e) {\n    var response = helper.getBroadcastResponse(e.symbol);\n    return WatchlistSortData(e, helper.getBroadcastResponse(e.symbol));\n  }).toList();\n  list = WatchlistSortUtility()\n      .sortWatchlist(sortData, sortOptions)\n      .map((e) => e.scrip)\n      .toList();\n  return list;\n}"
+   },
+   "after_code": {
+    "code": "Future<List<WatchlistScrip>> sortWatchlistDetail(SortOptions sortOptions) async {\n  final list = [...watchlistScrips];\n  final helper = BroadCastHelper.instance;\n  helper.fetchSnapShot(list.map((e) => e.symbol).toSet());\n  // sort now with cached prices; _resortOnSnapshot() re-emits if order changes\n  return WatchlistSortUtility()\n      .sortWatchlist(\n          list.map((e) => WatchlistSortData(e, helper.getBroadcastResponse(e.symbol))).toList(),\n          sortOptions)\n      .map((e) => e.scrip)\n      .toList();\n}"
+   },
+   "safety": [
+    "Final order after the snapshot equals today's order.",
+    "Users without a saved sort are unaffected."
+   ],
+   "regression_checks": [
+    "Saved sort by LTP, % change, A–Z: final order correct after open and after refresh.",
+    "CAS default sort.",
+    "Sort sheet apply/clear."
+   ],
+   "after_improvement": "≥ 300 ms less per sorted load, more when several emits chain (to be measured).",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "G3",
+   "title": "Show the last list instead of a shimmer on return",
+   "summary": "Every visit to the Watchlist tab emits WatchlistLoading first, so the list is replaced by a shimmer although the app-scoped cubit still holds the last list. When it already has scrips for the selected watchlist, render them and refresh in the background, behind a flag.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Visible change (no shimmer on return) and the list may show for a moment with the previous visit's data before the refresh. Behind WatchlistPerfFlags.keepListOnReopen, default off.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "When the user returns to the Watchlist tab, may we show the list as it was (prices update live) while it refreshes in the background, instead of a loading shimmer?",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "199-203",
+     "change": "When the flag is on and watchlistScrips is not empty, skip the two loading emits and emit the current lists first."
+    },
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+     "lines": "991-992",
+     "change": "No change; the shimmer still shows when there is nothing to show."
+    }
+   ],
+   "current": "initState calls _loadData, which calls fetchWatchlist(id, true); showLoading emits WatchlistHeaderLoading and WatchlistLoading, and the list builder returns WatchListShimmer for WatchlistLoading. The cubit is provided once for the app (trader_bloc.dart 90) and keeps watchlistList and watchlistScrips between visits.",
+   "steps": [
+    "In fetchWatchlist: if (showLoading && WatchlistPerfFlags.keepListOnReopen && watchlistScrips.isNotEmpty) emit WatchlistLoaded and WatchlistListLoaded from the current fields instead of the loading states.",
+    "Keep the cache callback and network refresh as today.",
+    "Logout only calls WatchListScreen.resetSessionState() (apps/super_app/lib/main_common.dart 935), which resets tab state, not the cubit lists. Confirm whether the app-level BlocProviders are recreated on login; if not, clear watchlistList and watchlistScrips on logout before enabling the flag, so a second client never sees the first client's list."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+    "lines": "199-203",
+    "code": "Future<void> fetchWatchlist(int? selectWatchlistId, bool showLoading) async {\n  if (showLoading) {\n    safeEmit(WatchlistHeaderLoading());\n    safeEmit(WatchlistLoading());\n  }"
+   },
+   "after_code": {
+    "code": "if (showLoading) {\n  if (WatchlistPerfFlags.keepListOnReopen && watchlistScrips.isNotEmpty) {\n    _emitCurrentLists(); // WatchlistLoaded + WatchlistListLoaded from current fields\n  } else {\n    safeEmit(WatchlistHeaderLoading());\n    safeEmit(WatchlistLoading());\n  }\n}"
+   },
+   "safety": [
+    "Behind WatchlistPerfFlags.keepListOnReopen, default off.",
+    "First visit after login still shows the shimmer (no data)."
+   ],
+   "regression_checks": [
+    "Return to the tab: list visible immediately, then updates.",
+    "Logout and login as another client, open the tab: the previous client's list must never appear.",
+    "Edit in Manage Stocks, return: list reflects the change after refresh."
+   ],
+   "after_improvement": "Content visible on the first frame of a return visit instead of a shimmer; also removes one full list remount per visit.",
+   "depends_on": [
+    "A1"
+   ],
+   "verify": true
+  }
+ ]
+}

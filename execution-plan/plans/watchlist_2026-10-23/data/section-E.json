@@ -1,0 +1,232 @@
+{
+ "section": "E",
+ "title": "Offline and reconnect",
+ "intro": "When the network drops, the watchlist keeps its prices on screen (good) but gives no sign that they are old: no banner, no timestamp, and the prices look exactly like live ones. The only offline message in the code is a snackbar that is gated on a bottom-bar index the RISE shell does not seem to set. An offline cold start stops at the mPIN screen with a generic error. These changes add an in-screen offline banner and a stale marker behind flags, fix a listener that stops after the first trip to the background, and put the cold-start question to Product.",
+ "measured": [
+  {
+   "metric": "Offline caching score (O1)",
+   "current": "44.4",
+   "expected": "≈ 77.8 with E1 + E2 (OF2, OF4 and OF8 move from No to Yes: 14 of 18 points instead of 8), to be re-scored with the same script"
+  },
+  {
+   "metric": "Clear offline message (OF4)",
+   "current": "No (only the system airplane icon)",
+   "expected": "Yes (E1)"
+  },
+  {
+   "metric": "Last-updated or stale marker (OF2, OF8)",
+   "current": "No / No (offline prices look live)",
+   "expected": "Yes / Yes (E2)"
+  },
+  {
+   "metric": "Offline cold launch shows cached list (OF1)",
+   "current": "No: mPIN screen with 'Oops, something went wrong! Please try again later.'",
+   "expected": "Product decision (E4)"
+  },
+  {
+   "metric": "Auto-refresh on reconnect (OF5)",
+   "current": "Yes, prices moved ~7 s after reconnect",
+   "expected": "unchanged or faster"
+  }
+ ],
+ "changes": [
+  {
+   "id": "E1",
+   "title": "Show an offline banner on the watchlist",
+   "summary": "The watchlist's offline message is a global snackbar that only shows when BottomNavCubit.currentPageInd == 1, and the RISE shell that hosts the watchlist does not appear to set that index. Add a small in-screen banner above the list, driven by the connectivity events the screen already receives, behind a flag.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Visible change on the main list. Behind WatchlistPerfFlags.offlineBanner (default off). The existing snackbar logic is left as it is.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "When the phone is offline, may the watchlist show a one-line banner above the list ('You're offline. Prices may be out of date.') until the connection returns? Copy and colour to be confirmed with Design.",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+     "lines": "137-155, 984-1013",
+     "change": "Keep a ValueNotifier<bool> _offline updated in toggleIsInterNetAvailable; render a banner above WatchlistListing when the flag is on."
+    },
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "181-185",
+     "change": "No change to shouldShowToast; documented as the reason the snackbar does not show in the RISE shell."
+    }
+   ],
+   "current": "toggleIsInterNetAvailable(false) calls showNoInternetToast() only when cubit.shouldShowToast is true, which requires MyNavigatorObserver.instance.isLandingPageVisible and BottomNavCubit.currentPageInd == 1. currentPageInd is assigned only in trader_bottom_bar/lib/bottom_navigation.dart (lines 566 and 598); the RISE dashboard hosts the watchlist from mo_dashboard/lib/dashboard_screen.dart line 263 and does not assign it (verify on device by logging the value). The benchmark saw no message at all while offline.",
+   "steps": [
+    "Add final ValueNotifier<bool> _offline = ValueNotifier(false) to _WatchListScreenState; set it in toggleIsInterNetAvailable before the existing logic; dispose it.",
+    "In _body above WatchlistListing: if WatchlistPerfFlags.offlineBanner, ValueListenableBuilder shows a 32 dp banner using the design system's warning colours when _offline is true.",
+    "Do not change shouldShowToast; the snackbar path stays as today.",
+    "Log BottomNavCubit.currentPageInd once in a debug build on the RISE shell to confirm the gating cause."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+    "lines": "137-155",
+    "code": "@override\nvoid toggleIsInterNetAvailable(bool isInternetAvailable) {\n  if (!isInternetAvailable) {\n    if (cubit.isEditMode) {\n      cubit.exitFromEditMode();\n    }\n    if (context.mounted &&\n        cubit.watchlistList.isNotEmpty &&\n        cubit.shouldShowToast) {\n      showNoInternetToast();\n    } else {\n      hideErrorSnackBar();\n    }\n  } else {\n    _loadData(localSelectedWatchlistId);\n    hideErrorSnackBar();\n  }\n  super.toggleIsInterNetAvailable(isInternetAvailable);\n}"
+   },
+   "after_code": {
+    "code": "final ValueNotifier<bool> _offline = ValueNotifier(false);\n\n@override\nvoid toggleIsInterNetAvailable(bool isInternetAvailable) {\n  _offline.value = !isInternetAvailable;\n  // ... existing logic unchanged ...\n  super.toggleIsInterNetAvailable(isInternetAvailable);\n}\n\n// in _body, above WatchlistListing:\nif (WatchlistPerfFlags.offlineBanner)\n  ValueListenableBuilder<bool>(\n    valueListenable: _offline,\n    builder: (context, offline, _) => offline\n        ? Container(\n            width: double.infinity,\n            padding: MOSpacing.paddingHorizontal16.add(MOSpacing.paddingVertical6),\n            color: context.feedbackBackgroundNegativeSubtle,\n            child: Text(WatchlistStrings.wlOfflineBanner, style: MOTypography.bodySmallRegular),\n          )\n        : const SizedBox.shrink(),\n  ),"
+   },
+   "safety": [
+    "Behind WatchlistPerfFlags.offlineBanner, default off.",
+    "Snackbar logic unchanged.",
+    "Banner only reads the connectivity events the screen already gets."
+   ],
+   "regression_checks": [
+    "Airplane mode on/off on Bench 20: banner appears and disappears; list stays visible.",
+    "Edit mode exits on offline as today.",
+    "Option List and Comm. List tabs unaffected.",
+    "Depends on E3 for the case where the app was backgrounded before going offline."
+   ],
+   "after_improvement": "OF4 moves from No to Yes. O1 rises by one item (to be re-scored).",
+   "depends_on": [
+    "A1",
+    "E3"
+   ],
+   "verify": true
+  },
+  {
+   "id": "E2",
+   "title": "Mark prices as not live when offline or reconnecting",
+   "summary": "Offline or right after a return from background, rows show the last cached price in the same style as live prices. While the price socket is not logged in, dim the LTP and show 'Last updated hh:mm:ss' under the list, behind a flag.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "Visible change on every row. Behind WatchlistPerfFlags.staleMarker (default off). Reads the socket state stream the header dot indicator already uses.",
+   "effort": "M",
+   "user_visible": true,
+   "product_decision": "While prices are not live (offline, or reconnecting after the app was in the background), may the watchlist grey out prices and show 'Last updated 14:52:10' until fresh prices arrive?",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+     "lines": "971-1009",
+     "change": "rightColumnLtp takes a bool isLive; when false, use the neutral-weak text colour for LTP and change."
+    },
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "181-190",
+     "change": "Listen to BroadCastHelper.instance.socketStateStream once; pass isLive to rows; show the last-updated time when not live."
+    }
+   ],
+   "current": "rightColumnLtp renders bdData.ltpValue with surfaceTextNeutralNormal and the change in red/green regardless of connection state. The socket state is available as BroadCastHelper.instance.socketStateStream and is already shown as a small coloured dot by BroadcasterInteractiveIndicator in the landing header, which users do not read as 'stale'. After a 60 s absence the socket is closed (see D2), so the same live-looking style also covers the reconnect period measured in U3.",
+   "steps": [
+    "In the listing state, subscribe once to socketStateStream; isLive = state == SocketState.loggedIn; remember the time of the last received tick (update from any row tick or from the quote stream).",
+    "Pass isLive into WatchlistItem; in rightColumnLtp, when !isLive and the flag is on, use context.surfaceTextNeutralDisabled (DSM token) for both lines.",
+    "Under the list header show 'Last updated <time>' while !isLive.",
+    "Debounce the not-live state by 2 s so normal reconnects do not flash."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+    "lines": "971-981",
+    "code": "Column rightColumnLtp(BroadcastResponse2 bdData, Color changeColor,\n    WatchlistItemCubit watchlistItemCubit) {\n  return Column(\n    crossAxisAlignment: CrossAxisAlignment.end,\n    children: [\n      Text(\n        bdData.ltpValue,\n        style: MOTypography.bodyLargeMedium.copyWith(\n          color: context.surfaceTextNeutralNormal,\n        ),\n      ),"
+   },
+   "after_code": {
+    "code": "Column rightColumnLtp(BroadcastResponse2 bdData, Color changeColor,\n    WatchlistItemCubit watchlistItemCubit, {bool isLive = true}) {\n  final dim = WatchlistPerfFlags.staleMarker && !isLive;\n  final ltpColor = dim ? context.surfaceTextNeutralDisabled : context.surfaceTextNeutralNormal;\n  final chgColor = dim ? context.surfaceTextNeutralDisabled : changeColor;\n  return Column(\n    crossAxisAlignment: CrossAxisAlignment.end,\n    children: [\n      Text(bdData.ltpValue,\n          style: MOTypography.bodyLargeMedium.copyWith(color: ltpColor)),\n      // ... change row uses chgColor ...\n    ],\n  );\n}"
+   },
+   "safety": [
+    "Behind WatchlistPerfFlags.staleMarker, default off.",
+    "isLive defaults to true, so other callers render as today.",
+    "2 s debounce avoids flicker on brief reconnects."
+   ],
+   "regression_checks": [
+    "Airplane mode: prices grey within ~2 s and 'Last updated' appears; reconnect: colours return when ticks arrive.",
+    "Background 60 s and return: grey until the first tick, then normal.",
+    "Dark and light themes; colour-blind check of grey vs red/green.",
+    "Holdings P&L bar follows the same state."
+   ],
+   "after_improvement": "OF2 and OF8 move from No to Yes; the stale period in U3 becomes visible to the user instead of looking live.",
+   "depends_on": [
+    "A1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "E3",
+   "title": "Restart the connectivity listener after background",
+   "summary": "StreamingBaseWidget cancels its connectivity subscription when the app is paused but keeps the cancelled object, and only subscribes again when the field is null. After the first trip to the background, streaming screens (the watchlist included) stop receiving offline/online events. Set the field to null after cancelling.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "High",
+   "risk_reason": "Shared base class of every streaming screen. The fix makes toggleIsInterNetAvailable fire again after a resume, which today silently stops; screens that reload on reconnect will start doing so again. Ship behind a flag and run a regression pass on the main streaming screens.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": null,
+   "be_request": "Remote Config boolean streaming_base_restart_network_listener (default false).",
+   "files": [
+    {
+     "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+     "lines": "208-228",
+     "change": "stopNetworkStreaming sets subscription = null after cancel (when the flag is on)."
+    }
+   ],
+   "current": "didChangeAppLifecycleState(paused) calls stopNetworkStreaming(), which does subscription?.cancel() but leaves subscription non-null. On resume, startNetworkStreaming() runs subscription = subscription ?? AppEventStreamImpl...listen(...), so the cancelled subscription is kept and no new listener is attached. From then on toggleIsInterNetAvailable is never called for that screen (verify on device: background once, then toggle airplane mode and log the callback).",
+   "steps": [
+    "Add a static flag in trader_widgets read from Remote Config (default false).",
+    "In stopNetworkStreaming: subscription?.cancel(); if (flag) subscription = null;",
+    "Regression: watchlist, quote page, positions, holdings, option chain: background, return, airplane on/off."
+   ],
+   "before_code": {
+    "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+    "lines": "208-228",
+    "code": "void stopNetworkStreaming() {\n  subscription?.cancel();\n}\n\nvoid startNetworkStreaming() async {\n  // Use unified ConnectivityManager to prevent TooManyRequestsException\n  final connectivityResult = await ConnectivityManager.instance.getConnectivityResult();\n  //Todo need to check\n  latConnectedType ??= ConnectivityResultExtension(connectivityResult.last).network;\n  subscription = subscription ??\n      AppEventStreamImpl.getInstance()\n          .network\n          .startWith(ConnectivityResultExtension(connectivityResult.last).network)\n          .listen((event) {\n        debugPrint(\"The internet is available $event\");\n        if (!event.isConnected) {\n          checkConnectivityWithDelay();\n        }\n        _handleNetworkEvent(event);\n      });\n}"
+   },
+   "after_code": {
+    "code": "void stopNetworkStreaming() {\n  subscription?.cancel();\n  if (StreamingFlags.restartNetworkListener) {\n    subscription = null; // allow startNetworkStreaming to listen again\n  }\n}"
+   },
+   "safety": [
+    "Behind a Remote Config flag, default off (today's behaviour).",
+    "No change for screens that never go to background."
+   ],
+   "regression_checks": [
+    "Watchlist: background 30 s, return, airplane on: offline handling runs (E1 banner if on).",
+    "Quote page, Positions, Holdings, Option Chain: same sequence; no duplicate reloads or snackbars.",
+    "Rapid background/foreground: only one listener active (log count)."
+   ],
+   "after_improvement": "Offline/online handling keeps working for the whole session, not only until the first background. Needed for E1 to be reliable.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "E4",
+   "title": "Decide whether an offline start may show cached data",
+   "summary": "An offline cold start lands on the mPIN screen with 'Oops, something went wrong! Please try again later.' and never reaches the watchlist, although the watchlist responses are cached on disk (fetchWatchlist uses isForcedCacheEnable). Whether a cached, read-only watchlist may be shown before the mPIN is validated online is a Product and security decision.",
+   "categories": [
+    "Product",
+    "BE"
+   ],
+   "risk": "Low",
+   "risk_reason": "A decision; no code change until it is made. Any later change touches login and must be a separate, flagged, High-risk item.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "(1) On an offline cold start, should the mPIN screen show a clear 'You're offline' message instead of 'Oops, something went wrong'? (2) May a user who passes a local mPIN/biometric check see a read-only cached watchlist marked as offline until the network returns?",
+   "be_request": "Security review: can mPIN be verified locally for a read-only offline view, and which cached data may be shown without a fresh session token?",
+   "files": [],
+   "current": "The benchmark recorded the mPIN screen with a generic error on an offline cold start and no way to reach the watchlist. In the watchlist module, fetchWatchlist and fetchWatchlistById already request isForcedCacheEnable with a cache callback (watchlist_repository_impl.dart 17-24, 132-142), so cached lists exist; the blocker is the login flow (mo_login_unified), which this plan did not analyse line by line.",
+   "steps": [
+    "Product decides (1) and (2).",
+    "If (1): small change in the login package to map the offline error to the existing 'Please check your internet connection.' message (trader_network exceptions.dart already returns it when offline).",
+    "If (2): separate design and security review before any code."
+   ],
+   "after_code": {
+    "code": "// No code until Product and security decide."
+   },
+   "safety": [
+    "No change in this plan."
+   ],
+   "regression_checks": [
+    "None."
+   ],
+   "after_improvement": "If (1) is approved, the offline start shows a clear message; if (2) is approved, OF1 could move from No to Yes.",
+   "depends_on": [],
+   "verify": false
+  }
+ ]
+}

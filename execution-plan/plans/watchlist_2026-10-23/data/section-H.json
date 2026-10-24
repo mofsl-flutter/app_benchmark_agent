@@ -1,0 +1,121 @@
+{
+ "section": "H",
+ "title": "Watchlist features and quick actions",
+ "intro": "The watchlist shows live price and change, holdings quantity and unrealised P&L, and offers Buy/Sell by swiping a row. Market depth, alerts and an order ticket open only on the full quote page, and rows have no mini chart. Both items are Product decisions first; the FE work reuses widgets that already exist in the quote module and stays behind a flag.",
+ "measured": [
+  {
+   "metric": "Data pointers / features score (D1)",
+   "current": "72.2 (DP2 sparkline No; DP3 depth Partial; DP7 alerts Partial; DP8 quick buy/sell Partial)",
+   "expected": "≈ 88.9 if H1 is approved (DP3, DP7, DP8 to Yes); ≈ 100 with H2 as well (re-scored with the same checklist)"
+  }
+ ],
+ "changes": [
+  {
+   "id": "H1",
+   "title": "Quick-action sheet over the watchlist",
+   "summary": "Add a bottom sheet over the list with Buy, Sell, 5-level market depth and Create Alert for a stock, opened from a row without leaving the watchlist. Long-press opens edit mode today, so the trigger is a Product choice. Behind a flag.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "High",
+   "risk_reason": "New user-facing flow on the main list and a possible change to an existing gesture (long-press opens edit mode today). Needs live depth subscription and order-entry navigation. Behind WatchlistPerfFlags.quickActions, default off, with a full regression pass on the list.",
+   "effort": "L",
+   "user_visible": true,
+   "product_decision": "Which gesture opens the quick-action sheet (tap on the price area, a new chevron, or long-press with edit mode moved to the menu)? Which actions does it show (Buy, Sell, 5-level market depth, Create Alert, View chart, Open quote page)?",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "143-151, 297-333",
+     "change": "When the flag is on, open WatchlistQuickActionsSheet from the chosen gesture; keep today's tap-to-quote and long-press-to-edit when it is off."
+    },
+    {
+     "path": "packages/trader_watchlist/lib/widgets/quick_actions/watchlist_quick_actions_sheet.dart",
+     "lines": "new",
+     "change": "New sheet: header (name, LTP), Buy/Sell buttons (searchToPlaceOrderNavigation, as the swipe uses), depth rows via startBidStreaming/onDepthStreamReceived from BasePageState, Create Alert entry from mo_get_quote."
+    }
+   ],
+   "current": "The listing's InkWell long-press checks connectivity, logs a CleverTap event and calls switchToEditMode; a tap logs analytics and pushes the quote page with MoGetQuoteNavigator.navigateToScrip. Swiping a row calls searchToPlaceOrderNavigation with BUY or SELL (watchlist_listing.dart 420-456). Depth and alerts exist only on the quote page.",
+   "steps": [
+    "Product picks the gesture and actions.",
+    "Build the sheet as a StreamingBaseWidget so depth subscription stops when it closes (stopBidStreaming).",
+    "Reuse searchToPlaceOrderNavigation for Buy/Sell and the quote module's alert entry point.",
+    "Log the same analytics events the quote page logs for these actions, with source 'watchlist_sheet'."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+    "lines": "143-151",
+    "code": "onLongPress: () async {\n  bool isInternetAvailable = await checkInternetConnectivity();\n  if (isInternetAvailable && mounted) {\n    WatchlistCleverTapHelper.instance\n        .logWatchlistCleverTapEventWithClientCode(\n            WatchlistClevarTapEvents.watchlistLongPress);\n    watchlistCubit.switchToEditMode(\n        context, widget.watchlistListingInfo.watchlistInfo);\n  }"
+   },
+   "after_code": {
+    "code": "onLongPress: () async {\n  if (WatchlistPerfFlags.quickActions && _quickActionsOnLongPress) {\n    showModalBottomSheet(\n      context: context,\n      isScrollControlled: true,\n      builder: (_) => WatchlistQuickActionsSheet(scrip: /* row scrip */),\n    );\n    return;\n  }\n  // today's behaviour: edit mode\n  bool isInternetAvailable = await checkInternetConnectivity();\n  if (isInternetAvailable && mounted) { /* unchanged */ }\n},"
+   },
+   "safety": [
+    "Behind WatchlistPerfFlags.quickActions, default off.",
+    "Tap-to-quote and swipe-to-trade unchanged.",
+    "Order placement goes through the existing order form, not a new path."
+   ],
+   "regression_checks": [
+    "Flag off: long-press edit mode, tap to quote, swipe Buy/Sell as today.",
+    "Flag on: sheet opens, depth streams and stops on close, Buy/Sell open the order form with the right side, alert creation works.",
+    "Guest users get the guest sheet as with swipe."
+   ],
+   "after_improvement": "DP3, DP7 and DP8 can move from Partial to Yes; fewer full quote-page pushes (each push keeps the watchlist mounted underneath).",
+   "depends_on": [
+    "A1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "H2",
+   "title": "Intraday sparkline on watchlist rows",
+   "summary": "Rows have no mini chart. A sparkline needs an intraday price series per symbol from BE (or a client-built series from ticks since open) and a Product decision on space in the row.",
+   "categories": [
+    "FE",
+    "BE",
+    "Product"
+   ],
+   "risk": "High",
+   "risk_reason": "New data source and new painting on every row; can undo the idle and scroll gains if not done carefully (one CustomPainter per row with shouldRepaint on data change only, RepaintBoundary). Behind a flag.",
+   "effort": "L",
+   "user_visible": true,
+   "product_decision": "Should rows show an intraday sparkline? Where (between name and price), and for all lists or only stocks/indices?",
+   "be_request": "An API returning a compact intraday series (for example 5-minute closes since open) for up to 100 symbols in one call, cacheable for 5 minutes.",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+     "lines": "971-1009",
+     "change": "Add a fixed-size sparkline widget left of rightColumnLtp when the flag is on."
+    }
+   ],
+   "current": "rightColumnLtp shows LTP, an arrow SVG and change/% only. There is no price history on the watchlist.",
+   "steps": [
+    "Agree API with BE.",
+    "One CustomPainter per row with a fixed size and RepaintBoundary; repaint only when the series changes (not on every tick).",
+    "Fetch series once per open and every 5 min; append the last tick to the final point only if Product wants it live."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+    "lines": "971-981",
+    "code": "Column rightColumnLtp(BroadcastResponse2 bdData, Color changeColor,\n    WatchlistItemCubit watchlistItemCubit) {\n  return Column(\n    crossAxisAlignment: CrossAxisAlignment.end,\n    children: [\n      Text(\n        bdData.ltpValue,\n        style: MOTypography.bodyLargeMedium.copyWith(\n          color: context.surfaceTextNeutralNormal,\n        ),\n      ),"
+   },
+   "after_code": {
+    "code": "Row(children: [\n  if (WatchlistPerfFlags.sparkline)\n    RepaintBoundary(\n      child: SizedBox(width: 56, height: 24,\n          child: CustomPaint(painter: SparklinePainter(series))),\n    ),\n  rightColumnLtp(bdData, changeColor, watchlistItemCubit),\n])"
+   },
+   "safety": [
+    "Behind a flag (add a key to A1's holder), default off.",
+    "Painter repaints only on series change."
+   ],
+   "regression_checks": [
+    "Scroll FPS (S5) and idle redraw (U4) re-measured with the flag on.",
+    "Row layout on 360 dp screens."
+   ],
+   "after_improvement": "DP2 moves from No to Yes.",
+   "depends_on": [
+    "A1"
+   ],
+   "verify": false
+  }
+ ]
+}

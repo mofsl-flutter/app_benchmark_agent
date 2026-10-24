@@ -1,0 +1,424 @@
+{
+ "section": "F",
+ "title": "Release logging and privacy",
+ "intro": "While the benchmark created Bench 20, the release build wrote the client code and analytics attributes to logcat, a doubled API URL, and an 'API Failed' line for a successful call. The code shows where each comes from: plain print calls in the CleverTap helper, a log line placed before parsing every API response, a URL built from an origin plus a path that is already a full URL, and a print of every cached response. The same paths also spend CPU converting whole responses to strings. These changes keep analytics and the app's own file log working but stop writing user data and noise to logcat.",
+ "measured": [
+  {
+   "metric": "Client code and CleverTap add_to_watchlist in release logcat",
+   "current": "present (creation_summary.md)",
+   "expected": "absent in release builds (F1)"
+  },
+  {
+   "metric": "Doubled API URL in release logs",
+   "current": "https://tradingapi.mofsl.nethttps://tradingapi.mofsl.net/... (creation_summary.md)",
+   "expected": "single URL (F3)"
+  },
+  {
+   "metric": "'API Failed' on a 200 response",
+   "current": "present (creation_summary.md)",
+   "expected": "only on real failures (F2)"
+  },
+  {
+   "metric": "Repeated orientation events in logcat",
+   "current": "present (creation_summary.md)",
+   "expected": "not traced to app code; no change planned"
+  }
+ ],
+ "changes": [
+  {
+   "id": "F1",
+   "title": "Print CleverTap events only in debug builds",
+   "summary": "callCleverTap prints every event name and every attribute with print, which reaches logcat in release builds, including attributes such as Client Code. Wrap the prints in kDebugMode.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Shared helper used across the app (about 700 call sites of callCleverTap / callCleverTapWithAppSection), but only console output changes; CleverTapPlugin.recordEvent is untouched.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_core/lib/utils/clevertapfunc.dart",
+     "lines": "206-224",
+     "change": "Return early from internalLogClevertap and printAttributes when !kDebugMode."
+    }
+   ],
+   "current": "callCleverTap calls internalLogClevertap(eventName, eventData) before CleverTapPlugin.recordEvent. internalLogClevertap uses print for a header, the event name and, via printAttributes, every key and value. Flutter's print writes to logcat in release. The search add-to-watchlist event includes ClevertapAttributes.clientCode: Preferences.getUserId() (trader_search search_clevertap_helper.dart 73-83), so the client code appears in logcat.",
+   "steps": [
+    "import 'package:flutter/foundation.dart';",
+    "Guard internalLogClevertap and printAttributes with if (!kDebugMode) return;",
+    "Leave the dart:developer log() call (not printed in release)."
+   ],
+   "before_code": {
+    "path": "packages/trader_core/lib/utils/clevertapfunc.dart",
+    "lines": "206-224",
+    "code": "void internalLogClevertap(\n  String eventName,\n  Map<String, dynamic> eventData,\n) {\n  print(\"//-------------------------//\");\n  print(\"Clevertap Event Name : $eventName\");\n  print(\"Attributes: \");\n  eventData.printAttributes();\n  print(\"//-------------------------//\");\n}\n\nextension ClevertapExtensions on Map<String, dynamic> {\n  void printAttributes() {\n    forEach((key, value) {\n      print(\"$key ---> $value\");\n      //TODO:: Fix it\n    });\n  }\n}"
+   },
+   "after_code": {
+    "code": "void internalLogClevertap(\n  String eventName,\n  Map<String, dynamic> eventData,\n) {\n  if (!kDebugMode) return; // never print analytics attributes in release\n  print(\"//-------------------------//\");\n  print(\"Clevertap Event Name : $eventName\");\n  print(\"Attributes: \");\n  eventData.printAttributes();\n  print(\"//-------------------------//\");\n}"
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI.",
+    "Events still reach CleverTap."
+   ],
+   "regression_checks": [
+    "Release build: add a stock from search; CleverTap dashboard receives add_to_watchlist; logcat shows no attributes.",
+    "Debug build: prints unchanged."
+   ],
+   "after_improvement": "No client code or event attributes in release logcat.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "F2",
+   "title": "Remove the 'API Failed' line written on every response",
+   "summary": "handleResponse writes 'API Failed: The new error <type>' before it parses every protobuf response, successful or not. Remove that line; the catch block below already logs real failures.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Shared API client; only a log line is removed. The catch-block log for real parse failures stays.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_network/lib/DIOApiService2.dart",
+     "lines": "943-946",
+     "change": "Delete the AppWriteLog.writeLog(\"API Failed\", ...) before BaseResponse.fromBuffer."
+    }
+   ],
+   "current": "Inside the GeneratedMessage branch, the first statement of the try is AppWriteLog.writeLog(\"API Failed\", \"The new error ${responseType.toString()}\"), so every protobuf API call (including POST Watchlist/Scrip returning 200) writes an 'API Failed' entry and stringifies the empty template message.",
+   "steps": [
+    "Delete line 945.",
+    "Keep the catch (err) log at line 974."
+   ],
+   "before_code": {
+    "path": "packages/trader_network/lib/DIOApiService2.dart",
+    "lines": "943-946",
+    "code": "} else if (responseType is GeneratedMessage) {\n  try {\n    AppWriteLog.writeLog(\"API Failed\", \"The new error ${responseType.toString()}\");\n    final baseResponse = BaseResponse.fromBuffer(data);"
+   },
+   "after_code": {
+    "code": "} else if (responseType is GeneratedMessage) {\n  try {\n    final baseResponse = BaseResponse.fromBuffer(data);\n    // ... unchanged ...\n  } catch (err) {\n    AppWriteLog.writeLog(\"API Failed\", \"The new error $err\");\n    rethrow;\n  }"
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI."
+   ],
+   "regression_checks": [
+    "App log file: no 'API Failed' for successful calls; a forced parse error still logs."
+   ],
+   "after_improvement": "App log and logcat stop reporting false failures; one string conversion fewer per API call.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "F3",
+   "title": "Log the request URL once, not origin plus full URL",
+   "summary": "The API log builds the URL as realUri.origin + requestOptions.path, but path already holds the full URL (for example \"${BASE_URL}api/Watchlist\"), which produces the doubled https://tradingapi.mofsl.nethttps://... line. Log realUri instead.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Only the url field of a log record changes.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_network/lib/DIOApiService2.dart",
+     "lines": "385-391",
+     "change": "url: baseResponse.realUri.toString()."
+    }
+   ],
+   "current": "WatchlistAPI builds full URLs (watchlist_apis.dart: static String watchlist = \"${BASE_URL}api/Watchlist\"), callApiWithDio passes them as the request path, and the success log writes '${baseResponse.realUri.origin}${baseResponse.requestOptions.path}'. Origin + full URL = the doubled string seen in logcat.",
+   "steps": [
+    "Use baseResponse.realUri.toString() for url.",
+    "Check the same pattern at lines 965 and 1026 (requestOptions.baseUrl + path) used for the API_FAILED CleverTap event."
+   ],
+   "before_code": {
+    "path": "packages/trader_network/lib/DIOApiService2.dart",
+    "lines": "385-391",
+    "code": "AppWriteLog.writeAPILog(_buildApiLogJson(\n  ts: initApiTime,\n  level: 'SUCCESS',\n  logType: 'API',\n  method: baseResponse.requestOptions.method,\n  url: '${baseResponse.realUri.origin}${baseResponse.requestOptions.path}',\n  status: baseResponse.statusCode ?? 0,"
+   },
+   "after_code": {
+    "code": "AppWriteLog.writeAPILog(_buildApiLogJson(\n  ts: initApiTime,\n  level: 'SUCCESS',\n  logType: 'API',\n  method: baseResponse.requestOptions.method,\n  url: baseResponse.realUri.toString(),\n  // ... unchanged ..."
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI."
+   ],
+   "regression_checks": [
+    "Log file entries show one https:// per URL for watchlist, search and quote calls."
+   ],
+   "after_improvement": "Correct URLs in logs; easier support diagnosis.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "F4",
+   "title": "Stop printing every cached response",
+   "summary": "When a cached response is served, callApiWithDio prints the whole parsed protobuf with print('response is >> $response'). For the watchlist that includes scrip and holdings data. Remove the print.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Removes a console print only; the cache callback still runs.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_network/lib/DIOApiService2.dart",
+     "lines": "274-278",
+     "change": "Delete the print."
+    }
+   ],
+   "current": "For every cached call with a callback (fetchWatchlist and fetchWatchlistById both use one), the cached response is parsed and then printed in full with print, which reaches logcat in release and costs a full toString of the message on the UI isolate.",
+   "steps": [
+    "Delete line 277."
+   ],
+   "before_code": {
+    "path": "packages/trader_network/lib/DIOApiService2.dart",
+    "lines": "274-279",
+    "code": "  final response = cachedResponse.handleResponse(runtimeType,\n      isFromCache: false, url: url, logResponse: logApiResponse);\n  //AppWriteLog.writeLog(\"API Failed\", \"The new error $response\");\n  print('response is >> $response');\n  cacheCallBack.call(response);\n}"
+   },
+   "after_code": {
+    "code": "final response = cachedResponse.handleResponse(runtimeType,\n    isFromCache: false, url: url, logResponse: logApiResponse);\ncacheCallBack.call(response);"
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI."
+   ],
+   "regression_checks": [
+    "Watchlist opens from cache then refreshes from network as today."
+   ],
+   "after_improvement": "No user data from cached responses in logcat; one full toString fewer per cached call.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "F5",
+   "title": "Measure response size from bytes, not toString",
+   "summary": "After every API response, the client converts the whole parsed message to a string and UTF-8 encodes it only to log its size. Use the length of the raw response bytes.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "The logged size changes from 'size of the text form' to 'size of the wire bytes', which is the more useful number; nothing else uses it except the debug API list (non-release only).",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_network/lib/DIOApiService2.dart",
+     "lines": "373-379",
+     "change": "bytes length from baseResponse.data when it is a List<int>/Uint8List; skip toString."
+    }
+   ],
+   "current": "var bytes = utf8.encode(finalResponse.toString()); runs for every successful response, and the request is also stringified for POSTs in the same log line. For large responses (option chains, holdings) this is a noticeable allocation on the UI isolate.",
+   "steps": [
+    "final int size = (baseResponse.data is List<int>) ? (baseResponse.data as List<int>).length : 0;",
+    "Keep the toString path only inside the non-release notifyActivity block that needs it."
+   ],
+   "before_code": {
+    "path": "packages/trader_network/lib/DIOApiService2.dart",
+    "lines": "373-379",
+    "code": "var finalResponse = (baseResponse)\n    .handleResponse(runtimeType, isFromCache: isCacheAvailable, logResponse: logApiResponse);\nvar lastApiTime = DateTime.now();\nvar diff = lastApiTime.difference(initApiTime);\nvar bytes = utf8.encode(finalResponse.toString());\nAppWriteLog.writeLog(\"Trader API Service\",\n    \"Response ${baseResponse.statusCode}, ${baseResponse.requestOptions.method},${baseResponse.requestOptions.path}, Response Time: ${diff.inMilliseconds.toString()}ms, Data Size: ${getSizeString(bytes: bytes.length)} ${requestType == HttpMethod.post ? \"Request: ${request.toString()}\" : \"\"}\");"
+   },
+   "after_code": {
+    "code": "var finalResponse = (baseResponse)\n    .handleResponse(runtimeType, isFromCache: isCacheAvailable, logResponse: logApiResponse);\nvar diff = DateTime.now().difference(initApiTime);\nfinal raw = baseResponse.data;\nfinal int sizeBytes = raw is List<int> ? raw.length : 0;\nAppWriteLog.writeLog(\"Trader API Service\",\n    \"Response ${baseResponse.statusCode}, ${baseResponse.requestOptions.method}, Response Time: ${diff.inMilliseconds}ms, Data Size: ${getSizeString(bytes: sizeBytes)}\");"
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI.",
+    "The request body is no longer written to the release log line."
+   ],
+   "regression_checks": [
+    "Debug API list still shows responses in UAT/pilot builds.",
+    "App log shows a size for protobuf calls."
+   ],
+   "after_improvement": "One full message stringification fewer per API call; small CPU gain on every screen.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "F6",
+   "title": "Commit the removal of the bearer-token print",
+   "summary": "The committed HEAD of trader_network still contains debugPrint('BEARER_TOKEN [$url]: ...'), which prints the access token in release builds (debugPrint is not stripped). The working copy has the line commented out but not committed. Commit it on the release branch.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Removes a print only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_network/lib/DIOApiService2.dart",
+     "lines": "313",
+     "change": "Keep the line removed and commit; check the release branch builds from a commit that has it removed."
+    }
+   ],
+   "current": "git diff on the working tree shows one line changed in DIOApiService2.dart: the BEARER_TOKEN debugPrint is commented out locally; HEAD 63788d1ac8 still prints it on every API call.",
+   "steps": [
+    "Commit the change (or delete the line).",
+    "grep the repo for other debugPrint/print of 'Authorization' or tokens."
+   ],
+   "before_code": {
+    "path": "packages/trader_network/lib/DIOApiService2.dart",
+    "lines": "313",
+    "code": "// debugPrint('BEARER_TOKEN [$url]: ${header['Authorization']}');"
+   },
+   "after_code": {
+    "code": "// (line removed)"
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI."
+   ],
+   "regression_checks": [
+    "Release build logcat during login and watchlist open: no Authorization header values."
+   ],
+   "after_improvement": "No access tokens in device logs.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "F7",
+   "title": "Turn off Firebase Performance logcat output",
+   "summary": "The release manifest sets firebase_performance_logcat_enabled to true, so Firebase Performance writes its traces and network events to logcat. Set it to false for release (keep it in debug if wanted via a manifest placeholder).",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "App shell manifest; Firebase Performance collection itself is unchanged.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "apps/super_app/android/app/src/main/AndroidManifest.xml",
+     "lines": "116-118",
+     "change": "android:value=\"false\" (or a build-type placeholder)."
+    }
+   ],
+   "current": "<meta-data android:name=\"firebase_performance_logcat_enabled\" android:value=\"true\" /> is in the main manifest, so it applies to release builds.",
+   "steps": [
+    "Change to a manifestPlaceholder set true for debug and false for release, or simply false."
+   ],
+   "before_code": {
+    "path": "apps/super_app/android/app/src/main/AndroidManifest.xml",
+    "lines": "116-118",
+    "code": "<meta-data\n    android:name=\"firebase_performance_logcat_enabled\"\n    android:value=\"true\" />"
+   },
+   "after_code": {
+    "code": "<meta-data\n    android:name=\"firebase_performance_logcat_enabled\"\n    android:value=\"${firebasePerfLogcat}\" /> <!-- false in release -->"
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI.",
+    "Traces still upload to Firebase."
+   ],
+   "regression_checks": [
+    "Firebase console still receives traces from a release build."
+   ],
+   "after_improvement": "Less logcat traffic in release.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "F8",
+   "title": "Ask broadcaster owners to stop logging user id and symbols",
+   "summary": "mosl_broadcaster writes the user id on every socket login and the full symbol set on every subscribe to the app log. Ask the owners to drop the user id and log counts instead of symbol lists.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "External git dependency owned by another team; log text only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "mosl_broadcaster: lib/internal/broadcast_channel.dart",
+     "lines": "213-219",
+     "change": "Log 'Login successful' without the user id."
+    },
+    {
+     "path": "mosl_broadcaster: lib/internal/broadcast_controller.dart",
+     "lines": "247-251",
+     "change": "Log the number of symbols, not the set."
+    }
+   ],
+   "current": "onLogin writes 'Login successful: ${authResponse.userId} ${socketCreator.broadCastUrl}'; subscribeQuote writes 'Subscribe Quote: $symbols' on every call, and the watchlist calls it on every scroll end (C4). Whether AppWriteLog mirrors to logcat depends on mosl_app_logger's FlutterLogs setup (verify).",
+   "steps": [
+    "Open an issue on mosl_broadcaster with the two lines.",
+    "After C4 the number of subscribe logs from the watchlist already drops."
+   ],
+   "before_code": {
+    "path": "mosl_broadcaster: lib/internal/broadcast_channel.dart",
+    "lines": "213-219",
+    "code": "void onLogin(AuthResponse authResponse) {\n  loginTimerHandle?.cancel();\n  AppWriteLog.writeLog(\n    \"Trader Broadcast\",\n    \"Login successful: ${authResponse.userId} \"\n        \"${socketCreator.broadCastUrl}\",\n  );"
+   },
+   "after_code": {
+    "code": "AppWriteLog.writeLog(\n  \"Trader Broadcast\",\n  \"Login successful ${socketCreator.broadCastUrl}\",\n);\n// subscribeQuote:\nAppWriteLog.writeLog(\"Trader Broadcast\", \"Subscribe Quote: ${symbols.length} symbols\");"
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI."
+   ],
+   "regression_checks": [
+    "Socket login and subscriptions work as before."
+   ],
+   "after_improvement": "No user id in socket logs; smaller log volume.",
+   "depends_on": [],
+   "verify": true
+  },
+  {
+   "id": "F9",
+   "title": "Print visibility callbacks only in debug",
+   "summary": "registerVisibilityDetector prints 'Visible fraction is ...' for every visibility callback of every streaming widget, in release too (debugPrint is not stripped). Guard it with kDebugMode.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Shared base class; removes a print only.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+     "lines": "63-74, 100, 152, 168",
+     "change": "if (kDebugMode) around the debugPrint calls."
+    }
+   ],
+   "current": "VisibilityDetector callbacks fire while the watchlist scrolls and when routes change; each prints a line with the fraction and class name. InitState and lifecycle changes print too.",
+   "steps": [
+    "Wrap the four debugPrint calls in if (kDebugMode)."
+   ],
+   "before_code": {
+    "path": "packages/trader_widgets/lib/StreamingBaseWidget.dart",
+    "lines": "63-74",
+    "code": "Widget registerVisibilityDetector(\n    {required Widget child,\n    required String childClassName,\n    double visibleFraction = 0.3,\n    void Function(bool isVsiible)? callBack}) {\n  return VisibilityDetector(\n    key: Key(childClassName),\n    onVisibilityChanged: (VisibilityInfo info) {\n      _isResume = info.visibleFraction >= visibleFraction;\n      callBack?.call(_isResume);\n      debugPrint(\"Visible fraction is ${info.visibleFraction} $childClassName\");\n      if (info.visibleFraction >= visibleFraction) {"
+   },
+   "after_code": {
+    "code": "onVisibilityChanged: (VisibilityInfo info) {\n  _isResume = info.visibleFraction >= visibleFraction;\n  callBack?.call(_isResume);\n  if (kDebugMode) {\n    debugPrint(\"Visible fraction is ${info.visibleFraction} $childClassName\");\n  }\n  // ... unchanged ..."
+   },
+   "safety": [
+    "Logging only; no change to requests, responses, analytics events or UI."
+   ],
+   "regression_checks": [
+    "Streaming resumes/pauses on visibility exactly as before."
+   ],
+   "after_improvement": "Less logcat noise while scrolling; tiny CPU gain.",
+   "depends_on": [],
+   "verify": false
+  }
+ ]
+}

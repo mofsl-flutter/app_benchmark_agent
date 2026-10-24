@@ -1,0 +1,404 @@
+{
+ "title": "Optimized FE Plan",
+ "intro": "The smallest set of changes inside packages/trader_watchlist that removes per-frame and per-update waste without new dependencies, shared-package edits or feature flags. Every item keeps today's screens, data, routes and analytics; it only stops work that does not change what is drawn.",
+ "meta_note": "11 small pull requests, all in trader_watchlist",
+ "items": [
+  {
+   "n": 1,
+   "title": "Header pin state emitted only on change",
+   "ids": [
+    "C1",
+    "K3"
+   ],
+   "area": "Scrolling",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "101-104"
+    },
+    {
+     "path": "packages/trader_watchlist/test/watchlist_cubit_test.dart",
+     "lines": "append"
+    }
+   ],
+   "risk": "Low",
+   "risk_why": "The header never pins, so identical emits cannot change the output.",
+   "test": [
+    "Scroll Bench 20 down and up; header scrolls away and back.",
+    "K3 unit test."
+   ],
+   "effect": "No full header rebuild on each frame of a downward scroll; the main code-side gain for S5."
+  },
+  {
+   "n": 2,
+   "title": "Stable list and row keys",
+   "ids": [
+    "B3",
+    "K1"
+   ],
+   "area": "Memory, scrolling",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "86, 115, 294-296, 522-541"
+    }
+   ],
+   "risk": "Medium",
+   "risk_why": "Rows are updated in place instead of recreated; swipe state still resets per scrip through Slidable's own key.",
+   "test": [
+    "Prices tick after open, sort, refresh, add/remove.",
+    "Swipe Buy/Sell after a sort.",
+    "K1 widget test."
+   ],
+   "effect": "Rows are no longer torn down on every list update; less garbage per open (R9)."
+  },
+  {
+   "n": 3,
+   "title": "Rows release their listener and controllers",
+   "ids": [
+    "B1",
+    "K2"
+   ],
+   "area": "Memory",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart",
+     "lines": "96-115, 133-137"
+    }
+   ],
+   "risk": "Low",
+   "risk_why": "Cleanup in dispose only.",
+   "test": [
+    "Tooltips hide on scroll and swipe.",
+    "K2 leak test."
+   ],
+   "effect": "Disposed rows are not kept alive by the app-scoped cubit's stream."
+  },
+  {
+   "n": 4,
+   "title": "One tooltip StreamController per listing",
+   "ids": [
+    "B2"
+   ],
+   "area": "Memory",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "94-118"
+    }
+   ],
+   "risk": "Low",
+   "risk_why": "Same stream; created once and closed.",
+   "test": [
+    "Manage Watchlists sheet with an empty list still builds.",
+    "Tooltips hide on scroll."
+   ],
+   "effect": "No unclosed controller per build."
+  },
+  {
+   "n": 5,
+   "title": "One tick stream per row",
+   "ids": [
+    "A3"
+   ],
+   "area": "Idle cost",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "250-258"
+    }
+   ],
+   "risk": "Low",
+   "risk_why": "Same filter and first value; only identity kept.",
+   "test": [
+    "Prices tick after sort, refresh and list switch."
+   ],
+   "effect": "No resubscribe and extra build per row on each list update."
+  },
+  {
+   "n": 6,
+   "title": "Resubscribe only when visible rows change",
+   "ids": [
+    "C4"
+   ],
+   "area": "Scrolling, network",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "166-178"
+    }
+   ],
+   "risk": "Low",
+   "risk_why": "Any change of the visible set still subscribes.",
+   "test": [
+    "Newly visible rows tick after scrolling.",
+    "Holdings list keeps its P&L symbols."
+   ],
+   "effect": "Fewer rect walks, subscribe packets and broadcaster log lines."
+  },
+  {
+   "n": 7,
+   "title": "No shrinkWrap on the bounded list",
+   "ids": [
+    "C3"
+   ],
+   "area": "Scrolling",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/watchlist_listing.dart",
+     "lines": "194-200, 483-486"
+    }
+   ],
+   "risk": "Medium",
+   "risk_why": "Layout change; parent is bounded so the result should be identical.",
+   "test": [
+    "Lists of 1, 20, 100 stocks; pull to refresh; heatmap view."
+   ],
+   "effect": "Less layout work when row heights change."
+  },
+  {
+   "n": 8,
+   "title": "Shell rebuilds only on tab changes",
+   "ids": [
+    "C2"
+   ],
+   "area": "Scrolling, opening",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+     "lines": "546-554"
+    }
+   ],
+   "risk": "Medium",
+   "risk_why": "Changes which state rebuilds the screen shell; the list keeps its own builder.",
+   "test": [
+    "Open, switch chips, sort, refresh; switch Option List / Comm. List and back; coach marks."
+   ],
+   "effect": "One header rebuild fewer per list update (2+ per open)."
+  },
+  {
+   "n": 9,
+   "title": "Cubit forgets the disposed screen",
+   "ids": [
+    "B4"
+   ],
+   "area": "Memory",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "177-185"
+    },
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_screen.dart",
+     "lines": "513-526"
+    }
+   ],
+   "risk": "Low",
+   "risk_why": "Existing guards already treat a missing context as 'do not show'.",
+   "test": [
+    "Leave the tab during a slow fetch; no crash."
+   ],
+   "effect": "The last screen's element can be collected."
+  },
+  {
+   "n": 10,
+   "title": "Start the watchlist call without waiting for MTF",
+   "ids": [
+    "G1"
+   ],
+   "area": "Opening",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/watchlist_cubit.dart",
+     "lines": "199-214"
+    }
+   ],
+   "risk": "Medium",
+   "risk_why": "Loading order changes; MTF tags still applied before the network emit.",
+   "test": [
+    "MTF tags present after open; MTF failure does not block the list."
+   ],
+   "effect": "Watchlist request starts one MTF round-trip earlier (to be measured)."
+  },
+  {
+   "n": 11,
+   "title": "Label the list menu for screen readers",
+   "ids": [
+    "J3"
+   ],
+   "area": "Accessibility",
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/ui/watchlist_options/ui/watchlist_options_bottomsheet.dart",
+     "lines": "41-49"
+    }
+   ],
+   "risk": "Low",
+   "risk_why": "Metadata only.",
+   "test": [
+    "TalkBack reads 'Watchlist options, button'."
+   ],
+   "effect": "List menu usable with TalkBack."
+  }
+ ],
+ "achieve": [
+  {
+   "metric": "Scroll FPS at 120 Hz (S5)",
+   "today": "75.3 fps",
+   "after": "≈ 100–110 fps (estimate)",
+   "items": "1, 6, 7, 8"
+  },
+  {
+   "metric": "PSS growth over 10 open/close cycles (R9)",
+   "today": "+60.0 MB",
+   "after": "≈ 25–35 MB (estimate; rest needs B5, B6 and B7)",
+   "items": "2, 3, 4, 9"
+  },
+  {
+   "metric": "Idle frames identical to previous (U5)",
+   "today": "49.5 %",
+   "after": "slightly lower (≈ 40–45 %); most of it needs A2 and A4",
+   "items": "5"
+  },
+  {
+   "metric": "CPU on idle Bench 20 (C1)",
+   "today": "185.5 %",
+   "after": "slightly lower; most of it needs A2, A4, A5",
+   "items": "5, 6"
+  },
+  {
+   "metric": "Watchlist open time",
+   "today": "not measured",
+   "after": "shorter by one MTF round-trip (to be measured)",
+   "items": "10"
+  }
+ ],
+ "notice": [
+  "Scrolling the watchlist feels smoother on 120 Hz phones.",
+  "Nothing else looks different: same rows, prices, gestures and menus.",
+  "TalkBack can name the list menu."
+ ],
+ "one_line": "Smoother scrolling and less memory growth on the watchlist, with no visible change and no shared-package edits.",
+ "schedule_intro": "Two FE developers; each item is one pull request with its test.",
+ "schedule": [
+  {
+   "who": "Dev 1",
+   "rows": [
+    {
+     "when": "Day 1",
+     "items": "1, 5",
+     "work": "Header pin guard with test; one tick stream per row."
+    },
+    {
+     "when": "Day 2",
+     "items": "7, 6",
+     "work": "Remove shrinkWrap; resubscribe only on visible-set change (after item 2)."
+    },
+    {
+     "when": "Day 3",
+     "items": "8, 10",
+     "work": "Shell rebuild only on tab changes; MTF in parallel; profile build on the OPPO."
+    }
+   ]
+  },
+  {
+   "who": "Dev 2",
+   "rows": [
+    {
+     "when": "Day 1",
+     "items": "3, 4",
+     "work": "Row cleanup and one tooltip controller, with the leak test."
+    },
+    {
+     "when": "Day 2",
+     "items": "2",
+     "work": "Stable keys with the remount test."
+    },
+    {
+     "when": "Day 3",
+     "items": "9, 11",
+     "work": "Cubit context release; kebab accessibility label; regression pass."
+    }
+   ]
+  }
+ ],
+ "not_fixed": [
+  {
+   "what": "Most of the idle CPU and identical idle frames",
+   "where": "C1 still well above 100 % (estimate)",
+   "why": "Needs the row tick filter (behind a flag), the wealth tile change in the shared mo_app_bar package and a Product decision on the rotation.",
+   "ids": [
+    "A2",
+    "A4",
+    "A5",
+    "A6",
+    "A7"
+   ]
+  },
+  {
+   "what": "Full 120 fps scrolling",
+   "where": "≈ 100–110 fps after this plan (estimate)",
+   "why": "The texture render mode is set in the app shell and needs a flagged A/B.",
+   "ids": [
+    "C5"
+   ]
+  },
+  {
+   "what": "Remaining memory growth",
+   "where": "part of the +60 MB",
+   "why": "Leaks in shared packages and possible Java/SDK growth need shared edits and a heap dump.",
+   "ids": [
+    "B5",
+    "B6",
+    "B7"
+   ]
+  },
+  {
+   "what": "Offline banner and stale marker",
+   "where": "O1 stays 44.4",
+   "why": "Visible change that needs Product, a flag, and the shared connectivity-listener fix.",
+   "ids": [
+    "E1",
+    "E2",
+    "E3",
+    "E4"
+   ]
+  },
+  {
+   "what": "Price cadence and resume",
+   "where": "U1 17/min, U3 stale on return",
+   "why": "Feed cadence is a BE question; keeping the socket open is a shared-package and Product trade-off.",
+   "ids": [
+    "D1",
+    "D2"
+   ]
+  },
+  {
+   "what": "Release logcat clean-up",
+   "where": "client code and noisy API logs remain",
+   "why": "All in shared packages (trader_core, trader_network, trader_widgets) and the app manifest.",
+   "ids": [
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9"
+   ]
+  },
+  {
+   "what": "Quick actions, sparkline, SDK traffic",
+   "where": "D1 72.2, X3 9",
+   "why": "Product and BE decisions first.",
+   "ids": [
+    "H1",
+    "H2",
+    "I1",
+    "I2"
+   ]
+  }
+ ]
+}

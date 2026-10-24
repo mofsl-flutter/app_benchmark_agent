@@ -1,0 +1,251 @@
+{
+ "section": "J",
+ "title": "Creation flow and accessibility",
+ "intro": "Creating Bench 20 showed a prefilled name that must be cleared, no confirmation when a stock is added, a header that shifts while the wealth tile rotates, and two icons that screen readers cannot name. These are small fixes; the visible ones are behind flags.",
+ "measured": [
+  {
+   "metric": "Taps to create a list",
+   "current": "4 + clear prefilled name",
+   "expected": "4 (J1)"
+  },
+  {
+   "metric": "Confirmation on add",
+   "current": "none visible",
+   "expected": "short confirmation (J2)"
+  },
+  {
+   "metric": "Accessibility labels on list menu and add icon",
+   "current": "missing",
+   "expected": "present (J3, J4)"
+  }
+ ],
+ "changes": [
+  {
+   "id": "J1",
+   "title": "Select the prefilled name so typing replaces it",
+   "summary": "The Create New Watchlist name field is prefilled with 'WatchList N' and the cursor goes to the end, so users must delete it first. Select the whole text when the field gets focus, so typing replaces it and leaving it keeps the default.",
+   "categories": [
+    "FE",
+    "Product"
+   ],
+   "risk": "Low",
+   "risk_reason": "Text-field focus behaviour inside one sheet. Default name and validation unchanged. Behind WatchlistPerfFlags.nameSelectOnFocus.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "Keep the 'WatchList N' default but select it on focus so typing replaces it (instead of an empty field with the default as hint)?",
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/widgets/add_new_watchlist/add_new_watchlist.dart",
+     "lines": "53-60, 210-218",
+     "change": "Add a FocusNode; on focus, set controller.selection to the full text."
+    }
+   ],
+   "current": "initState computes 'WatchList ${n}' and creates TextEditingController(text: watchlistName). Nothing selects the text, so typing appends to it.",
+   "steps": [
+    "Add FocusNode _nameFocus; listener: if hasFocus and flag on, _controller.selection = TextSelection(baseOffset: 0, extentOffset: _controller.text.length).",
+    "Pass focusNode to the TextField; dispose it."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/widgets/add_new_watchlist/add_new_watchlist.dart",
+    "lines": "53-60",
+    "code": "@override\nvoid initState() {\n  super.initState();\n  getWatchlistName();\n  _controller = TextEditingController(text: watchlistName);\n  tabController =\n      TabController(length: 2, vsync: this, initialIndex: selectedTab);\n}"
+   },
+   "after_code": {
+    "code": "final FocusNode _nameFocus = FocusNode();\n\n@override\nvoid initState() {\n  super.initState();\n  getWatchlistName();\n  _controller = TextEditingController(text: watchlistName);\n  _nameFocus.addListener(() {\n    if (_nameFocus.hasFocus && WatchlistPerfFlags.nameSelectOnFocus) {\n      _controller.selection =\n          TextSelection(baseOffset: 0, extentOffset: _controller.text.length);\n    }\n  });\n  tabController = TabController(length: 2, vsync: this, initialIndex: selectedTab);\n}"
+   },
+   "safety": [
+    "Behind a flag, default off.",
+    "Name rules (5–20 chars, unique) unchanged."
+   ],
+   "regression_checks": [
+    "Tap field and type: name replaced.",
+    "Create without typing: 'WatchList N' created.",
+    "Readymade tab unaffected."
+   ],
+   "after_improvement": "One fewer action per custom watchlist.",
+   "depends_on": [
+    "A1"
+   ],
+   "verify": false
+  },
+  {
+   "id": "J2",
+   "title": "Confirm when a stock is added from search",
+   "summary": "Adding a stock from the add-scrip search only turns the icon into a tick; there is no message. Show a short positive snackbar 'Added to <watchlist>' on success, behind a flag in trader_search.",
+   "categories": [
+    "FE-Shared",
+    "Product"
+   ],
+   "risk": "Medium",
+   "risk_reason": "trader_search is a separate shared module; the result row is used in general search too. Visible change, behind a Remote Config flag read in trader_search, default off.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": "After adding a stock to a watchlist from search, show a 2-second confirmation 'Added to Bench 20'? Also on remove ('Removed from ...')?",
+   "be_request": "Remote Config boolean search_add_confirmation_enabled (default false).",
+   "files": [
+    {
+     "path": "packages/trader_search/lib/ui/widgets/search_result_item_widget.dart",
+     "lines": "577-589",
+     "change": "On isSuccess == true, MOSnackbarService.showPositive(context, message: 'Added to ${watchListName}') when the flag is on."
+    }
+   ],
+   "current": "On a successful addScripAPI the row sets isTick = true and calls setState; the cubit shows snackbars only for errors (dashboard_section_cubit.dart 312-342). The benchmark recorded no confirmation in RISE.",
+   "steps": [
+    "Add the snackbar after isTick = true when the flag is on.",
+    "Use the watchlist name already passed to addScripAPI."
+   ],
+   "before_code": {
+    "path": "packages/trader_search/lib/ui/widgets/search_result_item_widget.dart",
+    "lines": "577-589",
+    "code": "bool? isSuccess = await searchDashBoardCubit.addScripAPI(\n    context,\n    widget.searchResultItemData.scrip.id,\n    watchListId,\n    widget.searchResultItemData.watchListName);\nif (isSuccess == true) {\n  isTick = true;\n  showLoading = false;\n  setState(() {});\n} else {\n  showLoading = false;\n  setState(() {});\n}"
+   },
+   "after_code": {
+    "code": "if (isSuccess == true) {\n  isTick = true;\n  showLoading = false;\n  setState(() {});\n  if (SearchFlags.addConfirmation && context.mounted) {\n    MOSnackbarService.showPositive(context,\n        message: 'Added to ${widget.searchResultItemData.watchListName}');\n  }\n}"
+   },
+   "safety": [
+    "Behind a flag, default off.",
+    "API call and tick state unchanged."
+   ],
+   "regression_checks": [
+    "Add 20 stocks in a row: one confirmation each, no stacking that hides the list.",
+    "General search add icon behaves the same."
+   ],
+   "after_improvement": "Users see that the add worked.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "J3",
+   "title": "Label the list-menu icon for screen readers",
+   "summary": "The kebab that opens Info / Sort / Manage is an InkWell around an icon with no semantic label. Wrap it in Semantics(button: true, label: 'Watchlist options').",
+   "categories": [
+    "FE"
+   ],
+   "risk": "Low",
+   "risk_reason": "Adds accessibility metadata only; no visual change.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_watchlist/lib/ui/watchlist_options/ui/watchlist_options_bottomsheet.dart",
+     "lines": "41-49",
+     "change": "Semantics(button: true, label: WatchlistStrings.wlOptionsA11y) around the InkWell."
+    }
+   ],
+   "current": "build returns PView(child: InkWell(onTap: onClickMoreIcon, child: Container(... MOIcon(menu-circle-vertical) ...))). No Semantics, tooltip or semanticLabel anywhere in trader_watchlist (searched).",
+   "steps": [
+    "Wrap the InkWell in Semantics with button: true and a label.",
+    "Add the string to WatchlistStrings."
+   ],
+   "before_code": {
+    "path": "packages/trader_watchlist/lib/ui/watchlist_options/ui/watchlist_options_bottomsheet.dart",
+    "lines": "41-49",
+    "code": "@override\nWidget build(BuildContext context) {\n  return PView(\n    key: const ValueKey(PlotlineCampaignEvent.kebabMenuInWatchlistEvent),\n    valueKey: PlotlineCampaignEvent.kebabMenuInWatchlistEvent,\n    child: InkWell(\n      splashFactory: InkRipple.splashFactory,\n      onTap: () => onClickMoreIcon(),\n      child: Container("
+   },
+   "after_code": {
+    "code": "return PView(\n  key: const ValueKey(PlotlineCampaignEvent.kebabMenuInWatchlistEvent),\n  valueKey: PlotlineCampaignEvent.kebabMenuInWatchlistEvent,\n  child: Semantics(\n    button: true,\n    label: 'Watchlist options',\n    child: InkWell(\n      splashFactory: InkRipple.splashFactory,\n      onTap: () => onClickMoreIcon(),\n      child: /* unchanged */,\n    ),\n  ),\n);"
+   },
+   "safety": [
+    "No visual or behavioural change."
+   ],
+   "regression_checks": [
+    "TalkBack reads 'Watchlist options, button'.",
+    "Coach mark still anchors to kebabMenuKey."
+   ],
+   "after_improvement": "The list menu is usable with TalkBack.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "J4",
+   "title": "Label the add/remove icon in search results",
+   "summary": "The add-to-watchlist icon in search results is a GestureDetector around an SVG with no label. Add Semantics with 'Add to watchlist' or 'Remove from watchlist' depending on state.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Accessibility metadata only, in the shared search module.",
+   "effort": "S",
+   "user_visible": false,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/trader_search/lib/ui/widgets/search_result_item_widget.dart",
+     "lines": "603-611",
+     "change": "Semantics(button: true, label: isTick ? 'Remove from watchlist' : 'Add to watchlist')."
+    }
+   ],
+   "current": "child: showLoading ? CupertinoActivityIndicator() : SvgCommonRender(isTick ? iconSearchAddedToWatchlist : iconSearchAddToWatchlist, ...). No semantic label; the benchmark's UI tree could not name it.",
+   "steps": [
+    "Wrap the GestureDetector in Semantics with a state-dependent label.",
+    "Do the same in recent_search_item.dart _buildWatchlistIcon for consistency."
+   ],
+   "before_code": {
+    "path": "packages/trader_search/lib/ui/widgets/search_result_item_widget.dart",
+    "lines": "603-611",
+    "code": "child: showLoading\n    ? const CupertinoActivityIndicator()\n    : SvgCommonRender(\n        isTick ? iconSearchAddedToWatchlist : iconSearchAddToWatchlist,\n        color: isTick ? null : context.surfaceIconNeutralNormal,\n        height: MOSpacing.spacing24,\n        width: MOSpacing.spacing20,\n        fit: BoxFit.fitWidth,\n      ),"
+   },
+   "after_code": {
+    "code": "return Semantics(\n  button: true,\n  label: isTick ? 'Remove from watchlist' : 'Add to watchlist',\n  child: GestureDetector(\n    onTap: () async { /* unchanged */ },\n    child: /* unchanged */,\n  ),\n);"
+   },
+   "safety": [
+    "No visual change."
+   ],
+   "regression_checks": [
+    "TalkBack names the icon in both states."
+   ],
+   "after_improvement": "Add/remove is usable with TalkBack and in UI automation.",
+   "depends_on": [],
+   "verify": false
+  },
+  {
+   "id": "J5",
+   "title": "Keep the header height fixed while the wealth tile changes",
+   "summary": "The developer saw the list shift while the header's wealth tile rotates. The tile sits in a box of fixed height (5.5 % of screen height) with an AnimatedSize inside, so the shift probably comes from the tile switching between nothing (SizedBox.shrink) and content when its stream re-emits, which changes the header row's height. Reserve the tile's height in all states.",
+   "categories": [
+    "FE-Shared"
+   ],
+   "risk": "Low",
+   "risk_reason": "Layout inside one shared widget; the reserved height equals the height the tile already uses when visible.",
+   "effort": "S",
+   "user_visible": true,
+   "product_decision": null,
+   "be_request": null,
+   "files": [
+    {
+     "path": "packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart",
+     "lines": "104-132, 333-345",
+     "change": "Return SizedBox(height: tileHeight, width: tileWidth) instead of SizedBox.shrink() while data or tiles are missing."
+    }
+   ],
+   "current": "WealthOverviewTile returns const SizedBox.shrink() when the snapshot has no data or the tile list is empty, and _WealthOverviewTileContent otherwise, which is a SizedBox of MediaQuery height × 0.055. The landing header is in a SliverToBoxAdapter above the list, so any header height change moves the list. Which of these states occurs during rotation was not observed (verify with the Flutter inspector's layout explorer while it rotates).",
+   "steps": [
+    "Confirm with the inspector which widget changes height.",
+    "If it is the shrink/content switch, return a same-size empty box.",
+    "If it is the AnimatedSize, clamp its child height to the outer box."
+   ],
+   "before_code": {
+    "path": "packages/mo_app_bar/lib/widgets/wealth_overview_switcher.dart",
+    "lines": "333-345",
+    "code": "child: SizedBox(\n  height: MediaQuery.of(context).size.height * 0.055,\n  width: MediaQuery.of(context).size.width * 0.5,\n  child: ValueListenableBuilder<double>(\n    valueListenable: _currentHeightNotifier,\n    builder: (context, currentHeight, child) {\n      return AnimatedSize(\n        duration: const Duration(milliseconds: 250),\n        curve: Curves.easeInOut,\n        alignment: Alignment.topCenter,\n        child: SizedBox(\n          height: currentHeight,\n          child: PageView.builder("
+   },
+   "after_code": {
+    "code": "// in WealthOverviewTile.build\nif (!snapshot.hasData || tiles.isEmpty) {\n  return SizedBox(\n    height: MediaQuery.sizeOf(context).height * _WealthOverviewConstants.tileHeightFactor,\n    width: MediaQuery.sizeOf(context).width * _WealthOverviewConstants.tileWidthFactor,\n  );\n}"
+   },
+   "safety": [
+    "Same size as the visible tile; no content change."
+   ],
+   "regression_checks": [
+    "Header height constant through 10 rotations on Watchlist, Home, Trades.",
+    "Users without wealth tiles: header spacing acceptable (Design check)."
+   ],
+   "after_improvement": "No list jump while the header tile changes.",
+   "depends_on": [],
+   "verify": true
+  }
+ ]
+}

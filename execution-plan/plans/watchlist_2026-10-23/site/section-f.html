@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F · Release logging and privacy</title>
+<meta name="description" content="While the benchmark created Bench 20, the release build wrote the client code and analytics attributes to logcat, a doubled API URL, and an &#x27;API Failed&#x27; line for a successful call. The code shows where each comes from: plain print calls in the CleverTap helper, a log line placed before parsing every API response, a URL built from an origin plus a path that is already a full URL, and a print of every cached response. The same paths also spend CPU converting whole responses to strings. These changes keep analytics and the app&#x27;s own file log working but stop writing user data and noise to logcat.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html" class="current"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html" class="current"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section F</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Release logging and privacy</h1>
+        <p class="lede">While the benchmark created Bench 20, the release build wrote the client code and analytics attributes to logcat, a doubled API URL, and an &#x27;API Failed&#x27; line for a successful call. The code shows where each comes from: plain print calls in the CleverTap helper, a log line placed before parsing every API response, a URL built from an origin plus a path that is already a full URL, and a print of every cached response. The same paths also spend CPU converting whole responses to strings. These changes keep analytics and the app&#x27;s own file log working but stop writing user data and noise to logcat.</p>
+        <div class="meta"><span><b>9</b> changes</span><span><b>9</b> low · <b>0</b> medium · <b>0</b> high risk</span><span>FE · shared <b>9</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>Client code and CleverTap add_to_watchlist in release logcat</td><td>present (creation_summary.md)</td><td><b>absent in release builds (F1)</b></td></tr><tr><td>Doubled API URL in release logs</td><td>https://tradingapi.mofsl.nethttps://tradingapi.mofsl.net/... (creation_summary.md)</td><td><b>single URL (F3)</b></td></tr><tr><td>&#x27;API Failed&#x27; on a 200 response</td><td>present (creation_summary.md)</td><td><b>only on real failures (F2)</b></td></tr><tr><td>Repeated orientation events in logcat</td><td>present (creation_summary.md)</td><td><b>not traced to app code; no change planned</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-f.html#F1" title="Print CleverTap events only in debug builds">F1</a></td><td>Print CleverTap events only in debug builds</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-f.html#F2" title="Remove the &#x27;API Failed&#x27; line written on every response">F2</a></td><td>Remove the &#x27;API Failed&#x27; line written on every response</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-f.html#F3" title="Log the request URL once, not origin plus full URL">F3</a></td><td>Log the request URL once, not origin plus full URL</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-f.html#F4" title="Stop printing every cached response">F4</a></td><td>Stop printing every cached response</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-f.html#F5" title="Measure response size from bytes, not toString">F5</a></td><td>Measure response size from bytes, not toString</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-f.html#F6" title="Commit the removal of the bearer-token print">F6</a></td><td>Commit the removal of the bearer-token print</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-f.html#F7" title="Turn off Firebase Performance logcat output">F7</a></td><td>Turn off Firebase Performance logcat output</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-f.html#F8" title="Ask broadcaster owners to stop logging user id and symbols">F8</a></td><td>Ask broadcaster owners to stop logging user id and symbols</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-f.html#F9" title="Print visibility callbacks only in debug">F9</a></td><td>Print visibility callbacks only in debug</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="F1" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F1</span><h3>Print CleverTap events only in debug builds</h3></div>
+    <p class="summary">callCleverTap prints every event name and every attribute with print, which reaches logcat in release builds, including attributes such as Client Code. Wrap the prints in kDebugMode.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>callCleverTap calls internalLogClevertap(eventName, eventData) before CleverTapPlugin.recordEvent. internalLogClevertap uses print for a header, the event name and, via printAttributes, every key and value. Flutter&#x27;s print writes to logcat in release. The search add-to-watchlist event includes ClevertapAttributes.clientCode: Preferences.getUserId() (trader_search search_clevertap_helper.dart 73-83), so the client code appears in logcat.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>import &#x27;package:flutter/foundation.dart&#x27;;</li><li>Guard internalLogClevertap and printAttributes with if (!kDebugMode) return;</li><li>Leave the dart:developer log() call (not printed in release).</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_core/lib/utils/clevertapfunc.dart</td><td class="nowrap">206-224</td><td>Return early from internalLogClevertap and printAttributes when !kDebugMode.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_core/lib/utils/clevertapfunc.dart:206-224</span></div><pre><code><span class="t-k">void</span> internalLogClevertap(
+  String eventName,
+  Map&lt;String, <span class="t-k">dynamic</span>&gt; eventData,
+) {
+  print(<span class="t-s">&quot;//-------------------------//&quot;</span>);
+  print(<span class="t-s">&quot;Clevertap Event Name : $eventName&quot;</span>);
+  print(<span class="t-s">&quot;Attributes: &quot;</span>);
+  eventData.printAttributes();
+  print(<span class="t-s">&quot;//-------------------------//&quot;</span>);
+}
+
+<span class="t-k">extension</span> ClevertapExtensions <span class="t-k">on</span> Map&lt;String, <span class="t-k">dynamic</span>&gt; {
+  <span class="t-k">void</span> printAttributes() {
+    forEach((key, value) {
+      print(<span class="t-s">&quot;$key ---&gt; $value&quot;</span>);
+      <span class="t-c">//TODO:: Fix it</span>
+    });
+  }
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">void</span> internalLogClevertap(
+  String eventName,
+  Map&lt;String, <span class="t-k">dynamic</span>&gt; eventData,
+) {
+  <span class="t-k">if</span> (!kDebugMode) <span class="t-k">return</span>; <span class="t-c">// never print analytics attributes in release</span>
+  print(<span class="t-s">&quot;//-------------------------//&quot;</span>);
+  print(<span class="t-s">&quot;Clevertap Event Name : $eventName&quot;</span>);
+  print(<span class="t-s">&quot;Attributes: &quot;</span>);
+  eventData.printAttributes();
+  print(<span class="t-s">&quot;//-------------------------//&quot;</span>);
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li><li>Events still reach CleverTap.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Release build: add a stock from search; CleverTap dashboard receives add_to_watchlist; logcat shows no attributes.</li><li>Debug build: prints unchanged.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Shared helper used across the app (about 700 call sites of callCleverTap / callCleverTapWithAppSection), but only console output changes; CleverTapPlugin.recordEvent is untouched.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>No client code or event attributes in release logcat.</p></div>
+  </div>
+</article><article class="card change" id="F2" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F2</span><h3>Remove the &#x27;API Failed&#x27; line written on every response</h3></div>
+    <p class="summary">handleResponse writes &#x27;API Failed: The new error &lt;type&gt;&#x27; before it parses every protobuf response, successful or not. Remove that line; the catch block below already logs real failures.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>Inside the GeneratedMessage branch, the first statement of the try is AppWriteLog.writeLog(&quot;API Failed&quot;, &quot;The new error ${responseType.toString()}&quot;), so every protobuf API call (including POST Watchlist/Scrip returning 200) writes an &#x27;API Failed&#x27; entry and stringifies the empty template message.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Delete line 945.</li><li>Keep the catch (err) log at line 974.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_network/lib/DIOApiService2.dart</td><td class="nowrap">943-946</td><td>Delete the AppWriteLog.writeLog(&quot;API Failed&quot;, ...) before BaseResponse.fromBuffer.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_network/lib/DIOApiService2.dart:943-946</span></div><pre><code>} <span class="t-k">else</span> <span class="t-k">if</span> (responseType <span class="t-k">is</span> GeneratedMessage) {
+  <span class="t-k">try</span> {
+    AppWriteLog.writeLog(<span class="t-s">&quot;API Failed&quot;</span>, <span class="t-s">&quot;The new error ${responseType.toString()}&quot;</span>);
+    <span class="t-k">final</span> baseResponse = BaseResponse.fromBuffer(data);</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>} <span class="t-k">else</span> <span class="t-k">if</span> (responseType <span class="t-k">is</span> GeneratedMessage) {
+  <span class="t-k">try</span> {
+    <span class="t-k">final</span> baseResponse = BaseResponse.fromBuffer(data);
+    <span class="t-c">// ... unchanged ...</span>
+  } <span class="t-k">catch</span> (err) {
+    AppWriteLog.writeLog(<span class="t-s">&quot;API Failed&quot;</span>, <span class="t-s">&quot;The new error $err&quot;</span>);
+    <span class="t-k">rethrow</span>;
+  }</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>App log file: no &#x27;API Failed&#x27; for successful calls; a forced parse error still logs.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Shared API client; only a log line is removed. The catch-block log for real parse failures stays.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>App log and logcat stop reporting false failures; one string conversion fewer per API call.</p></div>
+  </div>
+</article><article class="card change" id="F3" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F3</span><h3>Log the request URL once, not origin plus full URL</h3></div>
+    <p class="summary">The API log builds the URL as realUri.origin + requestOptions.path, but path already holds the full URL (for example &quot;${BASE_URL}api/Watchlist&quot;), which produces the doubled https://tradingapi.mofsl.nethttps://... line. Log realUri instead.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>WatchlistAPI builds full URLs (watchlist_apis.dart: static String watchlist = &quot;${BASE_URL}api/Watchlist&quot;), callApiWithDio passes them as the request path, and the success log writes &#x27;${baseResponse.realUri.origin}${baseResponse.requestOptions.path}&#x27;. Origin + full URL = the doubled string seen in logcat.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Use baseResponse.realUri.toString() for url.</li><li>Check the same pattern at lines 965 and 1026 (requestOptions.baseUrl + path) used for the API_FAILED CleverTap event.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_network/lib/DIOApiService2.dart</td><td class="nowrap">385-391</td><td>url: baseResponse.realUri.toString().</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_network/lib/DIOApiService2.dart:385-391</span></div><pre><code>AppWriteLog.writeAPILog(_buildApiLogJson(
+  ts: initApiTime,
+  level: <span class="t-s">&#x27;SUCCESS&#x27;</span>,
+  logType: <span class="t-s">&#x27;API&#x27;</span>,
+  method: baseResponse.requestOptions.method,
+  url: <span class="t-s">&#x27;${baseResponse.realUri.origin}${baseResponse.requestOptions.path}&#x27;</span>,
+  status: baseResponse.statusCode ?? <span class="t-n">0</span>,</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>AppWriteLog.writeAPILog(_buildApiLogJson(
+  ts: initApiTime,
+  level: <span class="t-s">&#x27;SUCCESS&#x27;</span>,
+  logType: <span class="t-s">&#x27;API&#x27;</span>,
+  method: baseResponse.requestOptions.method,
+  url: baseResponse.realUri.toString(),
+  <span class="t-c">// ... unchanged ...</span></code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Log file entries show one https:// per URL for watchlist, search and quote calls.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Only the url field of a log record changes.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Correct URLs in logs; easier support diagnosis.</p></div>
+  </div>
+</article><article class="card change" id="F4" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F4</span><h3>Stop printing every cached response</h3></div>
+    <p class="summary">When a cached response is served, callApiWithDio prints the whole parsed protobuf with print(&#x27;response is &gt;&gt; $response&#x27;). For the watchlist that includes scrip and holdings data. Remove the print.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>For every cached call with a callback (fetchWatchlist and fetchWatchlistById both use one), the cached response is parsed and then printed in full with print, which reaches logcat in release and costs a full toString of the message on the UI isolate.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Delete line 277.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_network/lib/DIOApiService2.dart</td><td class="nowrap">274-278</td><td>Delete the print.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_network/lib/DIOApiService2.dart:274-279</span></div><pre><code>  <span class="t-k">final</span> response = cachedResponse.handleResponse(runtimeType,
+      isFromCache: <span class="t-k">false</span>, url: url, logResponse: logApiResponse);
+  <span class="t-c">//AppWriteLog.writeLog(&quot;API Failed&quot;, &quot;The new error $response&quot;);</span>
+  print(<span class="t-s">&#x27;response is &gt;&gt; $response&#x27;</span>);
+  cacheCallBack.call(response);
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">final</span> response = cachedResponse.handleResponse(runtimeType,
+    isFromCache: <span class="t-k">false</span>, url: url, logResponse: logApiResponse);
+cacheCallBack.call(response);</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Watchlist opens from cache then refreshes from network as today.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Removes a console print only; the cache callback still runs.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>No user data from cached responses in logcat; one full toString fewer per cached call.</p></div>
+  </div>
+</article><article class="card change" id="F5" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F5</span><h3>Measure response size from bytes, not toString</h3></div>
+    <p class="summary">After every API response, the client converts the whole parsed message to a string and UTF-8 encodes it only to log its size. Use the length of the raw response bytes.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>var bytes = utf8.encode(finalResponse.toString()); runs for every successful response, and the request is also stringified for POSTs in the same log line. For large responses (option chains, holdings) this is a noticeable allocation on the UI isolate.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>final int size = (baseResponse.data is List&lt;int&gt;) ? (baseResponse.data as List&lt;int&gt;).length : 0;</li><li>Keep the toString path only inside the non-release notifyActivity block that needs it.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_network/lib/DIOApiService2.dart</td><td class="nowrap">373-379</td><td>bytes length from baseResponse.data when it is a List&lt;int&gt;/Uint8List; skip toString.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_network/lib/DIOApiService2.dart:373-379</span></div><pre><code><span class="t-k">var</span> finalResponse = (baseResponse)
+    .handleResponse(runtimeType, isFromCache: isCacheAvailable, logResponse: logApiResponse);
+<span class="t-k">var</span> lastApiTime = DateTime.now();
+<span class="t-k">var</span> diff = lastApiTime.difference(initApiTime);
+<span class="t-k">var</span> bytes = utf8.encode(finalResponse.toString());
+AppWriteLog.writeLog(<span class="t-s">&quot;Trader API Service&quot;</span>,
+    <span class="t-s">&quot;Response ${baseResponse.statusCode}, ${baseResponse.requestOptions.method},${baseResponse.requestOptions.path}, Response Time: ${diff.inMilliseconds.toString()}ms, Data Size: ${getSizeString(bytes: bytes.length)} ${requestType == HttpMethod.post ? &quot;</span>Request: ${request.toString()}<span class="t-s">&quot; : &quot;</span><span class="t-s">&quot;}&quot;</span>);</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">var</span> finalResponse = (baseResponse)
+    .handleResponse(runtimeType, isFromCache: isCacheAvailable, logResponse: logApiResponse);
+<span class="t-k">var</span> diff = DateTime.now().difference(initApiTime);
+<span class="t-k">final</span> raw = baseResponse.data;
+<span class="t-k">final</span> int sizeBytes = raw <span class="t-k">is</span> List&lt;int&gt; ? raw.length : <span class="t-n">0</span>;
+AppWriteLog.writeLog(<span class="t-s">&quot;Trader API Service&quot;</span>,
+    <span class="t-s">&quot;Response ${baseResponse.statusCode}, ${baseResponse.requestOptions.method}, Response Time: ${diff.inMilliseconds}ms, Data Size: ${getSizeString(bytes: sizeBytes)}&quot;</span>);</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li><li>The request body is no longer written to the release log line.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Debug API list still shows responses in UAT/pilot builds.</li><li>App log shows a size for protobuf calls.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> The logged size changes from &#x27;size of the text form&#x27; to &#x27;size of the wire bytes&#x27;, which is the more useful number; nothing else uses it except the debug API list (non-release only).</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>One full message stringification fewer per API call; small CPU gain on every screen.</p></div>
+  </div>
+</article><article class="card change" id="F6" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F6</span><h3>Commit the removal of the bearer-token print</h3></div>
+    <p class="summary">The committed HEAD of trader_network still contains debugPrint(&#x27;BEARER_TOKEN [$url]: ...&#x27;), which prints the access token in release builds (debugPrint is not stripped). The working copy has the line commented out but not committed. Commit it on the release branch.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>git diff on the working tree shows one line changed in DIOApiService2.dart: the BEARER_TOKEN debugPrint is commented out locally; HEAD 63788d1ac8 still prints it on every API call.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Commit the change (or delete the line).</li><li>grep the repo for other debugPrint/print of &#x27;Authorization&#x27; or tokens.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_network/lib/DIOApiService2.dart</td><td class="nowrap">313</td><td>Keep the line removed and commit; check the release branch builds from a commit that has it removed.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_network/lib/DIOApiService2.dart:313</span></div><pre><code><span class="t-c">// debugPrint(&#x27;BEARER_TOKEN [$url]: ${header[&#x27;Authorization&#x27;]}&#x27;);</span></code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-c">// (line removed)</span></code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Release build logcat during login and watchlist open: no Authorization header values.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Removes a print only.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>No access tokens in device logs.</p></div>
+  </div>
+</article><article class="card change" id="F7" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F7</span><h3>Turn off Firebase Performance logcat output</h3></div>
+    <p class="summary">The release manifest sets firebase_performance_logcat_enabled to true, so Firebase Performance writes its traces and network events to logcat. Set it to false for release (keep it in debug if wanted via a manifest placeholder).</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>&lt;meta-data android:name=&quot;firebase_performance_logcat_enabled&quot; android:value=&quot;true&quot; /&gt; is in the main manifest, so it applies to release builds.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Change to a manifestPlaceholder set true for debug and false for release, or simply false.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">apps/super_app/android/app/src/main/AndroidManifest.xml</td><td class="nowrap">116-118</td><td>android:value=&quot;false&quot; (or a build-type placeholder).</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">apps/super_app/android/app/src/main/AndroidManifest.xml:116-118</span></div><pre><code>&lt;meta-data
+    android:name=<span class="t-s">&quot;firebase_performance_logcat_enabled&quot;</span>
+    android:value=<span class="t-s">&quot;true&quot;</span> /&gt;</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>&lt;meta-data
+    android:name=<span class="t-s">&quot;firebase_performance_logcat_enabled&quot;</span>
+    android:value=<span class="t-s">&quot;${firebasePerfLogcat}&quot;</span> /&gt; &lt;!-- <span class="t-k">false</span> <span class="t-k">in</span> release --&gt;</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li><li>Traces still upload to Firebase.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Firebase console still receives traces from a release build.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> App shell manifest; Firebase Performance collection itself is unchanged.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Less logcat traffic in release.</p></div>
+  </div>
+</article><article class="card change" id="F8" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F8</span><h3>Ask broadcaster owners to stop logging user id and symbols</h3></div>
+    <p class="summary">mosl_broadcaster writes the user id on every socket login and the full symbol set on every subscribe to the app log. Ask the owners to drop the user id and log counts instead of symbol lists.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>onLogin writes &#x27;Login successful: ${authResponse.userId} ${socketCreator.broadCastUrl}&#x27;; subscribeQuote writes &#x27;Subscribe Quote: $symbols&#x27; on every call, and the watchlist calls it on every scroll end (C4). Whether AppWriteLog mirrors to logcat depends on mosl_app_logger&#x27;s FlutterLogs setup (verify).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Open an issue on mosl_broadcaster with the two lines.</li><li>After C4 the number of subscribe logs from the watchlist already drops.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">mosl_broadcaster: lib/internal/broadcast_channel.dart</td><td class="nowrap">213-219</td><td>Log &#x27;Login successful&#x27; without the user id.</td></tr><tr><td class="path">mosl_broadcaster: lib/internal/broadcast_controller.dart</td><td class="nowrap">247-251</td><td>Log the number of symbols, not the set.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">mosl_broadcaster: lib/internal/broadcast_channel.dart:213-219</span></div><pre><code><span class="t-k">void</span> onLogin(AuthResponse authResponse) {
+  loginTimerHandle?.cancel();
+  AppWriteLog.writeLog(
+    <span class="t-s">&quot;Trader Broadcast&quot;</span>,
+    <span class="t-s">&quot;Login successful: ${authResponse.userId} &quot;</span>
+        <span class="t-s">&quot;${socketCreator.broadCastUrl}&quot;</span>,
+  );</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>AppWriteLog.writeLog(
+  <span class="t-s">&quot;Trader Broadcast&quot;</span>,
+  <span class="t-s">&quot;Login successful ${socketCreator.broadCastUrl}&quot;</span>,
+);
+<span class="t-c">// subscribeQuote:</span>
+AppWriteLog.writeLog(<span class="t-s">&quot;Trader Broadcast&quot;</span>, <span class="t-s">&quot;Subscribe Quote: ${symbols.length} symbols&quot;</span>);</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Socket login and subscriptions work as before.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> External git dependency owned by another team; log text only.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>No user id in socket logs; smaller log volume.</p></div>
+  </div>
+</article><article class="card change" id="F9" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">F9</span><h3>Print visibility callbacks only in debug</h3></div>
+    <p class="summary">registerVisibilityDetector prints &#x27;Visible fraction is ...&#x27; for every visibility callback of every streaming widget, in release too (debugPrint is not stripped). Guard it with kDebugMode.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>VisibilityDetector callbacks fire while the watchlist scrolls and when routes change; each prints a line with the fraction and class name. InitState and lifecycle changes print too.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Wrap the four debugPrint calls in if (kDebugMode).</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_widgets/lib/StreamingBaseWidget.dart</td><td class="nowrap">63-74, 100, 152, 168</td><td>if (kDebugMode) around the debugPrint calls.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_widgets/lib/StreamingBaseWidget.dart:63-74</span></div><pre><code>Widget registerVisibilityDetector(
+    {<span class="t-k">required</span> Widget child,
+    <span class="t-k">required</span> String childClassName,
+    double visibleFraction = <span class="t-n">0.3</span>,
+    <span class="t-k">void</span> <span class="t-k">Function</span>(bool isVsiible)? callBack}) {
+  <span class="t-k">return</span> VisibilityDetector(
+    key: Key(childClassName),
+    onVisibilityChanged: (VisibilityInfo info) {
+      _isResume = info.visibleFraction &gt;= visibleFraction;
+      callBack?.call(_isResume);
+      debugPrint(<span class="t-s">&quot;Visible fraction is ${info.visibleFraction} $childClassName&quot;</span>);
+      <span class="t-k">if</span> (info.visibleFraction &gt;= visibleFraction) {</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>onVisibilityChanged: (VisibilityInfo info) {
+  _isResume = info.visibleFraction &gt;= visibleFraction;
+  callBack?.call(_isResume);
+  <span class="t-k">if</span> (kDebugMode) {
+    debugPrint(<span class="t-s">&quot;Visible fraction is ${info.visibleFraction} $childClassName&quot;</span>);
+  }
+  <span class="t-c">// ... unchanged ...</span></code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Logging only; no change to requests, responses, analytics events or UI.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Streaming resumes/pauses on visibility exactly as before.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Shared base class; removes a print only.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Less logcat noise while scrolling; tiny CPU gain.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-e.html"><span class="k">← Previous</span><span class="t">E · Offline and reconnect</span></a><a class="card next" href="section-g.html"><span class="k">Next →</span><span class="t">G · Opening the watchlist (not measured yet)</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

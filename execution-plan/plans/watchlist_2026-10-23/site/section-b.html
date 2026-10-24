@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B · Memory and leaks</title>
+<meta name="description" content="Opening and closing the watchlist ten times adds 60 MB that is not given back, and after five minutes the app holds 380.5 MB. The watchlist cubit lives for the whole app session, and the code adds objects to it or to long-lived streams on every open and every list update without removing them: stream subscriptions and tooltip controllers per row, a new StreamController per build, keys that force every row to be rebuilt from scratch, a listener in the indices rail and an ever-growing symbol list. These changes release what each open creates, without changing what the user sees.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html" class="current"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html" class="current"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section B</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Memory and leaks</h1>
+        <p class="lede">Opening and closing the watchlist ten times adds 60 MB that is not given back, and after five minutes the app holds 380.5 MB. The watchlist cubit lives for the whole app session, and the code adds objects to it or to long-lived streams on every open and every list update without removing them: stream subscriptions and tooltip controllers per row, a new StreamController per build, keys that force every row to be rebuilt from scratch, a listener in the indices rail and an ever-growing symbol list. These changes release what each open creates, without changing what the user sees.</p>
+        <div class="meta"><span><b>7</b> changes</span><span><b>6</b> low · <b>1</b> medium · <b>0</b> high risk</span><span>FE <b>5</b> · FE · shared <b>2</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>PSS growth over 10 open/close cycles (R9)</td><td>+60.0 MB (418.0 -&gt; 478.0 MB, one run, market closed)</td><td><b>≤ 20 MB after B1–B6 (to be confirmed; part of the growth may be outside Dart, see B7)</b></td></tr><tr><td>PSS after 5 min on Bench 20 (R3)</td><td>380.5 MB (one run)</td><td><b>lower by the per-open garbage removed here; target ≤ 340 MB, to be re-measured</b></td></tr><tr><td>PSS on Bench 20 (R2)</td><td>361.2 MB median; runs 340.9, 433.3, 443.1, 354.5, 361.2 (two states, ~352 / ~438)</td><td><b>not expected to change from B1–B6 alone; B7 investigates the two states</b></td></tr><tr><td>PSS after cold start (R1)</td><td>432.9 MB</td><td><b>not addressed by this section (app-wide)</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-b.html#B1" title="Cancel row tooltip subscriptions and dispose controllers">B1</a></td><td>Cancel row tooltip subscriptions and dispose controllers</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-b.html#B2" title="Create the tooltip stream once per listing and close it">B2</a></td><td>Create the tooltip stream once per listing and close it</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-b.html#B3" title="Keep list and row keys stable across rebuilds">B3</a></td><td>Keep list and row keys stable across rebuilds</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-b.html#B4" title="Release the screen context held by the cubit">B4</a></td><td>Release the screen context held by the cubit</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-b.html#B5" title="Cancel the indices-rail listener on dispose">B5</a></td><td>Cancel the indices-rail listener on dispose</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-b.html#B6" title="Stop the subscribed-symbol list growing on every scroll">B6</a></td><td>Stop the subscribed-symbol list growing on every scroll</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-b.html#B7" title="Find the rest of the growth with a memory diff">B7</a></td><td>Find the rest of the growth with a memory diff</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="B1" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">B1</span><h3>Cancel row tooltip subscriptions and dispose controllers</h3></div>
+    <p class="summary">Every WatchlistItem listens to the cubit&#x27;s tooltip stream in initState and never cancels, and creates three JustTheControllers it never disposes. Keep the subscription, cancel it in dispose and dispose the controllers.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>initState calls watchlistCubit.toolTipSteamSubscription.stream.listen(...) and drops the subscription. dispose() only calls super.dispose(). The cubit is app-scoped (apps/super_app/lib/Investor/core/utils/trader_bloc.dart line 90), so each disposed row stays referenced by the stream&#x27;s listener list until that StreamController is replaced, and its three JustTheControllers (ValueNotifiers) are never disposed. With B3 rows are disposed and recreated on every list update, so this repeats many times per open.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add StreamSubscription&lt;bool&gt;? _tooltipSub; assign it in initState.</li><li>In dispose: _tooltipSub?.cancel(); for (final c in tooltipController.values) c.dispose(); then super.dispose().</li><li>Do not call setState or hideTooltip after dispose (the listener checks mounted).</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart</td><td class="nowrap">96-115, 133-137</td><td>Store the StreamSubscription; cancel it and dispose the three JustTheControllers in dispose().</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart:96-115</span></div><pre><code><span class="t-k">@override</span>
+initState() {
+  watchlistCubit = BlocProvider.of&lt;WatchlistCubit&gt;(context);
+  closeThreshold = <span class="t-n">0.3</span> * extentRatio;
+  openThreshold = <span class="t-n">0.7</span> * extentRatio;
+  watchlistCubit.toolTipSteamSubscription.stream.listen((event) <span class="t-k">async</span> {
+    <span class="t-k">for</span> (<span class="t-k">var</span> ctrl <span class="t-k">in</span> tooltipController.values) {
+      <span class="t-k">if</span> (ctrl.value == TooltipStatus.isShowing) {
+        <span class="t-k">await</span> ctrl.hideTooltip(immediately: <span class="t-k">true</span>);
+      }
+    }
+    watchlistCubit.isToolTipShow = <span class="t-k">false</span>;
+  });
+  <span class="t-k">super</span>.initState();
+}
+
+<span class="t-k">@override</span>
+<span class="t-k">void</span> dispose() {
+  <span class="t-k">super</span>.dispose();
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>StreamSubscription&lt;bool&gt;? _tooltipSub;
+
+<span class="t-k">@override</span>
+initState() {
+  watchlistCubit = BlocProvider.of&lt;WatchlistCubit&gt;(context);
+  closeThreshold = <span class="t-n">0.3</span> * extentRatio;
+  openThreshold = <span class="t-n">0.7</span> * extentRatio;
+  _tooltipSub = watchlistCubit.toolTipSteamSubscription.stream.listen((event) <span class="t-k">async</span> {
+    <span class="t-k">if</span> (!mounted) <span class="t-k">return</span>;
+    <span class="t-k">for</span> (<span class="t-k">var</span> ctrl <span class="t-k">in</span> tooltipController.values) {
+      <span class="t-k">if</span> (ctrl.value == TooltipStatus.isShowing) {
+        <span class="t-k">await</span> ctrl.hideTooltip(immediately: <span class="t-k">true</span>);
+      }
+    }
+    watchlistCubit.isToolTipShow = <span class="t-k">false</span>;
+  });
+  <span class="t-k">super</span>.initState();
+}
+
+<span class="t-k">@override</span>
+<span class="t-k">void</span> dispose() {
+  _tooltipSub?.cancel();
+  <span class="t-k">for</span> (<span class="t-k">final</span> c <span class="t-k">in</span> tooltipController.values) {
+    c.dispose();
+  }
+  <span class="t-k">super</span>.dispose();
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>No change while the row is on screen.</li><li>mounted check prevents work after dispose.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Event &#x27;Updates&#x27; chip opens the event sheet; closing it hides tooltips.</li><li>Starting a swipe hides an open tooltip.</li><li>Scrolling with a tooltip open hides it.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Only adds cleanup in dispose of a single widget. Tooltip show/hide behaviour is unchanged while the row is mounted.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Disposed rows no longer stay reachable from the long-lived cubit stream. Part of the R9 growth; size to be confirmed with B7.</p></div>
+  </div>
+</article><article class="card change" id="B2" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">B2</span><h3>Create the tooltip stream once per listing and close it</h3></div>
+    <p class="summary">WatchlistListing replaces the cubit&#x27;s tooltip StreamController with a new one on every build and never closes the old one. Create it once in initState, close it in dispose.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>build() runs watchlistCubit.toolTipSteamSubscription = StreamController&lt;bool&gt;.broadcast(); on every build. Builds happen on every list update, theme stream event and parent rebuild. The old controller is never closed, and its listeners (rows from B1) keep it and the rows alive until the rows are collected.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>In initState (after super.initState), read the cubit with context.read&lt;WatchlistCubit&gt;() in a post-frame callback or didChangeDependencies once, create the controller and keep a reference.</li><li>Remove the assignment from build().</li><li>In dispose(): close the controller only if it is still the one this listing created.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/widgets/watchlist_listing.dart</td><td class="nowrap">94-110, 116-118</td><td>Move the StreamController creation to initState; close it in dispose.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/widgets/watchlist_listing.dart:112-118</span></div><pre><code><span class="t-k">@override</span>
+Widget build(BuildContext context) {
+  _scrollController = PrimaryScrollController.of(context);
+  <span class="t-k">var</span> listViewKey = RectGetter.createGlobalKey();
+  <span class="t-k">final</span> watchlistCubit = BlocProvider.of&lt;WatchlistCubit&gt;(context);
+  watchlistCubit.toolTipSteamSubscription =
+      StreamController&lt;bool&gt;.broadcast();</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>StreamController&lt;bool&gt;? _tooltipCtrl;
+bool _wired = <span class="t-k">false</span>;
+
+<span class="t-k">@override</span>
+<span class="t-k">void</span> didChangeDependencies() {
+  <span class="t-k">super</span>.didChangeDependencies();
+  <span class="t-k">if</span> (!_wired) {
+    _wired = <span class="t-k">true</span>;
+    <span class="t-k">final</span> cubit = BlocProvider.of&lt;WatchlistCubit&gt;(context);
+    _tooltipCtrl = StreamController&lt;bool&gt;.broadcast();
+    cubit.toolTipSteamSubscription = _tooltipCtrl!;
+  }
+}
+
+<span class="t-k">@override</span>
+<span class="t-k">void</span> dispose() {
+  _tooltipCtrl?.close();
+  updatesExpandedNotifier.dispose();
+  <span class="t-k">super</span>.dispose();
+}
+
+<span class="t-k">@override</span>
+Widget build(BuildContext context) {
+  _scrollController = PrimaryScrollController.of(context);
+  <span class="t-k">final</span> watchlistCubit = BlocProvider.of&lt;WatchlistCubit&gt;(context);
+  <span class="t-c">// no controller assignment here any more</span>
+  ...</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Same broadcast stream semantics.</li><li>Rows created before the listing still find the cubit&#x27;s default controller (watchlist_cubit.dart 113-114).</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Tooltips hide on scroll and on swipe start.</li><li>Open Manage Watchlists sheet with an empty watchlist: preview row builds without error.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Same stream type and same producers/consumers; it is just not recreated on every build. Rows built before the listing (Manage sheet preview) keep the cubit&#x27;s default instance as today.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Removes one unclosed StreamController per listing build. Small alone; together with B1 stops disposed rows from being retained.</p></div>
+  </div>
+</article><article class="card change" id="B3" data-item data-cat="FE" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">B3</span><h3>Keep list and row keys stable across rebuilds</h3></div>
+    <p class="summary">The listing creates a new GlobalKey for the list and for every row inside build, which forces Flutter to throw away and recreate every row subtree on each list update. Create the keys once and reuse them.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span class="idlinks">Depends on <a href="section-b.html#B1" title="Cancel row tooltip subscriptions and dispose controllers">B1</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>build() does var listViewKey = RectGetter.createGlobalKey(); and itemBuilder does _keys[index] = RectGetter.createGlobalKey(); before wrapping the row in RectGetter(key: ...). A widget with a different key cannot update the existing element, so on every listing build the whole RefreshIndicator/ListView subtree and every visible row (Slidable, StreamBuilder, WatchlistItem state, three tooltip controllers, one stream subscription) is unmounted and mounted again. One open of Bench 20 emits WatchlistListLoaded at least twice (cache, then network; more with sort), so this happens several times per open.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Make final GlobalKey&lt;RectGetterState&gt; _listViewKey = RectGetter.createGlobalKey(); a field; pass it where listViewKey is used.</li><li>In itemBuilder: final key = _keys.putIfAbsent(index, () =&gt; RectGetter.createGlobalKey());</li><li>In build, remove keys whose index &gt;= watchistScrips.length so getVisible never indexes past the list (today a stale index would throw inside the try and return an empty list).</li><li>Keep the ValueKey(index) on the InkWell and the Key(scripCode) on Slidable unchanged, so a sort still resets each row&#x27;s swipe state.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/widgets/watchlist_listing.dart</td><td class="nowrap">86, 115, 294-296, 522-541</td><td>listViewKey becomes a state field; _keys[index] uses putIfAbsent; prune keys &gt;= item count.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/widgets/watchlist_listing.dart:112-115, 294-296</span></div><pre><code><span class="t-k">@override</span>
+Widget build(BuildContext context) {
+  _scrollController = PrimaryScrollController.of(context);
+  <span class="t-k">var</span> listViewKey = RectGetter.createGlobalKey();
+  <span class="t-c">// ...</span>
+                          _keys[index] = RectGetter.createGlobalKey();
+                          <span class="t-k">return</span> RectGetter(
+                              key: _keys[index],</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">final</span> GlobalKey&lt;RectGetterState&gt; _listViewKey = RectGetter.createGlobalKey();
+<span class="t-k">final</span> Map&lt;int, GlobalKey&lt;RectGetterState&gt;&gt; _keys = {};
+
+<span class="t-k">@override</span>
+Widget build(BuildContext context) {
+  _scrollController = PrimaryScrollController.of(context);
+  <span class="t-k">final</span> count = widget.watchlistListingInfo.watchistScrips.length;
+  _keys.removeWhere((i, _) =&gt; i &gt;= count);
+  ...
+}
+
+<span class="t-c">// itemBuilder</span>
+<span class="t-k">final</span> rowKey = _keys.putIfAbsent(index, () =&gt; RectGetter.createGlobalKey());
+<span class="t-k">return</span> RectGetter(
+    key: rowKey,
+    child: InkWell(key: ValueKey(index), <span class="t-c">/* unchanged */</span>));</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Row content still updates through normal widget updates (didUpdateWidget).</li><li>Slidable keeps its scripCode key, so moving a stock to another index still resets its swipe.</li><li>getVisible gets the same rects as today.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Prices stream for visible rows after open, scroll, sort, refresh, add and remove.</li><li>Swipe Buy/Sell on rows after a sort.</li><li>Coach marks (first row keys) still anchor correctly.</li><li>Heatmap view still works (it uses the same _keys map).</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Changes element identity of the list and rows, which affects state that today is reset on every update (Slidable open state, tooltip state). Visible-row detection (getVisible) reads these keys, so it must keep working.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Rows are updated in place instead of recreated on each list update. Less garbage per open (R9) and less work on each update; also removes the resubscribe storm in A3. Size to be confirmed with K1 and B7.</p></div>
+  </div>
+</article><article class="card change" id="B4" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">B4</span><h3>Release the screen context held by the cubit</h3></div>
+    <p class="summary">The app-scoped WatchlistCubit stores the screen&#x27;s BuildContext on every build and keeps it after the screen is disposed. Clear it in the screen&#x27;s dispose.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>build() calls cubit.saveContext(context) (watchlist_screen.dart 530). The cubit outlives the screen (provided in trader_bloc.dart), so after the user leaves the Watchlist tab it still references the defunct element of the last WatchListScreen until the next open replaces it.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add void clearContext(BuildContext c) { if (identical(_context, c)) _context = null; } to WatchlistCubit.</li><li>Call it in WatchListScreen.dispose() before super.dispose().</li><li>Check the two places that use _context! (fetchWatchlist and getWatchlistById error paths): they run only when shouldShowToast is true, which requires _context?.mounted.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/watchlist_cubit.dart</td><td class="nowrap">177-179</td><td>Add clearContext(BuildContext c) that nulls _context only if it is still c.</td></tr><tr><td class="path">packages/trader_watchlist/lib/watchlist_screen.dart</td><td class="nowrap">513-526</td><td>Call cubit.clearContext(context) in dispose().</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_cubit.dart:177-185</span></div><pre><code><span class="t-k">void</span> saveContext(BuildContext context) {
+  _context = context;
+}
+
+bool <span class="t-k">get</span> shouldShowToast =&gt;
+    !isClosed &amp;&amp;
+    _context?.mounted == <span class="t-k">true</span> &amp;&amp;
+    MyNavigatorObserver.instance.isLandingPageVisible &amp;&amp;
+    BottomNavCubit.currentPageInd == <span class="t-n">1</span>;</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">void</span> saveContext(BuildContext context) {
+  _context = context;
+}
+
+<span class="t-k">void</span> clearContext(BuildContext context) {
+  <span class="t-k">if</span> (identical(_context, context)) _context = <span class="t-k">null</span>;
+}
+
+<span class="t-c">// WatchListScreen.dispose()</span>
+cubit.clearContext(context);</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Existing guards already treat a missing context as &#x27;do not show&#x27;.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Leave the Watchlist tab during a slow fetch: no crash when the fetch fails.</li><li>Cached-data error snackbar still shows when on the tab.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> shouldShowToast and the snackbar paths already check _context?.mounted; a null context reads as not mounted.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>The defunct screen element can be collected after the tab is left. Small; mainly removes one retained subtree per session.</p></div>
+  </div>
+</article><article class="card change" id="B5" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">B5</span><h3>Cancel the indices-rail listener on dispose</h3></div>
+    <p class="summary">The indices rail in the watchlist header adds a listener to the indices list on every mount and never cancels it. Keep the subscription and cancel it in dispose.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>initState runs cubit.mappedIndices.stream.asBroadcastStream().listen((event) { safeSetState(...); subscribeGlobal(...); }) and dispose() does not cancel it. ExploreIndicesCubit is long-lived, and the watchlist screen (and its header) is remounted on every bottom-nav visit, so every visit adds one more listener holding a disposed State. safeSetState skips setState when unmounted, but subscribeGlobal still runs for every stale listener when the indices list changes.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Add StreamSubscription? _mappedIndicesSub; assign it in initState.</li><li>Cancel it in dispose() before super.dispose().</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_home_market/lib/home/ui/widgets/commonindices_show.dart</td><td class="nowrap">141-160, 162-169</td><td>Store the StreamSubscription from mappedIndices.stream.asBroadcastStream().listen and cancel it in dispose.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_home_market/lib/home/ui/widgets/commonindices_show.dart:142-155</span></div><pre><code><span class="t-k">if</span> (cubit.mappedIndices.isNotEmpty) {
+  safeSetState(() {
+    _getIndicesList(cubit.mappedIndices);
+    subscribeGlobal(
+        _indicesList.map((e) =&gt; e.broadcastSymbol).toList(growable: <span class="t-k">false</span>));
+  });
+  cubit.mappedIndices.stream.asBroadcastStream().listen((event) {
+    safeSetState(() {
+      _getIndicesList(cubit.mappedIndices);
+      subscribeGlobal(_indicesList
+          .map((e) =&gt; e.broadcastSymbol)
+          .toList(growable: <span class="t-k">false</span>));
+    });
+  });</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>StreamSubscription? _mappedIndicesSub;
+
+<span class="t-c">// initState</span>
+_mappedIndicesSub = cubit.mappedIndices.stream.asBroadcastStream().listen((event) {
+  safeSetState(() {
+    _getIndicesList(cubit.mappedIndices);
+    subscribeGlobal(_indicesList.map((e) =&gt; e.broadcastSymbol).toList(growable: <span class="t-k">false</span>));
+  });
+});
+
+<span class="t-k">@override</span>
+<span class="t-k">void</span> dispose() {
+  _mappedIndicesSub?.cancel();
+  _indicesScrollController
+    ?..removeListener(_onIndicesScroll)
+    ..dispose();
+  _tagOpacity?.dispose();
+  <span class="t-k">super</span>.dispose();
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Mounted rails behave exactly as today.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Edit pinned indices from Explore, return to Watchlist: rail shows the new set.</li><li>Rail ticks on Trades, Portfolio, Retail Portfolio and StratX.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Shared widget (8 call sites), but the change only adds cleanup; behaviour while mounted is the same.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>One fewer retained State and listener per watchlist visit; stale subscribeGlobal calls stop.</p></div>
+  </div>
+</article><article class="card change" id="B6" data-item data-cat="FE-Shared" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">B6</span><h3>Stop the subscribed-symbol list growing on every scroll</h3></div>
+    <p class="summary">BasePageState.startQuoteStreaming appends the requested symbols to quoteSymbolList on every call, and the watchlist calls it on every scroll end. Add only symbols that are not already in the list.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>startQuoteStreaming does quoteSymbolList.addAll(requestedList). The watchlist listing calls it from every ScrollEndNotification and every ScrollMetricsNotification at the top, so a long session on the watchlist keeps adding the same ~10–20 symbols.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Keep the List type (public field) and add a private Set mirror, or check contains before adding.</li><li>Leave the helper.startQuoteStreaming(requestedList.toSet()) call unchanged.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_widgets/lib/StreamingBaseWidget.dart</td><td class="nowrap">115-118</td><td>Append only symbols not already present.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_widgets/lib/StreamingBaseWidget.dart:115-118</span></div><pre><code><span class="t-k">void</span> startQuoteStreaming(List&lt;BroadcastSymbol&gt; requestedList) {
+  quoteSymbolList.addAll(requestedList);
+  helper.startQuoteStreaming(requestedList.toSet());
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">void</span> startQuoteStreaming(List&lt;BroadcastSymbol&gt; requestedList) {
+  <span class="t-k">for</span> (<span class="t-k">final</span> s <span class="t-k">in</span> requestedList) {
+    <span class="t-k">if</span> (!quoteSymbolList.contains(s)) quoteSymbolList.add(s);
+  }
+  helper.startQuoteStreaming(requestedList.toSet());
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Same socket requests as today.</li><li>resumeStreaming sends the same set.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Watchlist, quote page, positions and holdings resume streaming after background.</li><li>Scroll the watchlist for 2 min: prices still tick.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Shared base class used by many streaming screens. resumeStreaming already uses quoteSymbolList.toSet(), so the set of symbols sent is identical; only duplicates are no longer stored.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Bounded list per screen instead of one growing with every scroll. Small memory effect; removes a slow leak in long sessions.</p></div>
+  </div>
+</article><article class="card change" id="B7" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">B7</span><h3>Find the rest of the growth with a memory diff</h3></div>
+    <p class="summary">Part of R9 and the two R2 memory states are not explained by Dart code: the R2 dumps show Java heap of about 25 MB in the low runs and about 94–102 MB in the high runs, and a WebView exists in-process. After B1–B6, take a DevTools memory diff and an Android heap dump across 10 open/close cycles.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span><span class="idlinks">Depends on <a href="section-b.html#B1" title="Cancel row tooltip subscriptions and dispose controllers">B1</a> <a href="section-b.html#B2" title="Create the tooltip stream once per listing and close it">B2</a> <a href="section-b.html#B3" title="Keep list and row keys stable across rebuilds">B3</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>Each open of the Watchlist tab runs initState again (the shell does not keep the page alive), starts a fetch with a loading state, logs analytics and mounts the header. The R9 run was manual and at market close, so live-tick objects were not part of it. The Java heap difference between R2 runs points at native/Java SDK objects (WebView or analytics SDKs), which Dart tooling will not show.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Profile build, DevTools Memory: snapshot after first open, after 10 open/close cycles, diff by class (look for WatchlistItem states, JustTheController, StreamController, _StreamBuilderBaseState, CommonIndicesShowState).</li><li>adb shell dumpsys meminfo com.mosl.mobile before/after; Android Studio heap dump for Java objects (WebView, CleverTap, MoEngage, Plotline).</li><li>Record which objects grow; open a follow-up change for anything outside this module.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/watchlist_screen.dart</td><td class="nowrap">393-401</td><td>No change; this is what runs on every open and should be the focus of the diff.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_screen.dart:393-401</span></div><pre><code><span class="t-k">final</span> int initialTab = _resolveInitialTab();
+_isWatchlistSelected = initialTab == <span class="t-n">0</span>;
+cubit = context.read&lt;WatchlistCubit&gt;();
+cubit.getResearchIdeasUserType();
+cubit.togglePersistHeader(<span class="t-k">true</span>);
+<span class="t-k">if</span> (_isWatchlistSelected) {
+  _loadData(localSelectedWatchlistId);
+  NotifyVisitorsService.trackScreen(WatchlistStrings.watchlistLbl);
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-c">// No code change. Expected after B1-B6: no growth in WatchlistItem /</span>
+<span class="t-c">// JustTheController / StreamController instance counts across 10 cycles.</span></code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>No production change.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>None.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Measurement only.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Separates the Dart leaks fixed here from SDK or Java-side growth, so the R9 target can be met or re-scoped with evidence.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-a.html"><span class="k">← Previous</span><span class="t">A · Idle CPU and redraw on the watchlist</span></a><a class="card next" href="section-c.html"><span class="k">Next →</span><span class="t">C · Scrolling and frame delivery</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

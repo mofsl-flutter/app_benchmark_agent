@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K · Tests and re-measurement</title>
+<meta name="description" content="The fixes in sections A–C remove work that does not show on screen, so they can regress silently. These tests pin the behaviour: rows are not recreated on list updates, rows release their listeners, and the header state is emitted once per change. Re-measurement on the same phone closes the loop.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html" class="current"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html" class="current"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section K</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Tests and re-measurement</h1>
+        <p class="lede">The fixes in sections A–C remove work that does not show on screen, so they can regress silently. These tests pin the behaviour: rows are not recreated on list updates, rows release their listeners, and the header state is emitted once per change. Re-measurement on the same phone closes the loop.</p>
+        <div class="meta"><span><b>3</b> changes</span><span><b>3</b> low · <b>0</b> medium · <b>0</b> high risk</span><span>FE <b>3</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>Automated checks for remounts, leaks and header emits</td><td>none in trader_watchlist/test</td><td><b>3 tests in CI</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-k.html#K1" title="Test that list updates do not recreate rows">K1</a></td><td>Test that list updates do not recreate rows</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-k.html#K2" title="Test that rows release their tooltip listener">K2</a></td><td>Test that rows release their tooltip listener</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-k.html#K3" title="Test one header emit per value change">K3</a></td><td>Test one header emit per value change</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="K1" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">K1</span><h3>Test that list updates do not recreate rows</h3></div>
+    <p class="summary">Widget test: pump WatchlistListing with 20 scrips, emit a second WatchlistListLoaded with the same scrips, and assert WatchlistItem state objects are the same instances (no initState on update).</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span class="idlinks">Depends on <a href="section-b.html#B3" title="Keep list and row keys stable across rebuilds">B3</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>No test covers row identity. Today the test would fail because itemBuilder creates a new GlobalKey per row per build.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Find WatchlistItem states with tester.stateList, store identityHashCodes, rebuild with new info, compare.</li><li>Run with experimentalLeakTesting enabled (flutter_test&#x27;s leak tracking) to catch undisposed controllers.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/test/widgets/watchlist_listing_remount_test.dart</td><td class="nowrap">new</td><td>New widget test using existing mocks in test/mocks.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/widgets/watchlist_listing.dart:294-296</span></div><pre><code>_keys[index] = RectGetter.createGlobalKey();
+<span class="t-k">return</span> RectGetter(
+    key: _keys[index],</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>testWidgets(<span class="t-s">&#x27;list update keeps row states&#x27;</span>, (tester) <span class="t-k">async</span> {
+  <span class="t-k">await</span> tester.pumpWidget(harness(info(scrips20)));
+  <span class="t-k">final</span> before = tester.stateList(find.byType(WatchlistItem)).map(identityHashCode).toList();
+  <span class="t-k">await</span> tester.pumpWidget(harness(info(scrips20)));
+  <span class="t-k">final</span> after = tester.stateList(find.byType(WatchlistItem)).map(identityHashCode).toList();
+  expect(after, before);
+}, experimentalLeakTesting: LeakTesting.settings.withTrackedAll());</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Test only.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Test passes after B3; fails on today&#x27;s code.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Test only.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Prevents B3 from regressing.</p></div>
+  </div>
+</article><article class="card change" id="K2" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">K2</span><h3>Test that rows release their tooltip listener</h3></div>
+    <p class="summary">Widget test: mount and unmount the listing 10 times and assert the cubit&#x27;s tooltip stream has no listeners left and no JustTheController is leaked.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span class="idlinks">Depends on <a href="section-b.html#B1" title="Cancel row tooltip subscriptions and dispose controllers">B1</a> <a href="section-b.html#B2" title="Create the tooltip stream once per listing and close it">B2</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>No test covers WatchlistItem disposal; dispose() is empty today.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Pump/unpump 10 times.</li><li>expect(cubit.toolTipSteamSubscription.hasListener, isFalse) after the last unmount.</li><li>Enable leak tracking for ValueNotifier-based controllers.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/test/widgets/watchlist_item_dispose_test.dart</td><td class="nowrap">new</td><td>New widget test with leak tracking.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/ui/watchlist_item/watchlist_item.dart:112-115</span></div><pre><code><span class="t-k">@override</span>
+<span class="t-k">void</span> dispose() {
+  <span class="t-k">super</span>.dispose();
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>testWidgets(<span class="t-s">&#x27;rows cancel tooltip subscriptions&#x27;</span>, (tester) <span class="t-k">async</span> {
+  <span class="t-k">for</span> (<span class="t-k">var</span> i = <span class="t-n">0</span>; i &lt; <span class="t-n">10</span>; i++) {
+    <span class="t-k">await</span> tester.pumpWidget(harness(info(scrips20)));
+    <span class="t-k">await</span> tester.pumpWidget(<span class="t-k">const</span> SizedBox());
+  }
+  expect(cubit.toolTipSteamSubscription.hasListener, isFalse);
+}, experimentalLeakTesting: LeakTesting.settings.withTrackedAll());</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Test only.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Passes after B1 and B2.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Test only.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Prevents B1/B2 from regressing; gives an R9 proxy in CI.</p></div>
+  </div>
+</article><article class="card change" id="K3" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">K3</span><h3>Test one header emit per value change</h3></div>
+    <p class="summary">Cubit test: call togglePersistHeader(false) 50 times and assert one TogglePersistHeader emission.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span class="idlinks">Depends on <a href="section-c.html#C1" title="Emit the header pin state only when it changes">C1</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>watchlist_cubit_test.dart exists; no case checks repeated identical emits.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Listen to cubit.stream, call togglePersistHeader(true) once, then (false) 50 times, expect two states.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/test/watchlist_cubit_test.dart</td><td class="nowrap">append</td><td>New test case in the existing cubit test file.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_cubit.dart:101-104</span></div><pre><code><span class="t-k">void</span> togglePersistHeader(bool shouldPersist) {
+  _shouldPinnedHeader = shouldPersist;
+  safeEmit(TogglePersistHeader(_shouldPinnedHeader));
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>test(<span class="t-s">&#x27;togglePersistHeader emits only on change&#x27;</span>, () <span class="t-k">async</span> {
+  <span class="t-k">final</span> states = &lt;WatchlistState&gt;[];
+  <span class="t-k">final</span> sub = cubit.stream.listen(states.add);
+  cubit.togglePersistHeader(<span class="t-k">true</span>);
+  <span class="t-k">for</span> (<span class="t-k">var</span> i = <span class="t-n">0</span>; i &lt; <span class="t-n">50</span>; i++) { cubit.togglePersistHeader(<span class="t-k">false</span>); }
+  <span class="t-k">await</span> Future&lt;<span class="t-k">void</span>&gt;.delayed(Duration.zero);
+  expect(states.whereType&lt;TogglePersistHeader&gt;().length, <span class="t-n">2</span>);
+  <span class="t-k">await</span> sub.cancel();
+});</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Test only.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Passes after C1.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Test only.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Prevents the per-frame header rebuild from coming back.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-j.html"><span class="k">← Previous</span><span class="t">J · Creation flow and accessibility</span></a><a class="card next" href="files.html"><span class="k">Next →</span><span class="t">File-wise changes</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

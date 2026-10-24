@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C · Scrolling and frame delivery</title>
+<meta name="description" content="Scrolling the watchlist is free of jank (0.34 % janky frames, p99 15 ms), but on the 120 Hz screen only 75.3 frames per second reach the display, about 63 % of what the screen offers. The code shows that every frame of a downward scroll rebuilds the whole header, that the whole screen rebuilds on each list update, and that the list re-measures itself. The app also renders through a texture view on Android 11 and later, which adds a second composition pass. These changes remove per-frame work and test the render mode behind a flag.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="side" aria-label="Report navigation">
+    <div class="brand">Watchlist Module Change Plan<small>trader_watchlist · 23 Oct 2026</small></div>
+    <div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html" class="current"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div>
+  </aside>
+  <div>
+    <div class="topnav">
+      <div class="row">
+        <div class="brand">Watchlist Module Change Plan</div>
+        <details><summary>Menu</summary><div class="menu"><div class="navgroup"><a href="index.html"><span>Overview</span></a><a href="summary.html"><span>Summary and 2–4 day plan</span></a><a href="optimized-plan.html"><span>Optimized FE plan</span></a><a href="most-preferred-plan.html"><span>Most preferred plan</span></a></div><div class="navgroup"><div class="label">Sections</div><a href="section-a.html"><span class="l">A</span><span>Idle CPU and redraw on the watchlist</span><span class="n">7</span></a><a href="section-b.html"><span class="l">B</span><span>Memory and leaks</span><span class="n">7</span></a><a href="section-c.html" class="current"><span class="l">C</span><span>Scrolling and frame delivery</span><span class="n">5</span></a><a href="section-d.html"><span class="l">D</span><span>Live prices and returning to the app</span><span class="n">2</span></a><a href="section-e.html"><span class="l">E</span><span>Offline and reconnect</span><span class="n">4</span></a><a href="section-f.html"><span class="l">F</span><span>Release logging and privacy</span><span class="n">9</span></a><a href="section-g.html"><span class="l">G</span><span>Opening the watchlist (not measured yet)</span><span class="n">3</span></a><a href="section-h.html"><span class="l">H</span><span>Watchlist features and quick actions</span><span class="n">2</span></a><a href="section-i.html"><span class="l">I</span><span>Third-party SDK traffic on the watchlist</span><span class="n">2</span></a><a href="section-j.html"><span class="l">J</span><span>Creation flow and accessibility</span><span class="n">5</span></a><a href="section-k.html"><span class="l">K</span><span>Tests and re-measurement</span><span class="n">3</span></a></div><div class="navgroup"><div class="label">Cross views</div><a href="files.html"><span>File-wise changes</span></a><a href="teams.html"><span>Team-wise changes</span></a><a href="risk.html"><span>Risk and rollout</span></a><a href="full-report.html"><span>Full report (print)</span></a></div></div></details>
+      </div>
+    </div>
+    <main class="content">
+      <header class="pagehead">
+        <div class="headrow"><div class="eyebrow">Section C</div><button class="theme-btn" type="button">Theme</button></div>
+        <h1>Scrolling and frame delivery</h1>
+        <p class="lede">Scrolling the watchlist is free of jank (0.34 % janky frames, p99 15 ms), but on the 120 Hz screen only 75.3 frames per second reach the display, about 63 % of what the screen offers. The code shows that every frame of a downward scroll rebuilds the whole header, that the whole screen rebuilds on each list update, and that the list re-measures itself. The app also renders through a texture view on Android 11 and later, which adds a second composition pass. These changes remove per-frame work and test the render mode behind a flag.</p>
+        <div class="meta"><span><b>5</b> changes</span><span><b>2</b> low · <b>2</b> medium · <b>1</b> high risk</span><span>FE <b>4</b> · FE · shared <b>1</b> · BE <b>1</b></span></div>
+      </header><section class="block"><div class="bh"><h2>Today vs after improvement</h2></div><div class="card table-wrap"><table><thead><tr><th>Metric</th><th>Today</th><th>After improvement</th></tr></thead><tbody><tr><td>Average FPS while scrolling Bench 20 (S5)</td><td>75.3 fps at 120 Hz (~63 % of offered frames)</td><td><b>≥ 110 fps at 120 Hz after C1–C4; C5 decides whether full 120 fps is reachable (verify)</b></td></tr><tr><td>Janky frames while scrolling (S1)</td><td>0.34 %</td><td><b>unchanged or lower</b></td></tr><tr><td>Frame duration p50 / p90 / p99 (S2–S4)</td><td>6.3 / 9.7 / 15 ms</td><td><b>≈ same or lower; header rebuild removal mainly cuts UI-thread work on reverse scroll</b></td></tr><tr><td>Tab switch gesture jank (S7)</td><td>1.62 %</td><td><b>keep ≤ 2 % (regression guard)</b></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Changes in this section</h2><p>Select an ID to jump to the full detail.</p></div><div class="card table-wrap"><table><thead><tr><th>ID</th><th>Change</th><th>Teams</th><th>Risk</th><th>Effort</th><th>Visible</th></tr></thead><tbody><tr><td class="nowrap"><a href="section-c.html#C1" title="Emit the header pin state only when it changes">C1</a></td><td>Emit the header pin state only when it changes</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-c.html#C2" title="Stop rebuilding the whole screen on each list update">C2</a></td><td>Stop rebuilding the whole screen on each list update</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-c.html#C3" title="Remove shrinkWrap from the bounded list">C3</a></td><td>Remove shrinkWrap from the bounded list</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Medium">Medium</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-c.html#C4" title="Resubscribe only when the visible rows change">C4</a></td><td>Resubscribe only when the visible rows change</td><td><span class="tags"><span class="tag cat-FE">FE</span></span></td><td><span class="risk Low">Low</span></td><td><span class="effort">S · ≤ 1 day</span></td><td><span class="muted">No</span></td></tr><tr><td class="nowrap"><a href="section-c.html#C5" title="Test SurfaceView rendering on Android 11+">C5</a></td><td>Test SurfaceView rendering on Android 11+</td><td><span class="tags"><span class="tag cat-FE-Shared">FE · shared</span><span class="tag cat-BE">BE</span></span></td><td><span class="risk High">High</span></td><td><span class="effort">M · 2–4 days</span></td><td><span class="muted">No</span></td></tr></tbody></table></div></section><section class="block"><div class="bh"><h2>Change details</h2></div><div class="filters" role="search"><input class="search" id="search" type="search" placeholder="Search…" aria-label="Search"><div class="chips" role="group" aria-label="Filter by team"><button class="chip" type="button" data-group="cat" data-value="all" aria-pressed="true">All teams</button><button class="chip" type="button" data-group="cat" data-value="FE" aria-pressed="false">FE</button><button class="chip" type="button" data-group="cat" data-value="FE-Shared" aria-pressed="false">FE · shared</button><button class="chip" type="button" data-group="cat" data-value="BE" aria-pressed="false">BE</button><button class="chip" type="button" data-group="cat" data-value="Product" aria-pressed="false">Product</button></div><div class="chips" role="group" aria-label="Filter by risk"><button class="chip" type="button" data-group="risk" data-value="all" aria-pressed="true">Any risk</button><button class="chip" type="button" data-group="risk" data-value="Low" aria-pressed="false">Low</button><button class="chip" type="button" data-group="risk" data-value="Medium" aria-pressed="false">Medium</button><button class="chip" type="button" data-group="risk" data-value="High" aria-pressed="false">High</button></div><span class="count" id="count" data-noun="changes" aria-live="polite"></span></div><div class="changes"><article class="card change" id="C1" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">C1</span><h3>Emit the header pin state only when it changes</h3></div>
+    <p class="summary">On every frame of a downward scroll the listing calls togglePersistHeader(false), which emits a new state and rebuilds the whole header (landing header, wealth tile, indices rail, tab bar, banners). Emit only when the value actually changes.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>The NotificationListener in the listing calls watchlistCubit.togglePersistHeader(false) for every ScrollUpdateNotification while the user scrolls down (and for every ScrollUpdateNotification in heatmap view). togglePersistHeader always calls safeEmit(TogglePersistHeader(...)); WatchlistState classes have no == and safeEmit does not dedupe, so Bloc emits each time. The header BlocBuilder (watchlist_screen.dart 588-597, buildWhen: current is TogglePersistHeader) then rebuilds watchlistHeaderAppBar, which rebuilds the landing header, CommonIndicesShow (with new tick streams, A6), the curve tab bar and CrossSellingBanners, once per frame.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>In togglePersistHeader: if (_shouldPinnedHeader == shouldPersist &amp;&amp; state is TogglePersistHeader) return; then assign and emit.</li><li>Keep the first emit (from initState) so the header BlocBuilder still gets a TogglePersistHeader state.</li><li>Add K3 (unit test: one emit per value change).</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/watchlist_cubit.dart</td><td class="nowrap">101-104</td><td>Return early when shouldPersist equals the current value.</td></tr><tr><td class="path">packages/trader_watchlist/lib/widgets/watchlist_listing.dart</td><td class="nowrap">161-165, 463-465</td><td>No change needed after the guard; optional: call only on ScrollStartNotification.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_cubit.dart:101-104</span></div><pre><code><span class="t-k">void</span> togglePersistHeader(bool shouldPersist) {
+  _shouldPinnedHeader = shouldPersist;
+  safeEmit(TogglePersistHeader(_shouldPinnedHeader));
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">void</span> togglePersistHeader(bool shouldPersist) {
+  <span class="t-k">if</span> (_shouldPinnedHeader == shouldPersist &amp;&amp; state <span class="t-k">is</span> TogglePersistHeader) {
+    <span class="t-k">return</span>; <span class="t-c">// nothing changed; avoid rebuilding the whole header</span>
+  }
+  _shouldPinnedHeader = shouldPersist;
+  safeEmit(TogglePersistHeader(_shouldPinnedHeader));
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>The header does not read the pin value for layout (it never pins), so the output is identical.</li><li>Other states still flow; only repeated identical TogglePersistHeader emits are skipped.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Scroll down and up on Bench 20: header scrolls away and comes back as today.</li><li>Switch to Option List and Comm. List and back.</li><li>Wealth tile and indices rail keep updating while the list is still.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> The pinned value is not used by the header any more (the header is a SliverToBoxAdapter, see the comment at watchlist_screen.dart 877-882), so skipping identical emits cannot change what is drawn.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Removes a full header rebuild from every frame of a downward scroll. Expected to be the largest code-side gain for S5 (75.3 fps towards ≥ 110 fps at 120 Hz, to be confirmed).</p></div>
+  </div>
+</article><article class="card change" id="C2" data-item data-cat="FE" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">C2</span><h3>Stop rebuilding the whole screen on each list update</h3></div>
+    <p class="summary">The outer BlocBuilder rebuilds the NestedScrollView, header and body on every WatchlistListLoaded, although the list has its own BlocBuilder for that state. Rebuild the outer tree only for tab changes and the initial state.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span><span class="idlinks">Depends on <a href="section-c.html#C1" title="Emit the header pin state only when it changes">C1</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>buildWhen returns true for WatchlistListLoaded, WatchlistInitial and ToggleTabView. One open emits WatchlistListLoaded at least twice (cache result, then network result; more with sort or a default-watchlist refetch), and each one rebuilds the whole NestedScrollView and header before the inner list BlocBuilder (lines 985-990) rebuilds the list again. _body only passes the state through; the list content comes from the inner builder (verify there is no other reader).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Search _body and its children for reads of the outer `state` other than ToggleTabView index; there should be none.</li><li>Change buildWhen to current is WatchlistInitial || current is ToggleTabView.</li><li>Keep the Comm. List and Option List branches unchanged (they do not depend on WatchlistListLoaded).</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/watchlist_screen.dart</td><td class="nowrap">549-554</td><td>Drop WatchlistListLoaded from the outer buildWhen, after confirming nothing in _body reads that state.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/watchlist_screen.dart:546-554</span></div><pre><code>body: Obx(() {
+  <span class="t-k">return</span> AbsorbPointer(
+    absorbing: BottomNavCubit.isTutorialCoachMarkShowing.value,
+    child: BlocBuilder&lt;WatchlistCubit, WatchlistState&gt;(
+        buildWhen: (previous, current) {
+      <span class="t-k">return</span> (current <span class="t-k">is</span> WatchlistListLoaded ||
+          current <span class="t-k">is</span> WatchlistInitial ||
+          current <span class="t-k">is</span> ToggleTabView);
+    }, builder: (context, state) {</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>child: BlocBuilder&lt;WatchlistCubit, WatchlistState&gt;(
+    buildWhen: (previous, current) {
+  <span class="t-c">// The list has its own BlocBuilder for WatchlistListLoaded; the shell</span>
+  <span class="t-c">// only needs to follow tab changes and the first state.</span>
+  <span class="t-k">return</span> current <span class="t-k">is</span> WatchlistInitial || current <span class="t-k">is</span> ToggleTabView;
+}, builder: (context, state) {</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>The inner list BlocBuilder still rebuilds on every WatchlistListLoaded.</li><li>Tab switching still rebuilds the shell.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Open the tab cold and warm; list appears.</li><li>Switch list chips, sort, refresh, add/remove a stock.</li><li>Switch to Option List / Comm. List and back; post-market default tab.</li><li>Coach marks on first use still block taps while shown.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Changes which state rebuilds the screen shell. The outer builder also derives the selected tab and the coach-mark absorb state; those must still follow ToggleTabView and the initial load.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>One full header rebuild fewer per list update (2+ per open). Helps opening and the first scroll after a load.</p></div>
+  </div>
+</article><article class="card change" id="C3" data-item data-cat="FE" data-risk="Medium">
+  <header>
+    <div class="idrow"><span class="cid">C3</span><h3>Remove shrinkWrap from the bounded list</h3></div>
+    <p class="summary">The watchlist ListView uses shrinkWrap: true although it sits in an Expanded with a bounded height. Remove shrinkWrap (and from the heatmap GridView) so the viewport keeps a fixed size.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Medium">Medium</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>ListView.separated(physics: AlwaysScrollableScrollPhysics(), shrinkWrap: true, controller: _scrollController, ...) inside Expanded &gt; InkWell &gt; ... &gt; RefreshIndicator. A shrink-wrapping viewport sizes itself from its content, so any change in a row&#x27;s height (detailed view, Updates chip animation, performance line) re-lays out the viewport.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Remove shrinkWrap: true from the ListView.separated.</li><li>Remove shrinkWrap: true from the heatmap GridView.builder.</li><li>Check the trailing &#x27;Add Scrip&#x27; row and pull-to-refresh on a 1-stock list.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/widgets/watchlist_listing.dart</td><td class="nowrap">194-200, 483-486</td><td>shrinkWrap: false (default) on ListView.separated and GridView.builder.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/widgets/watchlist_listing.dart:194-200</span></div><pre><code>child: ListView.separated(
+  physics: <span class="t-k">const</span> AlwaysScrollableScrollPhysics(),
+  shrinkWrap: <span class="t-k">true</span>,
+  controller: _scrollController,
+  itemCount:
+      widget.watchlistListingInfo.watchistScrips.length +
+          (_showAddScripButton(watchlistCubit) ? <span class="t-n">1</span> : <span class="t-n">0</span>),</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>child: ListView.separated(
+  physics: <span class="t-k">const</span> AlwaysScrollableScrollPhysics(),
+  controller: _scrollController,
+  itemCount:
+      widget.watchlistListingInfo.watchistScrips.length +
+          (_showAddScripButton(watchlistCubit) ? <span class="t-n">1</span> : <span class="t-n">0</span>),</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Parent height is bounded (Expanded), so the list fills the same area.</li><li>Physics unchanged, so pull-to-refresh works on short lists.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Lists with 1, 5, 20 and 100 stocks; Add Scrip row at the end.</li><li>Pull to refresh.</li><li>Heatmap view.</li><li>Header scroll-away behaviour in the NestedScrollView.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Medium.</b> Layout change in the main list. With a bounded parent the visible result should be the same; short lists must still allow pull-to-refresh (AlwaysScrollableScrollPhysics is kept).</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Less layout work per frame when row heights change. Small but steady contribution to S5 (verify with the Performance overlay).</p></div>
+  </div>
+</article><article class="card change" id="C4" data-item data-cat="FE" data-risk="Low">
+  <header>
+    <div class="idrow"><span class="cid">C4</span><h3>Resubscribe only when the visible rows change</h3></div>
+    <p class="summary">At every scroll end, and at every scroll-metrics change at the top, the listing walks all row keys, builds the visible symbol list and sends a subscribe request, which the broadcaster also writes to its log. Do it only when the visible set differs from the last one.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE">FE</span></span></span><span>Risk <span class="risk Low">Low</span></span><span>Effort <span class="effort">S · ≤ 1 day</span></span><span><span class="tag visible">No visible change</span></span><span class="idlinks">Depends on <a href="section-b.html#B3" title="Keep list and row keys stable across rebuilds">B3</a></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>On ScrollEndNotification or isFirstScroll(notification) (any ScrollMetricsNotification with extentBefore == 0) the listener calls getVisible, which reads every row&#x27;s rect through its GlobalKey, then startQuoteStreaming(subscriptionList). In the broadcaster, subscribeQuote writes &#x27;Subscribe Quote: &lt;all symbols&gt;&#x27; to the app log and computes subscription diffs (mosl_broadcaster broadcast_controller.dart 248-258) every time.</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Keep Set&lt;BroadcastSymbol&gt; _lastVisible in the state.</li><li>After computing subscriptionList, if setEquals(_lastVisible, subscriptionList.toSet()) return; else store and call startQuoteStreaming.</li><li>Clear _lastVisible when the watchlist changes (didUpdateWidget with a different watchlistInfo.id) so a new list always subscribes.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">packages/trader_watchlist/lib/widgets/watchlist_listing.dart</td><td class="nowrap">166-178</td><td>Compare the new visible set with the last one; call startQuoteStreaming only when different.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">packages/trader_watchlist/lib/widgets/watchlist_listing.dart:166-178</span></div><pre><code><span class="t-k">if</span> (notification <span class="t-k">is</span> ScrollEndNotification ||
+    isFirstScroll(notification)) {
+  <span class="t-k">final</span> visibleArea = getVisible(
+      listViewKey, widget.watchlistListingInfo.watchistScrips);
+
+  <span class="t-k">final</span> shouldMergeSymbols = watchlistCubit.isHoldingSelected &amp;&amp;
+      watchlistCubit.symbols.isNotEmpty;
+  <span class="t-k">final</span> List&lt;BroadcastSymbol&gt; subscriptionList =
+      shouldMergeSymbols
+          ? {...visibleArea, ...watchlistCubit.symbols}.toList()
+          : visibleArea;
+  startQuoteStreaming(subscriptionList);
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code>Set&lt;BroadcastSymbol&gt; _lastVisible = {};
+
+<span class="t-k">if</span> (notification <span class="t-k">is</span> ScrollEndNotification || isFirstScroll(notification)) {
+  <span class="t-k">final</span> visibleArea = getVisible(_listViewKey, widget.watchlistListingInfo.watchistScrips);
+  <span class="t-k">final</span> shouldMergeSymbols = watchlistCubit.isHoldingSelected &amp;&amp; watchlistCubit.symbols.isNotEmpty;
+  <span class="t-k">final</span> List&lt;BroadcastSymbol&gt; subscriptionList = shouldMergeSymbols
+      ? {...visibleArea, ...watchlistCubit.symbols}.toList()
+      : visibleArea;
+  <span class="t-k">final</span> next = subscriptionList.toSet();
+  <span class="t-k">if</span> (!setEquals(next, _lastVisible)) {
+    _lastVisible = next;
+    startQuoteStreaming(subscriptionList);
+  }
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>A changed visible set always subscribes, exactly as today.</li><li>Resume after background still uses resumeStreaming from the base class.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Scroll to the bottom and back: newly visible rows tick.</li><li>Switch list chips: the new list&#x27;s visible rows tick.</li><li>Holdings list: P&amp;L symbols remain subscribed.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk Low.</b> Same subscription content whenever the visible set changes; identical repeat requests are skipped. The broadcaster already ignores empty diff requests, so the socket sees the same result.</p>
+    
+    <div class="callout after"><h4>After improvement</h4><p>Fewer rect walks, subscribe packets and log writes during and after scrolling. Small CPU and network gain.</p></div>
+  </div>
+</article><article class="card change" id="C5" data-item data-cat="FE-Shared BE" data-risk="High">
+  <header>
+    <div class="idrow"><span class="cid">C5</span><h3>Test SurfaceView rendering on Android 11+</h3></div>
+    <p class="summary">MainActivity forces RenderMode.texture on Android 11 and later. Texture mode copies each Flutter frame into a texture that the Activity&#x27;s own view hierarchy then composites, which matches the benchmark seeing RISE frames under ViewRootImpl and only ~63 % of 120 Hz frames delivered while frame times are low. Add a flag that selects RenderMode.surface and A/B it.</p>
+    <div class="facts"><span>Teams <span class="tags"><span class="tag cat-FE-Shared">FE · shared</span><span class="tag cat-BE">BE</span></span></span><span>Risk <span class="risk High">High</span></span><span>Effort <span class="effort">M · 2–4 days</span></span><span><span class="tag visible">No visible change</span></span><span><span class="tag verify">verify on device</span></span></div>
+  </header>
+  <div class="bodygrid">
+    <div class="twocol">
+      <div class="part"><h4>Today</h4><p>getRenderMode() returns RenderMode.surface only for SDK &lt;= Q and RenderMode.texture otherwise, overriding the manifest&#x27;s surface value. The test phone runs Android 17, so RISE renders through a FlutterTextureView. The benchmark notes show RISE frames attributed to VRI-com.mosl.mobile/MainActivity, 75.3 fps at a granted 120 Hz, S1 0.34 % and p50 6.3 ms: frames are fast but not every vsync produces a displayed frame (verify with a SurfaceFlinger trace in both modes).</p></div>
+      <div class="part"><h4>What to change</h4><ol><li>Kotlin: read a boolean from FlutterSharedPreferences in getRenderMode(), the same way PushFanoutFlags.kt already reads a Remote Config value written by push_fanout_remote_config_service.dart; SDK &lt;= Q keeps surface; SDK &gt; Q returns surface only when the flag is true.</li><li>Dart: after Remote Config fetch/activate, persist the flag for the next launch.</li><li>Internal build: compare S5, S1, U4 and C1 on the OPPO in both modes; check WebView chart, payment and KYC SDK screens, screenshots/FLAG_SECURE, split screen and keyboard insets.</li><li>Roll out only if S5 improves and crash-free sessions stay flat.</li></ol></div>
+    </div>
+    <div class="part"><h4>Files</h4><div class="card table-wrap"><table class="files-table"><thead><tr><th>File</th><th>Lines</th><th>What changes</th></tr></thead><tbody><tr><td class="path">apps/super_app/android/app/src/main/kotlin/com/mosl/mobile/MainActivity.kt</td><td class="nowrap">120-130</td><td>On Android 11+, return RenderMode.surface when the stored flag is true; otherwise texture as today.</td></tr><tr><td class="path">apps/super_app/lib/core/app_initializer.dart</td><td class="nowrap">new code</td><td>After Remote Config activation, write android_render_mode_surface to SharedPreferences.</td></tr></tbody></table></div></div>
+    <div class="codepair"><div class="codebox before"><div class="cap"><b>Current code</b><span class="loc">apps/super_app/android/app/src/main/kotlin/com/mosl/mobile/MainActivity.kt:120-130</span></div><pre><code><span class="t-k">override</span> fun getRenderMode(): RenderMode {
+    <span class="t-k">return</span> <span class="t-k">if</span> (Build.VERSION.SDK_INT &lt;= Build.VERSION_CODES.Q) {
+        <span class="t-c">// Force surface for Android 10 and below (known crash-prone)</span>
+        Log.d(<span class="t-s">&quot;MainActivity&quot;</span>, <span class="t-s">&quot;Using RenderMode.surface for Android 10 and below&quot;</span>)
+        RenderMode.surface
+    } <span class="t-k">else</span> {
+        <span class="t-c">// Allow texture for Android 11+ (better performance, lower crash risk)</span>
+        Log.d(<span class="t-s">&quot;MainActivity&quot;</span>, <span class="t-s">&quot;Using RenderMode.texture for Android 11+&quot;</span>)
+        RenderMode.texture
+    }
+}</code></pre></div><div class="codebox after"><div class="cap"><b>Proposed change</b><span class="loc">sketch</span></div><pre><code><span class="t-k">override</span> fun getRenderMode(): RenderMode {
+    <span class="t-k">if</span> (Build.VERSION.SDK_INT &lt;= Build.VERSION_CODES.Q) {
+        <span class="t-k">return</span> RenderMode.surface <span class="t-c">// unchanged</span>
+    }
+    val prefs = getSharedPreferences(<span class="t-s">&quot;FlutterSharedPreferences&quot;</span>, MODE_PRIVATE)
+    val useSurface = prefs.getBoolean(<span class="t-s">&quot;flutter.android_render_mode_surface&quot;</span>, <span class="t-k">false</span>)
+    <span class="t-k">return</span> <span class="t-k">if</span> (useSurface) RenderMode.surface <span class="t-k">else</span> RenderMode.texture <span class="t-c">// default = today</span>
+}</code></pre></div></div>
+    <div class="twocol">
+      <div class="part"><h4>How existing behaviour is kept</h4><ul><li>Default false keeps texture mode for everyone.</li><li>Takes effect on the next cold start only, never mid-session.</li><li>Rollback is a Remote Config change plus one relaunch.</li></ul></div>
+      <div class="part"><h4>Regression checks</h4><ul><li>Full app regression on Android 11–17 with the flag on: WebView charts, payment gateway, KYC, PDF viewers, video, maps.</li><li>FLAG_SECURE still blocks screenshots.</li><li>Keyboard insets and split screen.</li><li>Crash-free sessions in Firebase for the rollout cohort.</li></ul></div>
+    </div>
+    <p class="riskbox"><b>Risk High.</b> App shell change for every screen. The code comment says surface mode was &#x27;crash-prone&#x27; on Android 10 and below, and platform views (WebView charts, payment SDKs) behave differently between modes. Must ship behind a flag, default texture, with a full regression pass.</p>
+    <div class="callouts"><div class="callout be"><h4>Backend request</h4><p>Remote Config boolean android_render_mode_surface (default false). Because the render mode is read when the Activity is created, Dart stores the fetched value in SharedPreferences and Kotlin reads it on the next launch.</p></div></div>
+    <div class="callout after"><h4>After improvement</h4><p>If texture mode is the cause, S5 could approach the granted 120 Hz with lower raster/RenderThread CPU (also helps C1). Unknown until the A/B on the device.</p></div>
+  </div>
+</article></div><div class="card empty" id="empty">No changes match this filter.</div></section><nav class="pager"><a class="card prev" href="section-b.html"><span class="k">← Previous</span><span class="t">B · Memory and leaks</span></a><a class="card next" href="section-d.html"><span class="k">Next →</span><span class="t">D · Live prices and returning to the app</span></a></nav>
+      <footer class="foot">Prepared from a read-only review of packages/trader_watchlist (branch develop/sprint_18_release_pod4_mm_researchhome_fixes_oct21 (HEAD 63788d1ac8, working tree)) and the benchmark reports/watchlist/watchlist_mahidhar_OPPO-CPH3009_2026-10-23.xlsx + results/watchlist/mahidhar_OPPO-CPH3009/notes.md measured on OPPO CPH3009, Android 17, 120 Hz, RISE 6.2.09, 22–23 Oct 2026. Expected results are estimates to be confirmed by re-measuring on the same device. Items tagged &quot;verify&quot; need device confirmation.</footer>
+    </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>
