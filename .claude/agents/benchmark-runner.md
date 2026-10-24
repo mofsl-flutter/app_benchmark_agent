@@ -171,9 +171,14 @@ Follow these steps in order. Say which step you are on in one line each time.
     management dashboard (`…_dashboard.html`): Scorecard 1 technical, Scorecard 2 user feel
     (`ux_rubric.json`), the rank comparison, and the verdict (RISE's gaps re-scored as if closed).
     Print both paths, RISE's technical and user-feel ranks, the verdict items it printed, and the
-    RISE rank per category. Say what is still missing, if anything; the dashboard's coverage
-    warnings say which apps have less data. Tell the developer to open the HTML in a browser; it is
-    self-contained and may show client-account values, so it is shared only inside the team.
+    RISE rank per category. Also print its "API calls" and "Network per open" lines: they summarise
+    sheet `10 API & Network calls` in the workbook (comparison, "Where RISE's API calls need
+    optimisation", per-run tables; diagnostic, never scored), and `--html` writes that sheet as
+    `…_api.html` for sharing. Point out RISE's API wall time against its L3 so the developer sees
+    how much of the screen load is network and how much is rendering. Say what is still missing,
+    if anything; the dashboard's coverage warnings say which apps have less data. Tell the
+    developer to open the HTML in a browser; it is self-contained and may show client-account
+    values, so it is shared only inside the team.
 
 11. **Commit.** Remind the developer to commit their results folder on their own branch and open
     a pull request: `git checkout -b results/<module>-<name>`, `git add results/<module>/<name>_<phone>`

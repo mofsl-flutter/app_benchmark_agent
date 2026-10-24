@@ -178,7 +178,7 @@ class CallsTablesTests(unittest.TestCase):
         self.assertEqual(B.BENCH_GROUPS["net"], ["L11"])
         self.assertIn("L11", B.AUTOMATED)
         self.assertNotIn("X3", B.AUTOMATED)
-        self.assertEqual(len(B.METRIC_CATALOGUE), 50)
+        self.assertEqual(len({m["id"] for m in B.METRIC_CATALOGUE}), len(B.METRIC_CATALOGUE))  # unique ids; the count is asserted in CatalogueTests
 
     def test_append_calls_round_trip(self):
         folder = Path(tempfile.mkdtemp())

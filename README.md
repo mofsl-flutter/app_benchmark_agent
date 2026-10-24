@@ -31,7 +31,7 @@ the same protocol for everyone. Results combine by folder; no spreadsheet is edi
 | `build_dashboard.py` | Management dashboard written next to each module workbook (imported by `build_report.py`) |
 | `results/<module>/<developer>_<device>/` | `runs.csv`, `env.csv`, `state.json`, plus `api_calls.csv` (RISE API calls per run) and `net_calls.csv` (connections per run) — your folder only | — your folder only |
 | `reports/` | Generated workbooks and scorecards, dated |
-| `docs/` | The benchmark plan, the design, and example reports |
+| `docs/` | The benchmark plan, the design, example reports, and `docs/API-NETWORK-GUIDE.md`: the developer guide to the API / network capture |
 | `archive/` | The original Portfolio workbook, CSVs and context, for reference only |
 
 ## Setup (once per developer)
@@ -220,6 +220,8 @@ Plans talk only about today vs after improvement; competitor names and ranks sta
 benchmark. See `execution-plan/README.md` for the folder layout and how to rebuild a plan by hand.
 
 ## API and network details
+
+Step-by-step developer guide: `docs/API-NETWORK-GUIDE.md`.
 
 What can be seen per app, and where it ends up:
 
